@@ -602,24 +602,35 @@ tr:last-child td { border-bottom: 0; }
   }
 
   .summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin-bottom: 10px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--border);
   }
 
   .metric {
-    border-radius: var(--radius-sm);
-    padding: 10px 12px;
+    border: 0;
+    border-radius: 0;
+    padding: 7px 5px;
     box-shadow: none;
+    min-width: 0;
+    text-align: center;
   }
 
   .metric span {
-    font-size: 0.75rem;
+    font-size: 0.66rem;
     margin-bottom: 2px;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .metric strong {
-    font-size: 1.45rem;
+    font-size: 1.25rem;
   }
 
   .app-header {
