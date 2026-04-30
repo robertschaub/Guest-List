@@ -151,6 +151,12 @@ CSV-Import und CSV-Export gelten immer nur für das aktuell geöffnete Event. F�
 
 ## Nutzung am Event
 
+Separate Einweisung für Check-in-Personal:
+
+```text
+docs/operations/CHECKIN_PERSONAL_KURZANLEITUNG_DE.md
+```
+
 ### Check-in Staff
 
 1. Event-Link öffnen.
