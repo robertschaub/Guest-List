@@ -1221,7 +1221,7 @@ function renderAdmin() {
 
     <section class="card">
       <h2>Event wechseln</h2>
-      <p class="small">Öffnet ein anderes vorbereitetes Event in diesem Browser. Gäste, Import und Export bleiben pro Event getrennt.</p>
+      <p class="small">Aktiviert ein anderes vorbereitetes Event in diesem Browser. Gäste, Import und Export bleiben pro Event getrennt.</p>
       ${renderKnownEventList(appState.eventId)}
     </section>
 
@@ -2176,7 +2176,7 @@ function renderKnownEventList(currentEventId = "") {
             </span>
             <span class="event-switch-actions">
               <button class="btn-secondary" type="button" data-copy-known-link="${escapeHtml(link)}">Link kopieren</button>
-              <button class="${isCurrent ? "btn-secondary" : "btn-primary"}" type="button" data-open-event="${escapeHtml(event.id)}">${isCurrent ? "Aktuell" : "Öffnen"}</button>
+              <button class="${isCurrent ? "btn-secondary" : "btn-primary"}" type="button" data-activate-event="${escapeHtml(event.id)}">${isCurrent ? "Aktuell" : "Aktivieren"}</button>
             </span>
           </div>
         `;
@@ -2223,34 +2223,87 @@ function bindKnownLinkCopyButtons() {
 }
 
 function bindKnownEventButtons() {
-  document.querySelectorAll("[data-open-event]").forEach((button) => {
+  document.querySelectorAll("[data-activate-event]").forEach((button) => {
     button.addEventListener("click", async () => {
-      const eventId = button.getAttribute("data-open-event");
+      const eventId = button.getAttribute("data-activate-event");
       if (!eventId) return;
       if (eventId === appState.eventId) {
-        notify("Dieses Event ist bereits geöffnet.", "info");
+        notify("Dieses Event ist bereits aktuell.", "info");
         return;
       }
-      if (isAdmin()) {
-        button.disabled = true;
-        button.dataset.originalText = button.textContent || "";
-        const session = getAdminSession();
-        if (session?.pin) {
-          try {
-            await connectAdminToEvent(eventId, session.pin, session.displayName || appState.member?.displayName || "Admin");
-            window.location.href = urlWithEvent(eventId);
-            return;
-          } catch (error) {
-            console.error(error);
-            clearAdminSession();
-            notify("Automatischer Admin-Wechsel fehlgeschlagen. Bitte beim Ziel-Event erneut einloggen.", "warning");
-          }
+      button.disabled = true;
+      const originalText = button.textContent || "";
+      button.textContent = "Aktiviere…";
+      try {
+        await activateKnownEvent(eventId);
+      } catch (error) {
+        console.error(error);
+        notify(`Event konnte nicht aktiviert werden: ${error?.message || error}`, "error");
+        if (document.body.contains(button)) {
+          button.disabled = false;
+          button.textContent = originalText;
         }
-        button.disabled = false;
       }
-      window.location.href = urlWithEvent(eventId);
     });
   });
+}
+
+async function activateKnownEvent(eventId) {
+  const targetEventId = resolveEventId(eventId);
+  const previousTab = appState.currentTab;
+  const eventSnap = await getDoc(doc(appState.db, "events", targetEventId));
+  if (!eventSnap.exists()) {
+    throw new Error(`Event ${targetEventId} wurde nicht gefunden.`);
+  }
+
+  let memberSnap = await getMemberSnapForEvent(targetEventId);
+  if (isAdmin()) {
+    const session = getAdminSession();
+    if (session?.pin) {
+      try {
+        await connectAdminToEvent(targetEventId, session.pin, session.displayName || appState.member?.displayName || "Admin");
+        memberSnap = await getMemberSnapForEvent(targetEventId);
+      } catch (error) {
+        console.error(error);
+        clearAdminSession();
+        if (!memberSnap.exists()) {
+          throw new Error("Automatischer Admin-Wechsel fehlgeschlagen. Bitte beim Ziel-Event erneut einloggen.");
+        }
+      }
+    }
+  }
+
+  unsubscribeAll();
+  appState.eventId = targetEventId;
+  appState.event = { id: eventSnap.id, ...eventSnap.data() };
+  appState.member = memberSnap.exists() ? { id: memberSnap.id, ...memberSnap.data() } : null;
+  appState.guests = [];
+  appState.auditEntries = [];
+  appState.currentTab = previousTab;
+  localStorage.setItem("guestlist:lastEventId", targetEventId);
+  saveKnownEvent(appState.event);
+  window.history.replaceState(null, "", urlWithEvent(targetEventId));
+
+  if (appState.member) {
+    loadMainApp();
+    notify(`${appState.event.name || targetEventId} ist jetzt der aktuelle Event.`, "success");
+    return;
+  }
+
+  renderJoin();
+  const result = document.getElementById("joinResult");
+  if (result) {
+    result.innerHTML = `<p class="notice info">Event aktiviert. Bitte mit dem passenden PIN verbinden.</p>`;
+  }
+}
+
+async function getMemberSnapForEvent(eventId) {
+  try {
+    return await getDoc(doc(appState.db, "events", eventId, "members", appState.user.uid));
+  } catch (error) {
+    if (isPermissionError(error)) return { exists: () => false };
+    throw error;
+  }
 }
 
 async function connectAdminToEvent(eventId, pin, displayName) {
