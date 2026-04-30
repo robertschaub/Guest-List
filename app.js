@@ -410,7 +410,7 @@ function renderJoin() {
         </div>
         <div class="form-row">
           <label for="deviceLabel">Gerät <span class="optional-label">optional</span></label>
-          <input id="deviceLabel" value="${escapeHtml(localStorage.getItem("guestlist:deviceLabel") || "")}" placeholder="z.B. iPad Eingang links" />
+          <input id="deviceLabel" value="" placeholder="z.B. iPad Eingang links" />
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" type="submit">Verbinden</button>
@@ -445,8 +445,7 @@ async function joinEventFromForm(event) {
     }, { merge: true });
 
     localStorage.setItem("guestlist:memberName", displayName);
-    if (deviceLabel) localStorage.setItem("guestlist:deviceLabel", deviceLabel);
-    else localStorage.removeItem("guestlist:deviceLabel");
+    localStorage.removeItem("guestlist:deviceLabel");
 
     const memberSnap = await getDoc(memberRef(appState.user.uid));
     appState.member = { id: memberSnap.id, ...memberSnap.data() };
