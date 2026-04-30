@@ -1084,22 +1084,10 @@ function renderAdmin() {
   content.innerHTML = `
     <section class="card">
       <h2>Kurzanleitung Admin</h2>
-      <ol class="compact-list">
-        <li>Oben im Header prüfen: richtiger Eventname, Datum und Event-ID.</li>
-        <li>Für Freitag und Samstag getrennte Event-Links und getrennte CSV-Dateien verwenden.</li>
-        <li>Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.</li>
-        <li>Unter CSV Import erst UTF-8-CSV auswählen, dann CSV prüfen, danach Import starten.</li>
-        <li>Bei Import mit Löschen und bei Massen-No-Show muss die Event-ID als Bestätigung eingegeben werden.</li>
-        <li>Nach jedem Import in Übersicht und Listen Total und Kategorien kontrollieren.</li>
-        <li>Vor Eventstart unter Export / Backup Gäste-CSV und Audit-Log-CSV herunterladen.</li>
-        <li>Mit einem zweiten Gerät den Event-Link öffnen und Check-in-PIN testen.</li>
-      </ol>
-      <h3 class="compact-heading">Vor Eventstart</h3>
       <ul class="compact-list">
+        <li>Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.</li>
+        <li>Vor Eventstart unter Export / Backup eine CSV-Sicherung herunterladen.</li>
         <li>Event-Link und beide PINs extern sichern; PINs sind später nicht auslesbar.</li>
-        <li>Nur mit kompletter URL inklusive <code>?event=...</code> arbeiten, nicht mit der Basis-URL.</li>
-        <li>Keine automatische Datumswahl: nach Mitternacht bleibt ein Terminal auf dem Event seines Links.</li>
-        <li>Keine echten Gäste zum Test einchecken; Testgast löschen/zurücksetzen.</li>
         <li>Bei Geräteproblemen: Seite hart neu laden (<code>Ctrl+F5</code>), Event-Link neu öffnen, PIN erneut eingeben.</li>
       </ul>
     </section>
