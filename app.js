@@ -569,9 +569,7 @@ function renderShell() {
     <div id="flash"></div>
     <nav class="nav-tabs" id="navTabs">
       <button data-tab="checkin" class="active">Check-in</button>
-      <button data-tab="overview">Übersicht</button>
-      <button data-tab="lists">Listen</button>
-      ${isAdmin() ? `<button data-tab="admin">Admin</button><button data-tab="log">Log</button>` : ""}
+      ${isAdmin() ? `<button data-tab="overview">Übersicht</button><button data-tab="lists">Listen</button><button data-tab="admin">Admin</button><button data-tab="log">Log</button>` : ""}
       <button id="switchEventBtn" type="button">Event wechseln</button>
       <button id="switchRoleBtn" type="button">Rolle/PIN wechseln</button>
     </nav>
@@ -592,7 +590,7 @@ function renderShell() {
 }
 
 function renderActiveTab() {
-  if (!isAdmin() && ["admin", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
+  if (!isAdmin() && ["overview", "lists", "admin", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
   if (appState.currentTab === "checkin") renderCheckin();
   else if (appState.currentTab === "overview") renderOverview();
   else if (appState.currentTab === "lists") renderLists();

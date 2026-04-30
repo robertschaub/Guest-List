@@ -175,6 +175,8 @@ docs/operations/CHECKIN_PERSONAL_KURZANLEITUNG_DE.md
 6. Gast einchecken.
 7. Support-Kommentar bei Bedarf ergänzen.
 
+Check-in Staff sieht bewusst nur den Check-in-Modus sowie `Event wechseln` und `Rolle/PIN wechseln`. Übersicht, Listen, Admin und Log sind Admin-only.
+
 ### Admin
 
 1. Event-Link öffnen.

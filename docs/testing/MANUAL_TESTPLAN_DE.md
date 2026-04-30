@@ -73,6 +73,8 @@ Prüfen:
 - Suchfeld sichtbar.
 - Mitarbeitername wird gespeichert/angezeigt; Gerätename ist optional.
 - Admin-Funktionen sind nicht sichtbar.
+- Tabs `Übersicht`, `Listen`, `Admin` und `Log` sind für Check-in Staff nicht sichtbar.
+- Nur `Check-in`, `Event wechseln` und `Rolle/PIN wechseln` sind sichtbar.
 
 ## Test 5 — CSV Import
 

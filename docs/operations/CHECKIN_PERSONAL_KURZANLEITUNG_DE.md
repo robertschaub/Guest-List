@@ -23,6 +23,8 @@ Die Basis-URL ohne `?event=...` nicht verwenden.
 5. Eigenen Namen oder Position eintragen, z.B. `Door 1`, `Door 2`, `Guest Support`.
 6. Gerätename optional eintragen, z.B. `iPad Eingang links`. Das Feld darf leer bleiben.
 
+Nach dem Verbinden gibt es für Check-in-Personal nur den Check-in-Modus. Übersicht, Listen, Admin und Log sind bewusst ausgeblendet.
+
 ## Gast einchecken
 
 1. Name oder Guest ID suchen.
