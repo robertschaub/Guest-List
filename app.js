@@ -92,6 +92,7 @@ const appState = {
     importRows: [],
     importPreview: [],
     importInProgress: false,
+    editingGuestId: "",
     lastBackupMessage: ""
   }
 };
@@ -615,6 +616,19 @@ function subscribeGuests() {
 function renderCheckin() {
   const content = tabContent();
   const categories = getCategories();
+
+  if (!appState.guestsLoaded) {
+    content.innerHTML = `
+      ${renderSummaryCards()}
+      ${isOffline() ? `<div class="notice error"><strong>Offline:</strong> Check-in und Änderungen sind gesperrt. Bitte Verbindung prüfen und Seite neu laden.</div>` : ""}
+      <section class="card compact">
+        <strong>Gäste laden…</strong>
+        <p class="small">Falls diese Meldung bleibt: Verbindung prüfen und Seite hart neu laden.</p>
+      </section>
+    `;
+    return;
+  }
+
   const filteredGuests = filterGuests(appState.ui.search, appState.ui.categoryFilter, appState.ui.statusFilter);
   const results = filteredGuests.slice(0, 60);
   const filteredCount = filteredGuests.length;
@@ -691,6 +705,8 @@ function renderEmptyEventWarning() {
 }
 
 function renderGuestCard(guest) {
+  if (isAdmin() && appState.ui.editingGuestId === guest.id) return renderGuestEditCard(guest);
+
   const status = STATUS_META[guest.status || "open"] || STATUS_META.open;
   const checkedText = guest.checkedInAt ? ` · ${formatTimestamp(guest.checkedInAt)}` : "";
   const byText = guest.checkedInByName ? ` · durch ${escapeHtml(guest.checkedInByName)}` : "";
@@ -732,6 +748,41 @@ function renderGuestCard(guest) {
   `;
 }
 
+function renderGuestEditCard(guest) {
+  const categories = getCategories();
+  const disabled = isOffline() ? "disabled" : "";
+  return `
+    <article class="guest-card edit-card" data-guest-id="${escapeHtml(guest.id)}">
+      <h3 class="guest-title">Gast bearbeiten</h3>
+      <div class="guest-meta">${escapeHtml(guest.guestId || guest.id)}</div>
+      <form class="grid two edit-guest-form" data-edit-guest-form="${escapeHtml(guest.id)}">
+        <div class="form-row">
+          <label>Name</label>
+          <input name="name" value="${escapeHtml(guest.name || "")}" required ${disabled} />
+        </div>
+        <div class="form-row">
+          <label>Kategorie</label>
+          <select name="category" ${disabled}>
+            ${categories.map((cat) => option(cat, cat, guest.category || categories[0] || "GA")).join("")}
+          </select>
+        </div>
+        <div class="form-row" style="grid-column:1/-1">
+          <label>Support-Kommentar</label>
+          <textarea name="supportComment" ${disabled}>${escapeHtml(guest.supportComment || "")}</textarea>
+        </div>
+        <div class="form-row" style="grid-column:1/-1">
+          <label>Interne Notiz</label>
+          <textarea name="internalNote" ${disabled}>${escapeHtml(guest.internalNote || "")}</textarea>
+        </div>
+        <div class="actions" style="grid-column:1/-1">
+          <button class="btn-primary" type="submit" ${disabled}>Speichern</button>
+          <button class="btn-secondary" type="button" data-action="cancel-edit" data-guest-id="${escapeHtml(guest.id)}">Abbrechen</button>
+        </div>
+      </form>
+    </article>
+  `;
+}
+
 function attachGuestCardHandlers(root) {
   root.querySelectorAll("[data-action='checkin']").forEach((button) => {
     button.addEventListener("click", () => checkInGuest(button.dataset.guestId, button.dataset.force === "1"));
@@ -743,6 +794,17 @@ function attachGuestCardHandlers(root) {
 
   root.querySelectorAll("[data-action='edit-guest']").forEach((button) => {
     button.addEventListener("click", () => editGuest(button.dataset.guestId));
+  });
+
+  root.querySelectorAll("[data-edit-guest-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => saveEditedGuest(event, form.dataset.editGuestForm));
+  });
+
+  root.querySelectorAll("[data-action='cancel-edit']").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (appState.ui.editingGuestId === button.dataset.guestId) appState.ui.editingGuestId = "";
+      renderActiveTab();
+    });
   });
 
   root.querySelectorAll("[data-action='no-show']").forEach((button) => {
@@ -845,8 +907,7 @@ async function saveGuestComment(guestDocId) {
   }
 }
 
-async function editGuest(guestDocId) {
-  if (!requireOnline("Gast bearbeiten")) return;
+function editGuest(guestDocId) {
   if (!isAdmin()) {
     notify("Nur Admins dürfen Gäste bearbeiten.", "warning");
     return;
@@ -854,31 +915,38 @@ async function editGuest(guestDocId) {
   const guest = findGuest(guestDocId);
   if (!guest) return;
 
-  const name = prompt("Name", guest.name || "");
-  if (name === null) return;
-  const trimmedName = name.trim();
+  appState.ui.editingGuestId = guestDocId;
+  renderActiveTab();
+}
+
+async function saveEditedGuest(event, guestDocId) {
+  event.preventDefault();
+  if (!requireOnline("Gast speichern")) return;
+  if (!isAdmin()) {
+    notify("Nur Admins dürfen Gäste bearbeiten.", "warning");
+    return;
+  }
+  const guest = findGuest(guestDocId);
+  if (!guest) return;
+
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const trimmedName = String(data.get("name") || "").trim();
   if (!trimmedName) {
     notify("Name darf nicht leer sein.", "warning");
     return;
   }
-
-  const category = prompt(`Kategorie (${getCategories().join(", ")})`, guest.category || getCategories()[0] || "GA");
-  if (category === null) return;
-  const normalizedCategory = normalizeCategory(category);
-
-  const supportComment = prompt("Support-Kommentar", guest.supportComment || "");
-  if (supportComment === null) return;
-
-  const internalNote = prompt("Interne Notiz", guest.internalNote || "");
-  if (internalNote === null) return;
+  const normalizedCategory = normalizeCategory(data.get("category") || guest.category || getCategories()[0] || "GA");
+  const supportComment = String(data.get("supportComment") || "").trim();
+  const internalNote = String(data.get("internalNote") || "").trim();
 
   try {
     await updateDoc(guestRef(guestDocId), {
       name: trimmedName,
       category: normalizedCategory,
       searchName: normalizeForSearch(`${trimmedName} ${guest.guestId || ""} ${normalizedCategory}`),
-      supportComment: supportComment.trim(),
-      internalNote: internalNote.trim(),
+      supportComment,
+      internalNote,
       updatedAt: serverTimestamp(),
       lastActionAt: serverTimestamp(),
       lastActionByName: appState.member.displayName || "Admin"
@@ -889,6 +957,7 @@ async function editGuest(guestDocId) {
       oldCategory: guest.category || "",
       newCategory: normalizedCategory
     });
+    appState.ui.editingGuestId = "";
     notify("Gast aktualisiert.", "success");
   } catch (error) {
     console.error(error);
@@ -1794,9 +1863,22 @@ function notify(message, type = "info") {
     console.log(message);
     return;
   }
-  flash.innerHTML = `<div class="notice ${type}">${escapeHtml(message)}</div>`;
+  const escapedMessage = escapeHtml(message);
+  if (type === "error") {
+    flash.innerHTML = `
+      <div class="notice ${type} flash-message">
+        <span>${escapedMessage}</span>
+        <button class="flash-close" type="button" aria-label="Meldung schließen">Schließen</button>
+      </div>
+    `;
+    flash.querySelector(".flash-close")?.addEventListener("click", () => {
+      flash.innerHTML = "";
+    });
+    return;
+  }
+  flash.innerHTML = `<div class="notice ${type}">${escapedMessage}</div>`;
   setTimeout(() => {
-    if (flash.innerHTML.includes(escapeHtml(message))) flash.innerHTML = "";
+    if (flash.innerHTML.includes(escapedMessage)) flash.innerHTML = "";
   }, 4500);
 }
 
@@ -1896,12 +1978,6 @@ function nextAvailableGuestCode(start = appState.guests.length + 1) {
     number += 1;
   }
   return nextGuestCode(number);
-}
-
-function suggestDeviceLabel() {
-  const saved = localStorage.getItem("guestlist:deviceNumber");
-  if (saved) return `Check-in ${saved}`;
-  return "Check-in 1";
 }
 
 function isOffline() {
