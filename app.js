@@ -546,8 +546,8 @@ function renderShell() {
       <button data-tab="lists">Listen</button>
       ${isAdmin() ? `<button data-tab="admin">Admin</button>` : ""}
       <button data-tab="log">Log</button>
-      <button id="switchRoleBtn" type="button">Rolle/PIN wechseln</button>
       <button id="switchEventBtn" type="button">Event wechseln</button>
+      <button id="switchRoleBtn" type="button">Rolle/PIN wechseln</button>
     </nav>
     <section id="tabContent"></section>
   `);
