@@ -894,6 +894,13 @@ function renderAdmin() {
         <li>Vor Eventstart unter Export / Backup eine CSV-Sicherung herunterladen.</li>
         <li>Mit einem zweiten Gerät den Event-Link öffnen und Check-in-PIN testen.</li>
       </ol>
+      <h3 class="compact-heading">Vor Eventstart</h3>
+      <ul class="compact-list">
+        <li>Event-Link und beide PINs extern sichern; PINs sind später nicht auslesbar.</li>
+        <li>Nur mit kompletter URL inklusive <code>?event=...</code> arbeiten, nicht mit der Basis-URL.</li>
+        <li>Keine echten Gäste zum Test einchecken; Testgast löschen/zurücksetzen.</li>
+        <li>Bei Geräteproblemen: Seite neu laden, Event-Link neu öffnen, PIN erneut eingeben.</li>
+      </ul>
     </section>
 
     <section class="card">
