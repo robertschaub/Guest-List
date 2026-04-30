@@ -563,9 +563,25 @@ tr:last-child td { border-bottom: 0; }
 .log-line {
   border-bottom: 1px solid var(--border);
   padding: 11px 0;
+  overflow-wrap: anywhere;
 }
 
 .log-line:last-child { border-bottom: 0; }
+
+.audit-card {
+  overflow: hidden;
+}
+
+.audit-list {
+  max-height: min(68vh, 720px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+}
+
+.log-details {
+  word-break: break-word;
+}
 
 @media (max-width: 820px) {
   .grid.two, .grid.three, .grid.four, .summary-grid {

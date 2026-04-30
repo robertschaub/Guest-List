@@ -14,7 +14,6 @@ import {
   setDoc,
   addDoc,
   updateDoc,
-  deleteDoc,
   writeBatch,
   runTransaction,
   onSnapshot,
@@ -45,6 +44,12 @@ const ROLE_META = {
   admin: "Admin"
 };
 
+const INFO_LABELS = {
+  adminOnly: "Info nur für Administratoren",
+  adminToStaff: "Info von Administratoren an Check-in Staff",
+  staffToAll: "Info von Check-in Staff für alle"
+};
+
 const GUEST_EXPORT_HEADERS = [
   "Guest ID",
   "Name",
@@ -53,8 +58,9 @@ const GUEST_EXPORT_HEADERS = [
   "Check-in Zeit",
   "Check-in durch",
   "Check-in Gerät",
-  "Support Kommentar",
-  "Interne Notiz"
+  INFO_LABELS.staffToAll,
+  INFO_LABELS.adminToStaff,
+  INFO_LABELS.adminOnly
 ];
 
 const AUDIT_EXPORT_HEADERS = [
@@ -78,8 +84,11 @@ const appState = {
   member: null,
   guests: [],
   guestsLoaded: false,
+  adminNotes: {},
+  adminNotesLoaded: false,
   auditEntries: [],
   guestUnsubscribe: null,
+  adminNotesUnsubscribe: null,
   auditUnsubscribe: null,
   checkInLocks: new Set(),
   currentTab: "checkin",
@@ -679,8 +688,11 @@ function setupErrorMessage(error) {
 function loadMainApp() {
   unsubscribeAll();
   appState.guestsLoaded = false;
+  appState.adminNotes = {};
+  appState.adminNotesLoaded = false;
   renderShell();
   subscribeGuests();
+  subscribeAdminNotes();
   renderActiveTab();
 }
 
@@ -772,6 +784,23 @@ function subscribeGuests() {
     console.error(error);
     appState.guestsLoaded = true;
     notify("Gästeliste konnte nicht geladen werden. Prüfe Berechtigungen und Firestore-Regeln.", "error");
+  });
+}
+
+function subscribeAdminNotes() {
+  if (!isAdmin()) {
+    appState.adminNotesLoaded = true;
+    return;
+  }
+
+  const notesQuery = query(collection(appState.db, "events", appState.eventId, "guestAdminNotes"));
+  appState.adminNotesUnsubscribe = onSnapshot(notesQuery, (snapshot) => {
+    appState.adminNotes = Object.fromEntries(snapshot.docs.map((docSnap) => [docSnap.id, docSnap.data()]));
+    appState.adminNotesLoaded = true;
+    renderActiveTab();
+  }, (error) => {
+    console.error(error);
+    notify("Admin-Notizen konnten nicht geladen werden.", "error");
   });
 }
 
@@ -887,6 +916,12 @@ function handleCheckinAuthButton() {
 
 function logoutCurrentMember(nextTab = "role") {
   clearAdminSession();
+  if (appState.adminNotesUnsubscribe) {
+    appState.adminNotesUnsubscribe();
+    appState.adminNotesUnsubscribe = null;
+  }
+  appState.adminNotes = {};
+  appState.adminNotesLoaded = false;
   appState.member = null;
   appState.ui.editingGuestId = "";
   appState.currentTab = nextTab;
@@ -910,12 +945,16 @@ function renderAddGuestPanel(categories) {
             <select id="addCategory" ${disabled}>${categories.map((cat) => `<option>${escapeHtml(cat)}</option>`).join("")}</select>
           </div>
           <div class="form-row" style="grid-column:1/-1">
-            <label for="addSupportComment">Support-Kommentar</label>
-            <textarea id="addSupportComment" ${disabled}></textarea>
+            <label for="addInternalNote">${INFO_LABELS.adminOnly}</label>
+            <textarea id="addInternalNote" ${disabled}></textarea>
           </div>
           <div class="form-row" style="grid-column:1/-1">
-            <label for="addInternalNote">Interne Notiz</label>
-            <textarea id="addInternalNote" ${disabled}></textarea>
+            <label for="addAdminStaffInfo">${INFO_LABELS.adminToStaff}</label>
+            <textarea id="addAdminStaffInfo" ${disabled}></textarea>
+          </div>
+          <div class="form-row" style="grid-column:1/-1">
+            <label for="addSupportComment">${INFO_LABELS.staffToAll}</label>
+            <textarea id="addSupportComment" ${disabled}></textarea>
           </div>
           <div class="actions" style="grid-column:1/-1"><button class="btn-primary" type="submit" ${disabled}>Gast speichern</button></div>
         </form>
@@ -934,6 +973,10 @@ function renderGuestCard(guest) {
   const canOverride = isAdmin();
   const commentId = `comment-${guest.id}`;
   const disabled = writeDisabledAttr();
+  const memberInfoVisible = isEventMember();
+  const staffInfo = memberInfoVisible ? staffInfoForGuest(guest) : "";
+  const adminStaffInfo = memberInfoVisible ? adminStaffInfoForGuest(guest) : "";
+  const internalNote = isAdmin() ? adminOnlyInfoForGuest(guest) : "";
 
   return `
     <article class="guest-card" data-guest-id="${escapeHtml(guest.id)}">
@@ -948,12 +991,13 @@ function renderGuestCard(guest) {
         </div>
         <div class="small">${escapeHtml(guest.checkedInDevice || "")}</div>
       </div>
-      ${guest.internalNote ? `<p class="notice info"><strong>Notiz:</strong> ${escapeHtml(guest.internalNote)}</p>` : ""}
+      ${internalNote ? `<p class="notice info"><strong>${INFO_LABELS.adminOnly}:</strong> ${escapeHtml(internalNote)}</p>` : ""}
+      ${adminStaffInfo ? `<p class="notice info"><strong>${INFO_LABELS.adminToStaff}:</strong> ${escapeHtml(adminStaffInfo)}</p>` : ""}
       <div class="guest-actions">
         <div class="comment-box form-row">
-          <label for="${commentId}">Support-Kommentar</label>
-          <textarea id="${commentId}" data-comment-for="${escapeHtml(guest.id)}" placeholder="z.B. VIP-Band abgeben, kommt mit Künstler…" ${disabled}>${escapeHtml(guest.supportComment || "")}</textarea>
-          <button class="btn-secondary" data-action="save-comment" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Kommentar speichern</button>
+          <label for="${commentId}">${INFO_LABELS.staffToAll}</label>
+          <textarea id="${commentId}" data-comment-for="${escapeHtml(guest.id)}" placeholder="z.B. VIP-Band abgegeben, kommt mit Künstler…" ${disabled}>${escapeHtml(staffInfo)}</textarea>
+          <button class="btn-secondary" data-action="save-comment" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Info speichern</button>
         </div>
         <div class="actions" style="margin-top:22px">
           ${alreadyChecked && !canOverride ? `<button class="btn-secondary" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="0" ${disabled}>Bereits eingecheckt</button>` : `<button class="btn-success" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="${alreadyChecked && canOverride ? "1" : "0"}" ${disabled}>${alreadyChecked ? "Check-in überschreiben" : "Einchecken"}</button>`}
@@ -972,6 +1016,8 @@ function renderGuestCard(guest) {
 function renderGuestEditCard(guest) {
   const categories = getCategories();
   const disabled = writeDisabledAttr();
+  const internalNote = adminOnlyInfoForGuest(guest);
+  const adminStaffInfo = adminStaffInfoForGuest(guest);
   return `
     <article class="guest-card edit-card" data-guest-id="${escapeHtml(guest.id)}">
       <h3 class="guest-title">Gast bearbeiten</h3>
@@ -988,12 +1034,16 @@ function renderGuestEditCard(guest) {
           </select>
         </div>
         <div class="form-row" style="grid-column:1/-1">
-          <label>Support-Kommentar</label>
-          <textarea name="supportComment" ${disabled}>${escapeHtml(guest.supportComment || "")}</textarea>
+          <label>${INFO_LABELS.adminOnly}</label>
+          <textarea name="internalNote" ${disabled}>${escapeHtml(internalNote)}</textarea>
         </div>
         <div class="form-row" style="grid-column:1/-1">
-          <label>Interne Notiz</label>
-          <textarea name="internalNote" ${disabled}>${escapeHtml(guest.internalNote || "")}</textarea>
+          <label>${INFO_LABELS.adminToStaff}</label>
+          <textarea name="adminStaffInfo" ${disabled}>${escapeHtml(adminStaffInfo)}</textarea>
+        </div>
+        <div class="form-row" style="grid-column:1/-1">
+          <label>${INFO_LABELS.staffToAll}</label>
+          <textarea name="supportComment" ${disabled}>${escapeHtml(staffInfoForGuest(guest))}</textarea>
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" type="submit" ${disabled}>Speichern</button>
@@ -1109,8 +1159,8 @@ async function checkInGuest(guestDocId, force = false) {
 }
 
 async function saveGuestComment(guestDocId) {
-  if (!requireEventMember("Kommentar speichern")) return;
-  if (!requireOnline("Kommentar speichern")) return;
+  if (!requireEventMember("Info speichern")) return;
+  if (!requireOnline("Info speichern")) return;
   const guest = findGuest(guestDocId);
   const textarea = document.querySelector(`[data-comment-for="${cssEscape(guestDocId)}"]`);
   if (!guest || !textarea) return;
@@ -1124,13 +1174,13 @@ async function saveGuestComment(guestDocId) {
       lastActionByName: appState.member.displayName || "Check-in"
     });
     await addAudit("support_comment_update", guest, {
-      oldComment: guest.supportComment || "",
+      oldComment: staffInfoForGuest(guest),
       newComment
     });
-    notify("Support-Kommentar gespeichert.", "success");
+    notify("Info gespeichert.", "success");
   } catch (error) {
     console.error(error);
-    notify(`Kommentar konnte nicht gespeichert werden: ${error.message || error}`, "error");
+    notify(`Info konnte nicht gespeichert werden: ${error.message || error}`, "error");
   }
 }
 
@@ -1165,19 +1215,31 @@ async function saveEditedGuest(event, guestDocId) {
   }
   const normalizedCategory = normalizeCategory(data.get("category") || guest.category || getCategories()[0] || "GA");
   const supportComment = String(data.get("supportComment") || "").trim();
+  const adminStaffInfo = String(data.get("adminStaffInfo") || "").trim();
   const internalNote = String(data.get("internalNote") || "").trim();
 
   try {
-    await updateDoc(guestRef(guestDocId), {
+    const batch = writeBatch(appState.db);
+    batch.update(guestRef(guestDocId), {
       name: trimmedName,
       category: normalizedCategory,
       searchName: normalizeForSearch(`${trimmedName} ${guest.guestId || ""} ${normalizedCategory}`),
       supportComment,
-      internalNote,
+      adminStaffInfo,
       updatedAt: serverTimestamp(),
       lastActionAt: serverTimestamp(),
       lastActionByName: appState.member.displayName || "Admin"
     });
+    if (internalNote) {
+      batch.set(guestAdminNoteRef(guestDocId), {
+        internalNote,
+        updatedAt: serverTimestamp(),
+        updatedByName: appState.member.displayName || "Admin"
+      });
+    } else {
+      batch.delete(guestAdminNoteRef(guestDocId));
+    }
+    await batch.commit();
     await addAudit("guest_update", guest, {
       oldName: guest.name || "",
       newName: trimmedName,
@@ -1239,7 +1301,10 @@ async function deleteGuest(guestDocId) {
   if (!confirm(`Gast wirklich löschen?\n\n${label}\n\nDiese Aktion entfernt den Gast aus diesem Event.`)) return;
 
   try {
-    await deleteDoc(guestRef(guestDocId));
+    const batch = writeBatch(appState.db);
+    batch.delete(guestRef(guestDocId));
+    batch.delete(guestAdminNoteRef(guestDocId));
+    await batch.commit();
     await addAudit("guest_delete", guest, {
       oldStatus: guest.status || "open",
       checkedInAt: formatTimestamp(guest.checkedInAt),
@@ -1377,22 +1442,26 @@ function bindGuestListControls() {
 }
 
 function renderGuestTable(guests) {
+  const showAdminPrivate = isAdmin();
   const rows = guests.map((g) => `
     <tr>
       <td>${escapeHtml(g.name || "")}</td>
       <td>${escapeHtml(g.guestId || g.id)}</td>
       <td>${escapeHtml(g.category || "")}</td>
       <td><span class="badge ${STATUS_META[g.status || "open"]?.badge || "warning"}">${STATUS_META[g.status || "open"]?.label || "Offen"}</span></td>
-      <td>${escapeHtml(g.supportComment || "")}</td>
+      <td>${escapeHtml(adminStaffInfoForGuest(g))}</td>
+      <td>${escapeHtml(staffInfoForGuest(g))}</td>
+      ${showAdminPrivate ? `<td>${escapeHtml(adminOnlyInfoForGuest(g))}</td>` : ""}
       <td>${formatTimestamp(g.checkedInAt)}</td>
     </tr>
   `).join("");
+  const emptyColspan = showAdminPrivate ? 8 : 7;
 
   return `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Name</th><th>Guest ID</th><th>Kategorie</th><th>Status</th><th>Support-Kommentar</th><th>Check-in Zeit</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="6">Keine Einträge.</td></tr>`}</tbody>
+        <thead><tr><th>Name</th><th>Guest ID</th><th>Kategorie</th><th>Status</th><th>${INFO_LABELS.adminToStaff}</th><th>${INFO_LABELS.staffToAll}</th>${showAdminPrivate ? `<th>${INFO_LABELS.adminOnly}</th>` : ""}<th>Check-in Zeit</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="${emptyColspan}">Keine Einträge.</td></tr>`}</tbody>
       </table>
     </div>
   `;
@@ -1406,6 +1475,7 @@ function renderAdmin() {
 
   const content = tabContent();
   const categories = getCategories();
+  const exportDisabled = appState.adminNotesLoaded ? "" : "disabled";
   content.innerHTML = `
     <section class="card">
       <h2>Event wechseln</h2>
@@ -1440,7 +1510,7 @@ function renderAdmin() {
 
     <section class="card">
       <h2>CSV Import</h2>
-      <p class="small">Erwartete Spalten: <code>Name</code>, <code>Kategorie</code>, optional <code>Guest ID</code>, <code>Support Kommentar</code>, <code>Notiz</code>. Excel vorher als CSV speichern.</p>
+      <p class="small">Erwartete Spalten: <code>Name</code>, <code>Kategorie</code>, optional <code>Guest ID</code> und Info-Spalten. Excel vorher als CSV speichern.</p>
       <div class="grid two">
         <div class="form-row">
           <label for="csvFile">CSV-Datei</label>
@@ -1465,10 +1535,10 @@ function renderAdmin() {
       <h2>Export / Backup</h2>
       <p class="small">Backup für dieses Event: ${escapeHtml(appState.event?.name || "")} · ${escapeHtml(appState.event?.date || "")} · ${escapeHtml(appState.eventId || "")} · aktuell ${appState.guests.length} Gäste.</p>
       <div class="actions">
-        <button class="btn-secondary" data-export="all">Alle Gäste CSV</button>
-        <button class="btn-secondary" data-export="checked_in">Eingecheckte CSV</button>
-        <button class="btn-secondary" data-export="open">Offene CSV</button>
-        <button class="btn-secondary" data-export="no_show">No Show CSV</button>
+        <button class="btn-secondary" data-export="all" ${exportDisabled}>Alle Gäste CSV</button>
+        <button class="btn-secondary" data-export="checked_in" ${exportDisabled}>Eingecheckte CSV</button>
+        <button class="btn-secondary" data-export="open" ${exportDisabled}>Offene CSV</button>
+        <button class="btn-secondary" data-export="no_show" ${exportDisabled}>No Show CSV</button>
         <button class="btn-secondary" id="exportAuditBtn" type="button">Audit Log CSV</button>
       </div>
       <div id="backupStatus">${appState.ui.lastBackupMessage ? `<p class="notice success">${escapeHtml(appState.ui.lastBackupMessage)}</p>` : ""}</div>
@@ -1576,12 +1646,23 @@ async function addGuestFromForm(event) {
     name: val("addName"),
     category: val("addCategory"),
     supportComment: val("addSupportComment"),
-    internalNote: val("addInternalNote"),
+    adminStaffInfo: val("addAdminStaffInfo"),
     guestId: nextAvailableGuestCode()
   });
+  const internalNote = val("addInternalNote").trim();
 
   try {
-    const ref = await addDoc(collection(appState.db, "events", appState.eventId, "guests"), guest);
+    const ref = doc(collection(appState.db, "events", appState.eventId, "guests"));
+    const batch = writeBatch(appState.db);
+    batch.set(ref, guest);
+    if (internalNote) {
+      batch.set(guestAdminNoteRef(ref.id), {
+        internalNote,
+        updatedAt: serverTimestamp(),
+        updatedByName: appState.member.displayName || "Admin"
+      });
+    }
+    await batch.commit();
     await addAudit("guest_create", { id: ref.id, ...guest }, { source: "manual" });
     document.getElementById("addGuestForm").reset();
     notify("Gast hinzugefügt.", "success");
@@ -1684,13 +1765,21 @@ async function runCsvImport() {
 }
 
 async function writeGuestsInChunks(rows, onProgress) {
-  const chunkSize = 450;
+  const chunkSize = 225;
   let done = 0;
   for (let i = 0; i < rows.length; i += chunkSize) {
     const batch = writeBatch(appState.db);
     rows.slice(i, i + chunkSize).forEach((guest) => {
       const ref = doc(collection(appState.db, "events", appState.eventId, "guests"));
       batch.set(ref, buildGuestRecord(guest));
+      const internalNote = String(guest.internalNote || "").trim();
+      if (internalNote) {
+        batch.set(guestAdminNoteRef(ref.id), {
+          internalNote,
+          updatedAt: serverTimestamp(),
+          updatedByName: appState.member?.displayName || "Admin"
+        });
+      }
     });
     await batch.commit();
     done += Math.min(chunkSize, rows.length - i);
@@ -1699,11 +1788,14 @@ async function writeGuestsInChunks(rows, onProgress) {
 }
 
 async function deleteGuestsInChunks(guests, onProgress) {
-  const chunkSize = 450;
+  const chunkSize = 225;
   let done = 0;
   for (let i = 0; i < guests.length; i += chunkSize) {
     const batch = writeBatch(appState.db);
-    guests.slice(i, i + chunkSize).forEach((guest) => batch.delete(guestRef(guest.id)));
+    guests.slice(i, i + chunkSize).forEach((guest) => {
+      batch.delete(guestRef(guest.id));
+      batch.delete(guestAdminNoteRef(guest.id));
+    });
     await batch.commit();
     done += Math.min(chunkSize, guests.length - i);
     onProgress?.(done);
@@ -1711,6 +1803,10 @@ async function deleteGuestsInChunks(guests, onProgress) {
 }
 
 function exportGuests(filter) {
+  if (isAdmin() && !appState.adminNotesLoaded) {
+    notify("Export noch nicht möglich: Admin-Infos werden noch geladen.", "warning");
+    return;
+  }
   let rows = appState.guests;
   if (filter !== "all") rows = rows.filter((g) => (g.status || "open") === filter);
 
@@ -1722,8 +1818,9 @@ function exportGuests(filter) {
     "Check-in Zeit": formatTimestamp(g.checkedInAt),
     "Check-in durch": g.checkedInByName || "",
     "Check-in Gerät": g.checkedInDevice || "",
-    "Support Kommentar": g.supportComment || "",
-    "Interne Notiz": g.internalNote || ""
+    [INFO_LABELS.staffToAll]: staffInfoForGuest(g),
+    [INFO_LABELS.adminToStaff]: adminStaffInfoForGuest(g),
+    [INFO_LABELS.adminOnly]: adminOnlyInfoForGuest(g)
   }));
 
   const fileName = `${eventFileStem()}-${filter}-${todayStamp()}.csv`;
@@ -1932,13 +2029,13 @@ function renderAuditLog() {
   }
   const content = tabContent();
   content.innerHTML = `
-    <section class="card">
+    <section class="card audit-card">
       <h2>Audit Log</h2>
       <p class="small">Zeigt die letzten 100 Einträge. Der CSV-Export lädt bis zu 5000 Einträge für dieses Event.</p>
       <div class="actions">
         <button class="btn-secondary" id="exportAuditLogTabBtn" type="button">Audit Log CSV exportieren</button>
       </div>
-      <div id="auditList"><p class="small">Lädt…</p></div>
+      <div id="auditList" class="audit-list"><p class="small">Lädt…</p></div>
     </section>
   `;
   document.getElementById("exportAuditLogTabBtn")?.addEventListener("click", exportAuditLog);
@@ -1964,7 +2061,7 @@ function renderAuditLine(entry) {
       <strong>${escapeHtml(labelForAction(entry.action))}</strong>
       <div class="small">${formatTimestamp(entry.createdAt)} · ${escapeHtml(entry.actorName || "")} · ${escapeHtml(entry.deviceLabel || "")}</div>
       <div>${escapeHtml(entry.guestName || "")}</div>
-      ${entry.details ? `<div class="small">${escapeHtml(JSON.stringify(entry.details))}</div>` : ""}
+      ${entry.details ? `<div class="small log-details">${escapeHtml(JSON.stringify(entry.details))}</div>` : ""}
     </div>
   `;
 }
@@ -2019,7 +2116,7 @@ function calculateStats() {
 function filterGuests(search, category, status) {
   const normalizedSearch = normalizeForSearch(search || "");
   return appState.guests.filter((guest) => {
-    const text = `${guest.name || ""} ${guest.guestId || ""} ${guest.category || ""} ${guest.supportComment || ""}`;
+    const text = `${guest.name || ""} ${guest.guestId || ""} ${guest.category || ""} ${isEventMember() ? `${staffInfoForGuest(guest)} ${adminStaffInfoForGuest(guest)}` : ""} ${isAdmin() ? adminOnlyInfoForGuest(guest) : ""}`;
     const searchMatches = !normalizedSearch || normalizeForSearch(text).includes(normalizedSearch);
     const categoryMatches = !category || category === "all" || (guest.category || "") === category;
     const statusMatches = !status || status === "all" || (guest.status || "open") === status;
@@ -2044,7 +2141,7 @@ function buildGuestRecord(input) {
     category,
     status: input.status && DEFAULT_STATUSES.includes(input.status) ? input.status : "open",
     supportComment: String(input.supportComment || "").trim(),
-    internalNote: String(input.internalNote || "").trim(),
+    adminStaffInfo: String(input.adminStaffInfo || "").trim(),
     checkedInAt: input.checkedInAt || null,
     checkedInByUid: input.checkedInByUid || null,
     checkedInByName: input.checkedInByName || null,
@@ -2063,12 +2160,16 @@ function mapCsvRowToGuest(row, index, defaultCategory) {
     || defaultCategory;
   const guestId = pick(row, ["Guest ID", "GuestID", "ID", "Code", "Nummer", "Nr"])
     || nextGuestCode(appState.guests.length + index + 1);
-  const supportComment = pick(row, ["Support Kommentar", "Support Comment", "Kommentar", "Comment", "Bemerkung"]);
-  const internalNote = pick(row, ["Notiz", "Note", "Internal Note", "Interne Notiz"]);
+  const supportComment = pick(row, [INFO_LABELS.staffToAll, "Support Kommentar", "Support Comment", "Kommentar", "Comment", "Bemerkung"]);
+  const adminStaffInfo = pick(row, [INFO_LABELS.adminToStaff, "Info für Check-in Staff", "Check-in Info"]);
+  const internalNote = pick(row, [INFO_LABELS.adminOnly, "Interne Notiz", "Internal Note", "Admin-Info", "Admin Notiz", "Private Admin Info", "Notiz", "Note"]);
   const statusRaw = pick(row, ["Status", "Check-in Status"]);
   const status = parseStatus(statusRaw);
 
-  return buildGuestRecord({ name, category, guestId, supportComment, internalNote, status });
+  return {
+    ...buildGuestRecord({ name, category, guestId, supportComment, adminStaffInfo, status }),
+    internalNote: String(internalNote || "").trim()
+  };
 }
 
 function normalizeCategory(input) {
@@ -2303,8 +2404,24 @@ function guestRef(id) {
   return doc(appState.db, "events", appState.eventId, "guests", id);
 }
 
+function guestAdminNoteRef(id) {
+  return doc(appState.db, "events", appState.eventId, "guestAdminNotes", id);
+}
+
 function findGuest(id) {
   return appState.guests.find((g) => g.id === id);
+}
+
+function staffInfoForGuest(guest) {
+  return String(guest.supportComment || "").trim();
+}
+
+function adminStaffInfoForGuest(guest) {
+  return String(guest.adminStaffInfo || "").trim();
+}
+
+function adminOnlyInfoForGuest(guest) {
+  return String(appState.adminNotes[guest.id]?.internalNote || "").trim();
 }
 
 function isAdmin() {
@@ -2615,6 +2732,8 @@ async function activateKnownEvent(eventId) {
   appState.event = { id: eventSnap.id, ...eventSnap.data() };
   appState.member = memberSnap.exists() ? { id: memberSnap.id, ...memberSnap.data() } : null;
   appState.guests = [];
+  appState.adminNotes = {};
+  appState.adminNotesLoaded = false;
   appState.auditEntries = [];
   appState.currentTab = previousTab;
   localStorage.setItem("guestlist:lastEventId", targetEventId);
@@ -2735,6 +2854,10 @@ function unsubscribeAll() {
   if (appState.guestUnsubscribe) {
     appState.guestUnsubscribe();
     appState.guestUnsubscribe = null;
+  }
+  if (appState.adminNotesUnsubscribe) {
+    appState.adminNotesUnsubscribe();
+    appState.adminNotesUnsubscribe = null;
   }
   if (appState.auditUnsubscribe) {
     appState.auditUnsubscribe();

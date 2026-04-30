@@ -88,10 +88,19 @@ service cloud.firestore {
         && data.name is string
         && data.category is string
         && data.keys().hasOnly([
-          'guestId', 'name', 'searchName', 'category', 'status', 'supportComment', 'internalNote',
+          'guestId', 'name', 'searchName', 'category', 'status', 'supportComment', 'adminStaffInfo',
           'checkedInAt', 'checkedInByUid', 'checkedInByName', 'checkedInDevice',
           'createdAt', 'updatedAt', 'createdByUid', 'createdByName',
           'lastActionAt', 'lastActionByName'
+        ]);
+    }
+
+    function validGuestAdminNoteData(data) {
+      return data.internalNote is string
+        && data.updatedAt == request.time
+        && data.updatedByName is string
+        && data.keys().hasOnly([
+          'internalNote', 'updatedAt', 'updatedByName'
         ]);
     }
 
@@ -171,6 +180,13 @@ service cloud.firestore {
 
         allow update: if (isAdmin(eventId) && validGuestData(request.resource.data))
           || staffGuestUpdateAllowed(eventId);
+        allow delete: if isAdmin(eventId);
+      }
+
+      match /guestAdminNotes/{guestId} {
+        allow read: if isAdmin(eventId);
+        allow create, update: if isAdmin(eventId)
+          && validGuestAdminNoteData(request.resource.data);
         allow delete: if isAdmin(eventId);
       }
 

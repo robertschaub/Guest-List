@@ -60,8 +60,8 @@ Erwartete Felder:
 - `searchName`
 - `category`
 - `status`: `open`, `checked_in`, `no_show`
-- `supportComment`
-- `internalNote`
+- `supportComment`: Info von Check-in Staff für alle
+- `adminStaffInfo`: Info von Administratoren an Check-in Staff
 - `checkedInAt`
 - `checkedInByUid`
 - `checkedInByName`
@@ -72,6 +72,16 @@ Erwartete Felder:
 - `createdByName`
 - `lastActionAt`
 - `lastActionByName`
+
+## events/{eventId}/guestAdminNotes/{guestDocId}
+
+Admin-geschützte Zusatzdaten pro Gast. Diese Daten liegen bewusst nicht im normalen Gast-Dokument, weil Check-in Staff `guests` lesen darf.
+
+Erwartete Felder:
+
+- `internalNote`: Info nur für Administratoren
+- `updatedAt`
+- `updatedByName`
 
 ## events/{eventId}/auditLog/{logId}
 
@@ -94,8 +104,9 @@ Erwartete Felder:
 - `guestId` soll innerhalb eines Events eindeutig sein. Der CSV Import blockiert doppelte IDs in der Datei und bei Zusatzimporten auch IDs, die bereits im Event existieren.
 - `status` darf nur `open`, `checked_in`, `no_show` sein.
 - Doppel-Check-in-Schutz muss per Firestore Transaction geschehen.
-- Check-in Staff darf Status auf `checked_in` setzen und Support-Kommentare ändern, aber keine Gäste löschen.
+- Check-in Staff darf Status auf `checked_in` setzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen.
 - Admin darf Import, Export, Massen-No-Show, PIN-Reset und Korrekturen durchführen.
+- Admin-only Infos liegen unter `guestAdminNotes` und dürfen nur von Admins gelesen und geschrieben werden.
 
 ## Zu prüfen
 
