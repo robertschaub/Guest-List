@@ -1225,6 +1225,14 @@ function renderEventEdit() {
   const content = tabContent();
   content.innerHTML = `
     <section class="card">
+      <h2>Neues Event erstellen</h2>
+      <p class="small">Öffnet die Event-Auswahl mit Setup-Formular für einen neuen Event.</p>
+      <div class="actions">
+        <button class="btn-primary" id="openEventSetupBtn" type="button">Event-Auswahl / neues Event</button>
+      </div>
+    </section>
+
+    <section class="card">
       <h2>Event wechseln</h2>
       <p class="small">Öffnet ein anderes vorbereitetes Event in diesem Browser. Gäste, Import und Export bleiben pro Event getrennt.</p>
       ${renderKnownEventList(appState.eventId)}
@@ -1235,6 +1243,9 @@ function renderEventEdit() {
 
   bindKnownLinkCopyButtons();
   bindKnownEventButtons();
+  document.getElementById("openEventSetupBtn")?.addEventListener("click", () => {
+    window.location.href = `${urlWithoutParams()}?setup=1`;
+  });
   document.getElementById("eventNameForm")?.addEventListener("submit", updateEventNameFromForm);
 }
 
