@@ -81,9 +81,27 @@ code {
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.25);
 }
 
-.app-header > div:first-child {
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   width: min(1180px, calc(100% - 130px));
   margin-left: max(0px, calc((100% - 1180px) / 2));
+  min-width: 0;
+}
+
+.app-logo {
+  width: 58px;
+  height: 58px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  object-fit: contain;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.3);
+}
+
+.app-title-block {
+  min-width: 0;
 }
 
 .app-header h1 {
@@ -464,8 +482,15 @@ tr:last-child td { border-bottom: 0; }
     padding-right: 8px;
   }
 
-  .app-header > div:first-child {
+  .app-brand {
     width: calc(100% - 100px);
+    gap: 10px;
+  }
+
+  .app-logo {
+    width: 46px;
+    height: 46px;
+    border-radius: 8px;
   }
 
   .status-pill {
