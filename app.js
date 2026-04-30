@@ -308,6 +308,7 @@ function renderWelcome() {
     </section>
   `);
 
+  bindKnownLinkCopyButtons();
   bindKnownEventButtons();
 
   document.getElementById("joinExistingForm").addEventListener("submit", (event) => {
@@ -2065,14 +2066,18 @@ function renderKnownEventList(currentEventId = "") {
     <div class="event-switch-list">
       ${events.map((event) => {
         const isCurrent = event.id === currentEventId;
+        const link = urlWithEvent(event.id);
         return `
-          <button class="event-switch-card ${isCurrent ? "current" : ""}" type="button" data-open-event="${escapeHtml(event.id)}">
+          <div class="event-switch-card ${isCurrent ? "current" : ""}">
             <span>
               <strong>${escapeHtml(event.name || event.id)}</strong>
               <small>${event.date ? escapeHtml(formatEventDate(event.date)) : "ohne Datum"} · ${escapeHtml(event.id)}</small>
             </span>
-            <span>${isCurrent ? "Aktuell" : "Öffnen"}</span>
-          </button>
+            <span class="event-switch-actions">
+              <button class="btn-secondary" type="button" data-copy-known-link="${escapeHtml(link)}">Link kopieren</button>
+              <button class="${isCurrent ? "btn-secondary" : "btn-primary"}" type="button" data-open-event="${escapeHtml(event.id)}">${isCurrent ? "Aktuell" : "Öffnen"}</button>
+            </span>
+          </div>
         `;
       }).join("")}
     </div>
