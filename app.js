@@ -632,7 +632,8 @@ function loadMainApp() {
 
 function renderShell() {
   const role = ROLE_META[appState.member?.role] || appState.member?.role || "User";
-  if (!isAdmin() && ["overview", "lists", "admin", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
+  if (appState.currentTab === "lists") appState.currentTab = "overview";
+  if (!isAdmin() && ["overview", "admin", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
   const tabClass = (tab) => appState.currentTab === tab ? "active" : "";
   els.eventTitle.textContent = appState.event?.name || "Gästeliste";
   setEventMeta();
@@ -642,7 +643,7 @@ function renderShell() {
     <div id="flash"></div>
     <nav class="nav-tabs" id="navTabs">
       <button data-tab="checkin" class="${tabClass("checkin")}">Check-in</button>
-      ${isAdmin() ? `<button data-tab="overview" class="${tabClass("overview")}">Übersicht</button><button data-tab="lists" class="${tabClass("lists")}">Listen</button><button data-tab="admin" class="${tabClass("admin")}">Event Gäste & Betrieb</button>` : ""}
+      ${isAdmin() ? `<button data-tab="overview" class="${tabClass("overview")}">Übersicht</button><button data-tab="admin" class="${tabClass("admin")}">Event Gäste & Betrieb</button>` : ""}
       <button data-tab="setup" class="${tabClass("setup")}" type="button">Events Erstellen</button>
       <button data-tab="role" class="${tabClass("role")}" type="button">Rolle/PIN wechseln</button>
       ${isAdmin() ? `<button data-tab="log" class="${tabClass("log")}">Log</button>` : ""}
@@ -660,10 +661,10 @@ function renderShell() {
 }
 
 function renderActiveTab() {
-  if (!isAdmin() && ["overview", "lists", "admin", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
+  if (appState.currentTab === "lists") appState.currentTab = "overview";
+  if (!isAdmin() && ["overview", "admin", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
   if (appState.currentTab === "checkin") renderCheckin();
   else if (appState.currentTab === "overview") renderOverview();
-  else if (appState.currentTab === "lists") renderLists();
   else if (appState.currentTab === "admin") renderAdmin();
   else if (appState.currentTab === "setup") renderEventSetup();
   else if (appState.currentTab === "role") renderRolePinTab();
@@ -782,7 +783,6 @@ function renderAddGuestPanel(categories) {
     <section class="card compact">
       <details>
         <summary class="details-summary">Gast manuell hinzufügen</summary>
-        <p class="small">Nur für kurzfristige Ergänzungen verwenden. Der neue Gast erscheint danach direkt in dieser Liste.</p>
         <form id="addGuestForm" class="grid two">
           <div class="form-row">
             <label for="addName">Name</label>
@@ -1146,7 +1146,9 @@ function renderOverview() {
       <h2>Letzte Check-ins</h2>
       ${renderRecentCheckins()}
     </section>
+    ${renderGuestListSection()}
   `;
+  bindGuestListControls();
 }
 
 function renderSummaryCards() {
@@ -1215,13 +1217,11 @@ function renderRecentCheckins() {
   `;
 }
 
-function renderLists() {
-  const content = tabContent();
+function renderGuestListSection() {
   const categories = getCategories();
   const guests = filterGuests("", appState.ui.listCategory, appState.ui.listStatus);
 
-  content.innerHTML = `
-    ${renderSummaryCards()}
+  return `
     <section class="card">
       <h2>Listen</h2>
       <div class="grid two">
@@ -1244,14 +1244,16 @@ function renderLists() {
       ${renderGuestTable(guests)}
     </section>
   `;
+}
 
+function bindGuestListControls() {
   document.getElementById("listCategory")?.addEventListener("change", (e) => {
     appState.ui.listCategory = e.target.value;
-    renderLists();
+    renderOverview();
   });
   document.getElementById("listStatus")?.addEventListener("change", (e) => {
     appState.ui.listStatus = e.target.value;
-    renderLists();
+    renderOverview();
   });
 }
 
@@ -1312,7 +1314,7 @@ function renderAdmin() {
     <section class="card">
       <h2>Event-Links für Door-Leads</h2>
       <p class="small">Diese Links an Check-in-Geräte geben. Mitarbeiter:innen benötigen zusätzlich den Check-in-PIN. Nicht die Basis-URL verwenden.</p>
-      ${renderKnownEventLinks()}
+      ${renderCurrentEventLink()}
     </section>
 
     <section class="card">
@@ -2343,24 +2345,23 @@ function renderKnownEventList(currentEventId = "") {
   `;
 }
 
-function renderKnownEventLinks() {
-  const events = getKnownEvents();
-  if (!events.length) return `<p class="notice warning">Noch keine bekannten Events in dieser Installation.</p>`;
-
+function renderCurrentEventLink() {
+  const event = {
+    id: appState.eventId,
+    name: appState.event?.name || appState.eventId,
+    date: appState.event?.date || ""
+  };
+  if (!event.id) return `<p class="notice warning">Aktueller Event ist nicht geladen.</p>`;
+  const link = urlWithEvent(event.id);
   return `
     <div class="grid">
-      ${events.map((event) => {
-        const link = urlWithEvent(event.id);
-        return `
-          <div class="form-row">
-            <label>${escapeHtml(event.name || event.id)}${event.date ? ` · ${escapeHtml(formatEventDate(event.date))}` : ""}</label>
-            <div class="copy-field">
-              <input value="${escapeHtml(link)}" readonly />
-              <button class="btn-secondary" type="button" data-copy-known-link="${escapeHtml(link)}">Kopieren</button>
-            </div>
-          </div>
-        `;
-      }).join("")}
+      <div class="form-row">
+        <label>${escapeHtml(event.name || event.id)}${event.date ? ` · ${escapeHtml(formatEventDate(event.date))}` : ""}</label>
+        <div class="copy-field">
+          <input value="${escapeHtml(link)}" readonly />
+          <button class="btn-secondary" type="button" data-copy-known-link="${escapeHtml(link)}">Kopieren</button>
+        </div>
+      </div>
     </div>
   `;
 }
