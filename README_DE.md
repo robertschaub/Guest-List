@@ -143,6 +143,8 @@ https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=evt-samstag
 
 Im laufenden UI führt der Button **Event wechseln** zur Eingabeseite. Dort kann eine andere Event-ID geöffnet oder über `?setup=1` ein neues Event erstellt werden.
 
+Die Basis-URL ohne `?event=...` öffnet kein Event automatisch. Dadurch wird verhindert, dass ein Gerät aus Versehen das zuletzt verwendete Freitag-Event am Samstag wieder öffnet.
+
 CSV-Import und CSV-Export gelten immer nur für das aktuell geöffnete Event. Für zwei Eventtage werden daher zwei separate CSV-Dateien empfohlen, z.B. `the-garden-freitag.csv` und `the-garden-samstag.csv`.
 
 ## Nutzung am Event
@@ -182,7 +184,7 @@ Die App akzeptiert auch ähnliche Spaltennamen wie:
 - `Support Comment`, `Kommentar`, `Bemerkung`
 - `Note`, `Notiz`, `Interne Notiz`
 
-Excel-Datei zuerst als CSV exportieren.
+Excel-Datei zuerst als CSV exportieren. Empfohlen ist **CSV UTF-8**; klassische Windows-CSV wird zusätzlich mit Windows-1252-Fallback gelesen.
 
 Der Import erkennt Komma, Semikolon und Tab als Trennzeichen. Für deutsche Excel-Exporte ist Semikolon häufig; zum Testen liegt zusätzlich `data/samples/sample_guests_30_semicolon.csv` bei. UTF-8/Umlaute werden unterstützt.
 
@@ -256,7 +258,7 @@ Bewusst enthalten:
 
 ## Sicherheitshinweise
 
-- Verwende nicht `1234` als PIN.
+- Verwende keine kurzen Zahlen-PINs wie `1234`; neue Events erzwingen mindestens 8 Zeichen.
 - Check-in-PIN und Admin-PIN unterschiedlich setzen.
 - Event-Link nicht öffentlich posten.
 - Admin-PIN nur an Verantwortliche geben.

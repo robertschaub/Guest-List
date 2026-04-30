@@ -31,15 +31,6 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data;
     }
 
-    function isAdmin(eventId) {
-      return isMember(eventId) && memberData(eventId).role == 'admin';
-    }
-
-    function isCheckin(eventId) {
-      return isMember(eventId)
-        && (memberData(eventId).role == 'checkin' || memberData(eventId).role == 'admin');
-    }
-
     function validRole(role) {
       return role == 'admin' || role == 'checkin';
     }
@@ -50,6 +41,20 @@ service cloud.firestore {
           (role == 'admin' && securityData(eventId).adminPinHash == pinHash) ||
           (role == 'checkin' && securityData(eventId).checkinPinHash == pinHash)
         );
+    }
+
+    function hasCurrentPin(eventId) {
+      return isMember(eventId)
+        && validPin(eventId, memberData(eventId).role, memberData(eventId).pinHash);
+    }
+
+    function isAdmin(eventId) {
+      return hasCurrentPin(eventId) && memberData(eventId).role == 'admin';
+    }
+
+    function isCheckin(eventId) {
+      return hasCurrentPin(eventId)
+        && (memberData(eventId).role == 'checkin' || memberData(eventId).role == 'admin');
     }
 
     function validMemberWrite(eventId, uid) {
@@ -92,14 +97,26 @@ service cloud.firestore {
 
     function staffGuestUpdateAllowed(eventId) {
       return isCheckin(eventId) && (
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'supportComment', 'updatedAt', 'lastActionAt', 'lastActionByName'
-        ])
+        (
+          request.resource.data.supportComment is string
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.lastActionAt == request.time
+          && request.resource.data.lastActionByName is string
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'supportComment', 'updatedAt', 'lastActionAt', 'lastActionByName'
+          ])
+        )
         ||
         (
           resource.data.status != 'checked_in'
           && request.resource.data.status == 'checked_in'
           && request.resource.data.checkedInByUid == request.auth.uid
+          && request.resource.data.checkedInAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.lastActionAt == request.time
+          && request.resource.data.checkedInByName is string
+          && request.resource.data.checkedInDevice is string
+          && request.resource.data.lastActionByName is string
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status', 'checkedInAt', 'checkedInByUid', 'checkedInByName', 'checkedInDevice',
             'updatedAt', 'lastActionAt', 'lastActionByName', 'supportComment'

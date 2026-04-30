@@ -27,6 +27,7 @@ import {
 const CONFIG = window.GUESTLIST_APP_CONFIG || {};
 const DEFAULT_CATEGORIES = CONFIG.app?.categories || ["GA", "Member GA", "Member VIP", "On Stage", "Mitarbeiter"];
 const DEFAULT_STATUSES = ["open", "checked_in", "no_show"];
+const PIN_MIN_LENGTH = 8;
 
 const STATUS_META = {
   open: { label: "Offen", badge: "warning" },
@@ -50,6 +51,7 @@ const appState = {
   guests: [],
   guestUnsubscribe: null,
   auditUnsubscribe: null,
+  checkInLocks: new Set(),
   currentTab: "checkin",
   ui: {
     search: "",
@@ -108,7 +110,7 @@ async function boot() {
 
 async function startApp() {
   const params = new URLSearchParams(window.location.search);
-  const eventParam = params.get("event") || localStorage.getItem("guestlist:lastEventId");
+  const eventParam = params.get("event");
   const setupParam = params.get("setup");
 
   if (setupParam === "1" || !eventParam) {
@@ -169,14 +171,16 @@ function renderConfigMissing() {
 function renderWelcome() {
   els.eventTitle.textContent = "Gästeliste Check-in";
   setHeaderMeta([]);
+  const savedEventId = localStorage.getItem("guestlist:lastEventId") || "";
   render(`
     <section class="card">
       <h2>Event öffnen</h2>
-      <p class="small">Wenn du bereits eine Event-ID hast, kannst du direkt verbinden.</p>
+      <p class="small">Wenn du bereits eine Event-ID hast, kannst du direkt verbinden. Die Basis-URL öffnet kein Event automatisch.</p>
+      ${savedEventId ? `<p class="notice warning">Zuletzt in diesem Browser geöffnet: <code>${escapeHtml(savedEventId)}</code>. Bitte bewusst prüfen, ob das der richtige Tag ist.</p>` : ""}
       <form id="joinExistingForm" class="grid two">
         <div class="form-row">
           <label for="existingEventId">Event-ID</label>
-          <input id="existingEventId" placeholder="z.B. evt-abc123" autocomplete="off" />
+          <input id="existingEventId" value="${escapeHtml(savedEventId)}" placeholder="z.B. evt-abc123" autocomplete="off" />
         </div>
         <div class="form-row" style="align-self:end">
           <button class="btn-primary" type="submit">Event öffnen</button>
@@ -194,15 +198,15 @@ function renderWelcome() {
         </div>
         <div class="form-row">
           <label for="newEventDate">Datum</label>
-          <input id="newEventDate" type="date" />
+          <input id="newEventDate" type="date" required />
         </div>
         <div class="form-row">
           <label for="adminPin">Admin-PIN / Passwort</label>
-          <input id="adminPin" type="password" minlength="4" required placeholder="mindestens 4 Zeichen" />
+          <input id="adminPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
         </div>
         <div class="form-row">
           <label for="checkinPin">Check-in-PIN</label>
-          <input id="checkinPin" type="password" minlength="4" required placeholder="für Eingangspersonal" />
+          <input id="checkinPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
         </div>
         <div class="form-row">
           <label for="setupName">Dein Name</label>
@@ -248,8 +252,13 @@ async function createEventFromForm(event) {
   const deviceLabel = val("setupDevice").trim() || "Setup Gerät";
   const categories = val("categoryList").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 
-  if (adminPin.length < 4 || checkinPin.length < 4) {
-    result.innerHTML = `<p class="notice error">PINs müssen mindestens 4 Zeichen haben.</p>`;
+  if (!name || !date) {
+    result.innerHTML = `<p class="notice error">Eventname und Datum sind Pflichtfelder.</p>`;
+    return;
+  }
+
+  if (adminPin.length < PIN_MIN_LENGTH || checkinPin.length < PIN_MIN_LENGTH) {
+    result.innerHTML = `<p class="notice error">PINs müssen mindestens ${PIN_MIN_LENGTH} Zeichen haben.</p>`;
     return;
   }
 
@@ -447,11 +456,13 @@ function subscribeGuests() {
 function renderCheckin() {
   const content = tabContent();
   const categories = getCategories();
-  const results = filterGuests(appState.ui.search, appState.ui.categoryFilter, appState.ui.statusFilter).slice(0, 60);
-  const filteredCount = filterGuests(appState.ui.search, appState.ui.categoryFilter, appState.ui.statusFilter).length;
+  const filteredGuests = filterGuests(appState.ui.search, appState.ui.categoryFilter, appState.ui.statusFilter);
+  const results = filteredGuests.slice(0, 60);
+  const filteredCount = filteredGuests.length;
 
   content.innerHTML = `
     ${renderSummaryCards()}
+    ${isOffline() ? `<div class="notice error"><strong>Offline:</strong> Check-in und Änderungen sind gesperrt. Bitte Verbindung prüfen und Seite neu laden.</div>` : ""}
     <section class="card search-sticky">
       <div class="grid three">
         <div class="form-row" style="grid-column: span 2;">
@@ -507,6 +518,7 @@ function renderGuestCard(guest) {
   const alreadyChecked = guest.status === "checked_in";
   const canOverride = isAdmin();
   const commentId = `comment-${guest.id}`;
+  const disabled = isOffline() ? "disabled" : "";
 
   return `
     <article class="guest-card" data-guest-id="${escapeHtml(guest.id)}">
@@ -525,15 +537,15 @@ function renderGuestCard(guest) {
       <div class="guest-actions">
         <div class="comment-box form-row">
           <label for="${commentId}">Support-Kommentar</label>
-          <textarea id="${commentId}" data-comment-for="${escapeHtml(guest.id)}" placeholder="z.B. VIP-Band abgeben, kommt mit Künstler…">${escapeHtml(guest.supportComment || "")}</textarea>
-          <button class="btn-secondary" data-action="save-comment" data-guest-id="${escapeHtml(guest.id)}">Kommentar speichern</button>
+          <textarea id="${commentId}" data-comment-for="${escapeHtml(guest.id)}" placeholder="z.B. VIP-Band abgeben, kommt mit Künstler…" ${disabled}>${escapeHtml(guest.supportComment || "")}</textarea>
+          <button class="btn-secondary" data-action="save-comment" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Kommentar speichern</button>
         </div>
         <div class="actions" style="margin-top:22px">
-          ${alreadyChecked && !canOverride ? `<button class="btn-secondary" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="0">Bereits eingecheckt</button>` : `<button class="btn-success" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="${alreadyChecked && canOverride ? "1" : "0"}">${alreadyChecked ? "Check-in überschreiben" : "Einchecken"}</button>`}
+          ${alreadyChecked && !canOverride ? `<button class="btn-secondary" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="0" ${disabled}>Bereits eingecheckt</button>` : `<button class="btn-success" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="${alreadyChecked && canOverride ? "1" : "0"}" ${disabled}>${alreadyChecked ? "Check-in überschreiben" : "Einchecken"}</button>`}
           ${isAdmin() ? `
-            <button class="btn-secondary" data-action="edit-guest" data-guest-id="${escapeHtml(guest.id)}">Bearbeiten</button>
-            <button class="btn-warning" data-action="no-show" data-guest-id="${escapeHtml(guest.id)}">No Show</button>
-            <button class="btn-secondary" data-action="reset-open" data-guest-id="${escapeHtml(guest.id)}">Auf Offen</button>
+            <button class="btn-secondary" data-action="edit-guest" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Bearbeiten</button>
+            <button class="btn-warning" data-action="no-show" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>No Show</button>
+            <button class="btn-secondary" data-action="reset-open" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Auf Offen</button>
           ` : ""}
         </div>
       </div>
@@ -564,6 +576,8 @@ function attachGuestCardHandlers(root) {
 }
 
 async function checkInGuest(guestDocId, force = false) {
+  if (!requireOnline("Check-in")) return;
+  if (appState.checkInLocks.has(guestDocId)) return;
   const guest = findGuest(guestDocId);
   if (!guest) return;
 
@@ -582,6 +596,7 @@ async function checkInGuest(guestDocId, force = false) {
   }
 
   try {
+    appState.checkInLocks.add(guestDocId);
     let before = null;
     await runTransaction(appState.db, async (transaction) => {
       const ref = guestRef(guestDocId);
@@ -621,10 +636,13 @@ async function checkInGuest(guestDocId, force = false) {
       console.error(error);
       notify(`Check-in fehlgeschlagen: ${error.message || error}`, "error");
     }
+  } finally {
+    appState.checkInLocks.delete(guestDocId);
   }
 }
 
 async function saveGuestComment(guestDocId) {
+  if (!requireOnline("Kommentar speichern")) return;
   const guest = findGuest(guestDocId);
   const textarea = document.querySelector(`[data-comment-for="${cssEscape(guestDocId)}"]`);
   if (!guest || !textarea) return;
@@ -649,6 +667,7 @@ async function saveGuestComment(guestDocId) {
 }
 
 async function editGuest(guestDocId) {
+  if (!requireOnline("Gast bearbeiten")) return;
   if (!isAdmin()) {
     notify("Nur Admins dürfen Gäste bearbeiten.", "warning");
     return;
@@ -699,6 +718,7 @@ async function editGuest(guestDocId) {
 }
 
 async function updateGuestStatus(guestDocId, status) {
+  if (!requireOnline("Status ändern")) return;
   if (!isAdmin()) {
     notify("Nur Admins dürfen den Status manuell ändern.", "warning");
     return;
@@ -889,7 +909,7 @@ function renderAdmin() {
       <ol class="compact-list">
         <li>Oben im Header prüfen: richtiger Eventname, Datum und Event-ID.</li>
         <li>Für Freitag und Samstag getrennte Event-Links und getrennte CSV-Dateien verwenden.</li>
-        <li>Unter CSV Import erst Datei auswählen, dann CSV prüfen, danach Import starten.</li>
+        <li>Unter CSV Import erst UTF-8-CSV auswählen, dann CSV prüfen, danach Import starten.</li>
         <li>Nach jedem Import in Übersicht und Listen Total und Kategorien kontrollieren.</li>
         <li>Vor Eventstart unter Export / Backup eine CSV-Sicherung herunterladen.</li>
         <li>Mit einem zweiten Gerät den Event-Link öffnen und Check-in-PIN testen.</li>
@@ -960,6 +980,7 @@ function renderAdmin() {
 
     <section class="card">
       <h2>Export / Backup</h2>
+      <p class="small">Backup für dieses Event: ${escapeHtml(appState.event?.name || "")} · ${escapeHtml(appState.event?.date || "")} · ${escapeHtml(appState.eventId || "")} · aktuell ${appState.guests.length} Gäste.</p>
       <div class="actions">
         <button class="btn-secondary" data-export="all">Alle Gäste CSV</button>
         <button class="btn-secondary" data-export="checked_in">Eingecheckte CSV</button>
@@ -978,11 +999,11 @@ function renderAdmin() {
         <form id="pinResetForm" class="grid two">
           <div class="form-row">
             <label for="newAdminPin">Neuer Admin-PIN</label>
-            <input id="newAdminPin" type="password" minlength="4" />
+            <input id="newAdminPin" type="password" minlength="${PIN_MIN_LENGTH}" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
           </div>
           <div class="form-row">
             <label for="newCheckinPin">Neuer Check-in-PIN</label>
-            <input id="newCheckinPin" type="password" minlength="4" />
+            <input id="newCheckinPin" type="password" minlength="${PIN_MIN_LENGTH}" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
           </div>
           <div class="actions" style="grid-column:1/-1"><button class="btn-primary" type="submit">PINs speichern</button></div>
         </form>
@@ -1014,6 +1035,7 @@ async function copyEventLink() {
 
 async function addGuestFromForm(event) {
   event.preventDefault();
+  if (!requireOnline("Gast hinzufügen")) return;
   const guest = buildGuestRecord({
     name: val("addName"),
     category: val("addCategory"),
@@ -1043,7 +1065,7 @@ async function previewCsvImport() {
   }
 
   try {
-    const text = await file.text();
+    const text = await readCsvFileText(file);
     const rows = parseCsv(text);
     const defaultCategory = val("defaultImportCategory");
     const mapped = rows.map((row, idx) => mapCsvRowToGuest(row, idx, defaultCategory));
@@ -1070,6 +1092,12 @@ async function runCsvImport() {
   const result = document.getElementById("importResult");
   const rows = appState.ui.importRows;
   const replace = document.getElementById("replaceGuests").checked;
+  const runButton = document.getElementById("runImportBtn");
+  if (!requireOnline("CSV importieren")) return;
+  if (appState.ui.importInProgress) {
+    result.innerHTML = `<p class="notice warning">Import läuft bereits.</p>`;
+    return;
+  }
   if (!rows.length) return;
 
   const validation = validateImportRows(rows, replace);
@@ -1082,6 +1110,10 @@ async function runCsvImport() {
   if (!replace && !confirm(`${rows.length} Gäste zusätzlich importieren?`)) return;
 
   appState.ui.importInProgress = true;
+  if (runButton) {
+    runButton.disabled = true;
+    runButton.textContent = "Import läuft…";
+  }
   result.innerHTML = `
     <p class="notice info">Import läuft…</p>
     <div class="progress"><div id="importProgress"></div></div>
@@ -1104,13 +1136,14 @@ async function runCsvImport() {
     await addAudit("guest_import", { name: "CSV Import" }, { count: rows.length, replace });
     result.innerHTML = `<p class="notice success">Import abgeschlossen: ${rows.length} Gäste.</p>`;
     appState.ui.importRows = [];
-    document.getElementById("runImportBtn").disabled = true;
+    if (runButton) runButton.disabled = true;
     notify(`Import abgeschlossen: ${rows.length} Gäste.`, "success");
   } catch (error) {
     console.error(error);
     result.innerHTML = `<p class="notice error">Import fehlgeschlagen: ${escapeHtml(error.message || String(error))}</p>`;
   } finally {
     appState.ui.importInProgress = false;
+    if (runButton) runButton.textContent = "Import starten";
   }
 }
 
@@ -1157,11 +1190,12 @@ function exportGuests(filter) {
     "Interne Notiz": g.internalNote || ""
   }));
 
-  downloadCsv(`${safeFileName(appState.event?.name || "gaesteliste")}-${filter}-${todayStamp()}.csv`, toCsv(csvRows, ";"));
+  downloadCsv(`${eventFileStem()}-${filter}-${todayStamp()}.csv`, toCsv(csvRows, ";"));
   void addAudit("guest_export", { name: "CSV Export" }, { filter, count: csvRows.length });
 }
 
 async function markOpenGuestsNoShow() {
+  if (!requireOnline("No Show setzen")) return;
   if (!isAdmin()) return;
   const openGuests = appState.guests.filter((g) => (g.status || "open") === "open");
   if (!openGuests.length) {
@@ -1194,10 +1228,11 @@ async function markOpenGuestsNoShow() {
 
 async function resetPinsFromForm(event) {
   event.preventDefault();
+  if (!requireOnline("PINs neu setzen")) return;
   const adminPin = val("newAdminPin");
   const checkinPin = val("newCheckinPin");
-  if (adminPin.length < 4 || checkinPin.length < 4) {
-    notify("Beide PINs müssen mindestens 4 Zeichen haben.", "warning");
+  if (adminPin.length < PIN_MIN_LENGTH || checkinPin.length < PIN_MIN_LENGTH) {
+    notify(`Beide PINs müssen mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
     return;
   }
 
@@ -1209,9 +1244,18 @@ async function resetPinsFromForm(event) {
       checkinPinHash,
       updatedAt: serverTimestamp()
     });
+    await setDoc(memberRef(appState.user.uid), {
+      uid: appState.user.uid,
+      role: "admin",
+      pinHash: adminPinHash,
+      displayName: appState.member.displayName || "Admin",
+      deviceLabel: appState.member.deviceLabel || "",
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    appState.member = { ...appState.member, role: "admin", pinHash: adminPinHash };
     await addAudit("pins_reset", { name: "PINs" }, {});
     document.getElementById("pinResetForm").reset();
-    notify("PINs neu gesetzt. Bereits verbundene Geräte bleiben verbunden; neue Geräte brauchen die neuen PINs.", "success");
+    notify("PINs neu gesetzt. Alte Geräte/PINs verlieren nach der Rules-Aktualisierung den Schreibzugriff.", "success");
   } catch (error) {
     console.error(error);
     notify(`PINs konnten nicht gesetzt werden: ${error.message || error}`, "error");
@@ -1408,6 +1452,15 @@ function parseCsv(text) {
     });
     return obj;
   });
+}
+
+async function readCsvFileText(file) {
+  const bytes = await file.arrayBuffer();
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder("windows-1252").decode(bytes);
+  }
 }
 
 function detectCsvDelimiter(text) {
@@ -1635,6 +1688,16 @@ function suggestDeviceLabel() {
   return "Check-in 1";
 }
 
+function isOffline() {
+  return navigator.onLine === false;
+}
+
+function requireOnline(action) {
+  if (!isOffline()) return true;
+  notify(`${action} nicht möglich: Gerät ist offline.`, "error");
+  return false;
+}
+
 function setEventMeta() {
   const parts = [
     appState.event?.date ? `Datum: ${formatEventDate(appState.event.date)}` : "",
@@ -1703,6 +1766,15 @@ function todayStamp() {
 
 function safeFileName(value) {
   return normalizeForSearch(value).replace(/\s+/g, "-") || "gaesteliste";
+}
+
+function eventFileStem() {
+  const parts = [
+    safeFileName(appState.event?.name || "gaesteliste"),
+    appState.event?.date ? safeFileName(appState.event.date) : "",
+    appState.eventId ? safeFileName(appState.eventId) : ""
+  ].filter(Boolean);
+  return parts.join("-");
 }
 
 function setProgress(id, pct) {
