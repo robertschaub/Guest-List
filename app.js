@@ -580,7 +580,8 @@ function renderShell() {
     <div id="flash"></div>
     <nav class="nav-tabs" id="navTabs">
       <button data-tab="checkin" class="active">Check-in</button>
-      ${isAdmin() ? `<button data-tab="overview">Übersicht</button><button data-tab="lists">Listen</button><button data-tab="admin">Event Gäste & Betrieb</button><button data-tab="event">Events Erstellen</button><button data-tab="log">Log</button>` : `<button id="switchEventBtn" type="button">Event wechseln</button>`}
+      ${isAdmin() ? `<button data-tab="overview">Übersicht</button><button data-tab="lists">Listen</button><button data-tab="admin">Admin</button><button data-tab="log">Log</button>` : ""}
+      <button id="switchEventBtn" type="button">Event wechseln</button>
       <button id="switchRoleBtn" type="button">Rolle/PIN wechseln</button>
     </nav>
     <section id="tabContent"></section>
@@ -600,12 +601,11 @@ function renderShell() {
 }
 
 function renderActiveTab() {
-  if (!isAdmin() && ["overview", "lists", "admin", "event", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
+  if (!isAdmin() && ["overview", "lists", "admin", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
   if (appState.currentTab === "checkin") renderCheckin();
   else if (appState.currentTab === "overview") renderOverview();
   else if (appState.currentTab === "lists") renderLists();
   else if (appState.currentTab === "admin") renderAdmin();
-  else if (appState.currentTab === "event") renderEventEdit();
   else if (appState.currentTab === "log") renderAuditLog();
 }
 
@@ -1216,60 +1216,6 @@ function renderGuestTable(guests) {
   `;
 }
 
-function renderEventEdit() {
-  if (!isAdmin()) {
-    tabContent().innerHTML = `<section class="card"><h2>Kein Zugriff</h2><p>Admin-Rechte erforderlich.</p></section>`;
-    return;
-  }
-
-  const content = tabContent();
-  content.innerHTML = `
-    <section class="card">
-      <h2>Neues Event erstellen</h2>
-      <p class="small">Öffnet die Event-Auswahl mit Setup-Formular für einen neuen Event.</p>
-      <div class="actions">
-        <button class="btn-primary" id="openEventSetupBtn" type="button">Event-Auswahl / neues Event</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Event wechseln</h2>
-      <p class="small">Öffnet ein anderes vorbereitetes Event in diesem Browser. Gäste, Import und Export bleiben pro Event getrennt.</p>
-      ${renderKnownEventList(appState.eventId)}
-    </section>
-
-    ${renderEventSettingsPanel()}
-  `;
-
-  bindKnownLinkCopyButtons();
-  bindKnownEventButtons();
-  document.getElementById("openEventSetupBtn")?.addEventListener("click", () => {
-    window.location.href = `${urlWithoutParams()}?setup=1`;
-  });
-  document.getElementById("eventNameForm")?.addEventListener("submit", updateEventNameFromForm);
-}
-
-function renderEventSettingsPanel() {
-  return `
-    <section class="card">
-      <h2>Event-Einstellungen</h2>
-      <form id="eventNameForm" class="grid two">
-        <div class="form-row">
-          <label for="eventNameInput">Eventname</label>
-          <input id="eventNameInput" value="${escapeHtml(appState.event?.name || "")}" required />
-        </div>
-        <div class="form-row">
-          <label>Event-ID</label>
-          <input value="${escapeHtml(appState.eventId || "")}" readonly />
-        </div>
-        <div class="actions" style="grid-column:1/-1">
-          <button class="btn-primary" type="submit">Eventname speichern</button>
-        </div>
-      </form>
-    </section>
-  `;
-}
-
 function renderAdmin() {
   if (!isAdmin()) {
     tabContent().innerHTML = `<section class="card"><h2>Kein Zugriff</h2><p>Admin-Rechte erforderlich.</p></section>`;
@@ -1290,12 +1236,33 @@ function renderAdmin() {
     </section>
 
     <section class="card">
-      <h2>Door-Lead-Link</h2>
-      <p class="small">Diesen Link an Check-in-Geräte für den aktuell geöffneten Event geben. Mitarbeiter:innen benötigen zusätzlich den Check-in-PIN.</p>
-      ${renderCurrentEventLink()}
+      <h2>Event-Einstellungen</h2>
+      <form id="eventNameForm" class="grid two">
+        <div class="form-row">
+          <label for="eventNameInput">Eventname</label>
+          <input id="eventNameInput" value="${escapeHtml(appState.event?.name || "")}" required />
+        </div>
+        <div class="form-row">
+          <label>Event-ID</label>
+          <input value="${escapeHtml(appState.eventId || "")}" readonly />
+        </div>
+        <div class="actions" style="grid-column:1/-1">
+          <button class="btn-primary" type="submit">Eventname speichern</button>
+        </div>
+      </form>
     </section>
 
-    ${renderAddGuestPanel(categories)}
+    <section class="card">
+      <h2>Event-Links für Door-Leads</h2>
+      <p class="small">Diese Links an Check-in-Geräte geben. Mitarbeiter:innen benötigen zusätzlich den Check-in-PIN. Nicht die Basis-URL verwenden.</p>
+      ${renderKnownEventLinks()}
+    </section>
+
+    <section class="card">
+      <h2>Event wechseln</h2>
+      <p class="small">Öffnet ein anderes vorbereitetes Event in diesem Browser. Gäste, Import und Export bleiben pro Event getrennt.</p>
+      ${renderKnownEventList(appState.eventId)}
+    </section>
 
     <section class="card">
       <h2>CSV Import</h2>
@@ -1353,7 +1320,8 @@ function renderAdmin() {
   `;
 
   bindKnownLinkCopyButtons();
-  document.getElementById("addGuestForm")?.addEventListener("submit", addGuestFromForm);
+  bindKnownEventButtons();
+  document.getElementById("eventNameForm")?.addEventListener("submit", updateEventNameFromForm);
   document.getElementById("previewImportBtn")?.addEventListener("click", previewCsvImport);
   document.getElementById("runImportBtn")?.addEventListener("click", runCsvImport);
   document.querySelectorAll("[data-export]").forEach((btn) => btn.addEventListener("click", () => exportGuests(btn.dataset.export)));
@@ -1393,7 +1361,7 @@ async function updateEventNameFromForm(event) {
     setEventMeta();
     saveKnownEvent(appState.event);
     await addAudit("event_update", { name }, { field: "name", oldName, newName: name });
-    renderActiveTab();
+    renderAdmin();
     notify("Eventname gespeichert.", "success");
   } catch (error) {
     console.error(error);
@@ -2251,22 +2219,6 @@ function renderKnownEventLinks() {
           </div>
         `;
       }).join("")}
-    </div>
-  `;
-}
-
-function renderCurrentEventLink() {
-  const link = urlWithEvent(appState.eventId || "");
-  const label = `${appState.event?.name || appState.eventId || "Aktueller Event"}${appState.event?.date ? ` · ${formatEventDate(appState.event.date)}` : ""}`;
-  return `
-    <div class="grid">
-      <div class="form-row">
-        <label>${escapeHtml(label)}</label>
-        <div class="copy-field">
-          <input value="${escapeHtml(link)}" readonly />
-          <button class="btn-secondary" type="button" data-copy-known-link="${escapeHtml(link)}">Kopieren</button>
-        </div>
-      </div>
     </div>
   `;
 }
