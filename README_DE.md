@@ -137,8 +137,8 @@ Jedes Event hat eine eigene Event-ID und damit eine eigene Gästeliste in Firest
 Für THE GARDEN sind in der App zwei Eventtage vorbereitet:
 
 ```text
-https://robertschaub.github.io/Guest-List/?event=the-garden-2026-05-01
-https://robertschaub.github.io/Guest-List/?event=the-garden-2026-05-02
+https://robertschaub.github.io/Guest-List/?event=the-garden-w-dj-prospa
+https://robertschaub.github.io/Guest-List/?event=the-garden-w-me
 ```
 
 Auf der Startseite und im Admin-Tab gibt es eine Liste **Bestehende Events**. Dort können Admins den Freitag- oder Samstag-Event bewusst auswählen. Im laufenden UI führt der Button **Event wechseln** ebenfalls zur Event-Auswahl. Dort kann auch weiterhin eine Event-ID manuell geöffnet oder ein neues Event erstellt werden.

@@ -18,13 +18,13 @@ window.GUESTLIST_APP_CONFIG = {
     defaultEventName: "Event Gästeliste",
     knownEvents: [
       {
-        id: "the-garden-2026-05-01",
-        name: "THE GARDEN // FRI",
+        id: "the-garden-w-dj-prospa",
+        name: "THE GARDEN w/ DJ Prospa",
         date: "2026-05-01"
       },
       {
-        id: "the-garden-2026-05-02",
-        name: "THE GARDEN // SAT",
+        id: "the-garden-w-me",
+        name: "THE GARDEN w/ &ME",
         date: "2026-05-02"
       }
     ],
