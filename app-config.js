@@ -16,6 +16,18 @@ window.GUESTLIST_APP_CONFIG = {
   },
   app: {
     defaultEventName: "Event Gästeliste",
+    knownEvents: [
+      {
+        id: "the-garden-2026-05-01",
+        name: "THE GARDEN // FRI",
+        date: "2026-05-01"
+      },
+      {
+        id: "the-garden-2026-05-02",
+        name: "THE GARDEN // SAT",
+        date: "2026-05-02"
+      }
+    ],
     categories: ["GA", "Member GA", "Member VIP", "On Stage", "Mitarbeiter"],
     statuses: ["open", "checked_in", "no_show"]
   }

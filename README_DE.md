@@ -134,14 +134,14 @@ Diesen Link gibst du an die Check-in-Geräte weiter. Die Mitarbeiter:innen brauc
 
 Jedes Event hat eine eigene Event-ID und damit eine eigene Gästeliste in Firestore.
 
-Beispiel:
+Für THE GARDEN sind in der App zwei Eventtage vorbereitet:
 
 ```text
-https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=evt-freitag
-https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=evt-samstag
+https://robertschaub.github.io/Guest-List/?event=the-garden-2026-05-01
+https://robertschaub.github.io/Guest-List/?event=the-garden-2026-05-02
 ```
 
-Im laufenden UI führt der Button **Event wechseln** zur Eingabeseite. Dort kann eine andere Event-ID geöffnet oder über `?setup=1` ein neues Event erstellt werden.
+Auf der Startseite und im Admin-Tab gibt es eine Liste **Bestehende Events**. Dort können Admins den Freitag- oder Samstag-Event bewusst auswählen. Im laufenden UI führt der Button **Event wechseln** ebenfalls zur Event-Auswahl. Dort kann auch weiterhin eine Event-ID manuell geöffnet oder ein neues Event erstellt werden.
 
 Die Basis-URL ohne `?event=...` öffnet kein Event automatisch. Dadurch wird verhindert, dass ein Gerät aus Versehen das zuletzt verwendete Freitag-Event am Samstag wieder öffnet.
 

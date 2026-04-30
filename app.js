@@ -27,6 +27,8 @@ import {
 const CONFIG = window.GUESTLIST_APP_CONFIG || {};
 const DEFAULT_CATEGORIES = CONFIG.app?.categories || ["GA", "Member GA", "Member VIP", "On Stage", "Mitarbeiter"];
 const DEFAULT_STATUSES = ["open", "checked_in", "no_show"];
+const CONFIGURED_EVENTS = Array.isArray(CONFIG.app?.knownEvents) ? CONFIG.app.knownEvents : [];
+const KNOWN_EVENTS_STORAGE_KEY = "guestlist:knownEvents";
 const PIN_MIN_LENGTH = 8;
 
 const STATUS_META = {
@@ -128,6 +130,7 @@ async function startApp() {
   }
 
   appState.event = { id: eventSnap.id, ...eventSnap.data() };
+  saveKnownEvent(appState.event);
   els.eventTitle.textContent = appState.event.name || "Gästeliste";
   setEventMeta();
 
@@ -172,9 +175,18 @@ function renderWelcome() {
   els.eventTitle.textContent = "Gästeliste Check-in";
   setHeaderMeta([]);
   const savedEventId = localStorage.getItem("guestlist:lastEventId") || "";
+  const knownEvents = getKnownEvents();
   render(`
+    ${knownEvents.length ? `
+      <section class="card">
+        <h2>Bestehende Events</h2>
+        <p class="small">Für Freitag und Samstag jeweils den passenden Event öffnen. Die PIN wird danach abgefragt.</p>
+        ${renderKnownEventList()}
+      </section>
+    ` : ""}
+
     <section class="card">
-      <h2>Event öffnen</h2>
+      <h2>Event per ID öffnen</h2>
       <p class="small">Wenn du bereits eine Event-ID hast, kannst du direkt verbinden. Die Basis-URL öffnet kein Event automatisch.</p>
       ${savedEventId ? `<p class="notice warning">Zuletzt in diesem Browser geöffnet: <code>${escapeHtml(savedEventId)}</code>. Bitte bewusst prüfen, ob das der richtige Tag ist.</p>` : ""}
       <form id="joinExistingForm" class="grid two">
@@ -227,6 +239,8 @@ function renderWelcome() {
       <div id="setupResult"></div>
     </section>
   `);
+
+  bindKnownEventButtons();
 
   document.getElementById("joinExistingForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -292,6 +306,8 @@ async function createEventFromForm(event) {
       updatedAt: serverTimestamp()
     });
 
+    saveKnownEvent({ id: eventId, name, date });
+
     result.innerHTML = `
       <div class="notice success">
         Event erstellt. Speichere die PINs sicher. Du wirst jetzt weitergeleitet.
@@ -314,7 +330,7 @@ function renderEventNotFound(eventId) {
       <h2>Event nicht gefunden</h2>
       <p>Für die Event-ID <code>${escapeHtml(eventId)}</code> wurde kein Event gefunden.</p>
       <div class="actions">
-        <button class="btn-secondary" onclick="window.location.href='${escapeJsUrl(urlWithoutParams())}?setup=1'">Neues Event erstellen</button>
+        <button class="btn-secondary" onclick="window.location.href='${escapeJsUrl(urlWithoutParams())}?setup=1'">Zur Event-Auswahl</button>
       </div>
     </section>
   `);
@@ -933,6 +949,12 @@ function renderAdmin() {
     </section>
 
     <section class="card">
+      <h2>Event wechseln</h2>
+      <p class="small">Öffnet ein anderes vorbereitetes Event in diesem Browser. Gäste, Import und Export bleiben pro Event getrennt.</p>
+      ${renderKnownEventList(appState.eventId)}
+    </section>
+
+    <section class="card">
       <h2>Gast hinzufügen</h2>
       <form id="addGuestForm" class="grid two">
         <div class="form-row">
@@ -1012,6 +1034,7 @@ function renderAdmin() {
   `;
 
   document.getElementById("copyLinkBtn")?.addEventListener("click", copyEventLink);
+  bindKnownEventButtons();
   document.getElementById("addGuestForm")?.addEventListener("submit", addGuestFromForm);
   document.getElementById("previewImportBtn")?.addEventListener("click", previewCsvImport);
   document.getElementById("runImportBtn")?.addEventListener("click", runCsvImport);
@@ -1712,6 +1735,88 @@ function setHeaderMeta(parts) {
   const text = parts.filter(Boolean).join(" · ");
   meta.textContent = text;
   meta.hidden = !text;
+}
+
+function getKnownEvents() {
+  const byId = new Map();
+  [...CONFIGURED_EVENTS, ...getStoredKnownEvents()].forEach((event) => {
+    const normalized = normalizeKnownEvent(event);
+    if (!normalized) return;
+    const existing = byId.get(normalized.id);
+    byId.set(normalized.id, {
+      ...existing,
+      ...normalized
+    });
+  });
+  return [...byId.values()].sort((a, b) => {
+    const dateCompare = String(a.date || "").localeCompare(String(b.date || ""));
+    if (dateCompare) return dateCompare;
+    return String(a.name || a.id).localeCompare(String(b.name || b.id), "de");
+  });
+}
+
+function getStoredKnownEvents() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(KNOWN_EVENTS_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveKnownEvent(event) {
+  const normalized = normalizeKnownEvent(event);
+  if (!normalized) return;
+
+  const events = getStoredKnownEvents().filter((item) => normalizeKnownEvent(item)?.id !== normalized.id);
+  events.unshift(normalized);
+  localStorage.setItem(KNOWN_EVENTS_STORAGE_KEY, JSON.stringify(events.slice(0, 12)));
+}
+
+function normalizeKnownEvent(event) {
+  const id = String(event?.id || "").trim();
+  if (!id) return null;
+  return {
+    id,
+    name: String(event?.name || id).trim(),
+    date: String(event?.date || "").trim()
+  };
+}
+
+function renderKnownEventList(currentEventId = "") {
+  const events = getKnownEvents();
+  if (!events.length) return `<p class="notice warning">Noch keine bekannten Events in dieser Installation.</p>`;
+
+  return `
+    <div class="event-switch-list">
+      ${events.map((event) => {
+        const isCurrent = event.id === currentEventId;
+        return `
+          <button class="event-switch-card ${isCurrent ? "current" : ""}" type="button" data-open-event="${escapeHtml(event.id)}">
+            <span>
+              <strong>${escapeHtml(event.name || event.id)}</strong>
+              <small>${event.date ? escapeHtml(formatEventDate(event.date)) : "ohne Datum"} · ${escapeHtml(event.id)}</small>
+            </span>
+            <span>${isCurrent ? "Aktuell" : "Öffnen"}</span>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function bindKnownEventButtons() {
+  document.querySelectorAll("[data-open-event]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const eventId = button.getAttribute("data-open-event");
+      if (!eventId) return;
+      if (eventId === appState.eventId) {
+        notify("Dieses Event ist bereits geöffnet.", "info");
+        return;
+      }
+      window.location.href = urlWithEvent(eventId);
+    });
+  });
 }
 
 function ensureEventMeta() {
