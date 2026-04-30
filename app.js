@@ -66,6 +66,7 @@ const appState = {
 const els = {
   main: document.getElementById("main"),
   eventTitle: document.getElementById("eventTitle"),
+  eventMeta: document.getElementById("eventMeta"),
   connectionStatus: document.getElementById("connectionStatus"),
   footerText: document.getElementById("footerText")
 };
@@ -126,6 +127,7 @@ async function startApp() {
 
   appState.event = { id: eventSnap.id, ...eventSnap.data() };
   els.eventTitle.textContent = appState.event.name || "Gästeliste";
+  setEventMeta();
 
   const memberSnap = await getDoc(memberRef(appState.user.uid));
   if (memberSnap.exists()) {
@@ -146,6 +148,7 @@ function isConfigMissing() {
 
 function renderConfigMissing() {
   els.eventTitle.textContent = "Setup nötig";
+  setHeaderMeta([]);
   els.connectionStatus.textContent = "Nicht konfiguriert";
   els.connectionStatus.className = "status-pill err";
   render(`
@@ -165,6 +168,7 @@ function renderConfigMissing() {
 
 function renderWelcome() {
   els.eventTitle.textContent = "Gästeliste Check-in";
+  setHeaderMeta([]);
   render(`
     <section class="card">
       <h2>Event öffnen</h2>
@@ -295,6 +299,7 @@ async function createEventFromForm(event) {
 
 function renderEventNotFound(eventId) {
   els.eventTitle.textContent = "Event nicht gefunden";
+  setHeaderMeta([`ID: ${eventId}`]);
   render(`
     <section class="card">
       <h2>Event nicht gefunden</h2>
@@ -309,6 +314,7 @@ function renderEventNotFound(eventId) {
 function renderJoin() {
   const eventName = appState.event?.name || "Event";
   els.eventTitle.textContent = eventName;
+  setEventMeta();
   render(`
     <section class="card">
       <h2>Mit Event verbinden</h2>
@@ -388,7 +394,8 @@ function loadMainApp() {
 function renderShell() {
   const role = ROLE_META[appState.member?.role] || appState.member?.role || "User";
   els.eventTitle.textContent = appState.event?.name || "Gästeliste";
-  els.footerText.textContent = `${role} · ${appState.member?.displayName || ""} · ${appState.member?.deviceLabel || ""}`;
+  setEventMeta();
+  els.footerText.textContent = `${role} · ${appState.member?.displayName || ""} · ${appState.member?.deviceLabel || ""} · Event: ${appState.eventId || "-"}`;
 
   render(`
     <div id="flash"></div>
@@ -1603,6 +1610,41 @@ function suggestDeviceLabel() {
   const saved = localStorage.getItem("guestlist:deviceNumber");
   if (saved) return `Check-in ${saved}`;
   return "Check-in 1";
+}
+
+function setEventMeta() {
+  const parts = [
+    appState.event?.date ? `Datum: ${formatEventDate(appState.event.date)}` : "",
+    appState.eventId ? `ID: ${appState.eventId}` : ""
+  ];
+  setHeaderMeta(parts);
+}
+
+function setHeaderMeta(parts) {
+  const meta = ensureEventMeta();
+  if (!meta) return;
+  const text = parts.filter(Boolean).join(" · ");
+  meta.textContent = text;
+  meta.hidden = !text;
+}
+
+function ensureEventMeta() {
+  if (els.eventMeta) return els.eventMeta;
+  if (!els.eventTitle) return null;
+  const meta = document.createElement("div");
+  meta.id = "eventMeta";
+  meta.className = "event-meta";
+  meta.hidden = true;
+  els.eventTitle.insertAdjacentElement("afterend", meta);
+  els.eventMeta = meta;
+  return meta;
+}
+
+function formatEventDate(value) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return raw;
+  return `${match[3]}.${match[2]}.${match[1]}`;
 }
 
 function urlWithoutParams() {
