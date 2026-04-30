@@ -647,7 +647,6 @@ function renderCheckin() {
     ${renderSummaryCards()}
     ${isOffline() ? `<div class="notice error"><strong>Offline:</strong> Check-in und Änderungen sind gesperrt. Bitte Verbindung prüfen und Seite neu laden.</div>` : ""}
     ${renderEmptyEventWarning()}
-    ${isAdmin() ? renderAddGuestPanel(categories) : ""}
     <section class="card search-sticky">
       <div class="grid three">
         <div class="form-row" style="grid-column: span 2;">
@@ -671,6 +670,7 @@ function renderCheckin() {
       </div>
       <p class="small">${filteredCount} Treffer · maximal 60 sichtbar. Für schnellen Eingang: mindestens 2–3 Buchstaben suchen.</p>
     </section>
+    ${isAdmin() ? renderAddGuestPanel(categories) : ""}
     <section class="guest-list">
       ${results.length ? results.map(renderGuestCard).join("") : `<div class="card compact"><strong>Keine Treffer</strong><p class="small">Prüfe Schreibweise, Kategorie oder Statusfilter.</p></div>`}
     </section>
