@@ -29,6 +29,7 @@ const DEFAULT_CATEGORIES = CONFIG.app?.categories || ["GA", "Member GA", "Member
 const DEFAULT_STATUSES = ["open", "checked_in", "no_show"];
 const CONFIGURED_EVENTS = Array.isArray(CONFIG.app?.knownEvents) ? CONFIG.app.knownEvents : [];
 const KNOWN_EVENTS_STORAGE_KEY = "guestlist:knownEvents";
+const ADMIN_SESSION_STORAGE_KEY = "guestlist:adminSession";
 const EVENT_ALIASES = CONFIG.app?.eventAliases || {};
 const GLOBAL_ADMIN_EVENT_ID = CONFIG.app?.globalAdminEventId || CONFIGURED_EVENTS[0]?.id || "";
 const PIN_MIN_LENGTH = 4;
@@ -453,6 +454,8 @@ async function joinEventFromForm(event) {
 
     localStorage.setItem("guestlist:memberName", displayName);
     localStorage.removeItem("guestlist:deviceLabel");
+    if (role === "admin") saveAdminSession(pin, displayName);
+    else clearAdminSession();
 
     const memberSnap = await getDoc(memberRef(appState.user.uid));
     appState.member = { id: memberSnap.id, ...memberSnap.data() };
@@ -469,6 +472,36 @@ function joinErrorMessage(error) {
     return "Verbindung fehlgeschlagen. Prüfe Rolle und PIN. Das Feld Gerät darf leer bleiben.";
   }
   return `Verbindung fehlgeschlagen: ${error?.message || error}`;
+}
+
+function saveAdminSession(pin, displayName) {
+  try {
+    sessionStorage.setItem(ADMIN_SESSION_STORAGE_KEY, JSON.stringify({
+      pin,
+      displayName,
+      savedAt: Date.now()
+    }));
+  } catch {
+    // Session convenience only; ignore if browser blocks it.
+  }
+}
+
+function getAdminSession() {
+  try {
+    const data = JSON.parse(sessionStorage.getItem(ADMIN_SESSION_STORAGE_KEY) || "null");
+    if (!data?.pin) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function clearAdminSession() {
+  try {
+    sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
+  } catch {
+    // Ignore.
+  }
 }
 
 async function verifyGlobalAdminPin(pin, displayName, deviceLabel) {
@@ -1931,16 +1964,46 @@ function bindKnownLinkCopyButtons() {
 
 function bindKnownEventButtons() {
   document.querySelectorAll("[data-open-event]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const eventId = button.getAttribute("data-open-event");
       if (!eventId) return;
       if (eventId === appState.eventId) {
         notify("Dieses Event ist bereits geöffnet.", "info");
         return;
       }
+      if (isAdmin()) {
+        button.disabled = true;
+        button.dataset.originalText = button.textContent || "";
+        const session = getAdminSession();
+        if (session?.pin) {
+          try {
+            await connectAdminToEvent(eventId, session.pin, session.displayName || appState.member?.displayName || "Admin");
+            window.location.href = urlWithEvent(eventId);
+            return;
+          } catch (error) {
+            console.error(error);
+            clearAdminSession();
+            notify("Automatischer Admin-Wechsel fehlgeschlagen. Bitte beim Ziel-Event erneut einloggen.", "warning");
+          }
+        }
+        button.disabled = false;
+      }
       window.location.href = urlWithEvent(eventId);
     });
   });
+}
+
+async function connectAdminToEvent(eventId, pin, displayName) {
+  const pinHash = await hashPin(eventId, "admin", pin);
+  await setDoc(doc(appState.db, "events", eventId, "members", appState.user.uid), {
+    uid: appState.user.uid,
+    role: "admin",
+    pinHash,
+    displayName: displayName || "Admin",
+    deviceLabel: "",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
 }
 
 function ensureEventMeta() {

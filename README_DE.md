@@ -149,6 +149,8 @@ https://robertschaub.github.io/Guest-List/?event=the-garden-w-me
 
 Auf der Startseite und im Admin-Tab gibt es eine Liste **Bestehende Events**. Dort können Admins den Freitag- oder Samstag-Event bewusst auswählen. Im laufenden UI führt der Button **Event wechseln** ebenfalls zur Event-Auswahl. Eine manuelle Event-ID-Eingabe gibt es nur noch als aufgeklappten Expertenbereich, falls ein Event nicht in der Liste steht.
 
+Wenn ein Admin in derselben Browser-Session den Event wechselt, verbindet die App automatisch mit dem Ziel-Event. Nach Reload, neuem Tab oder neuem Gerät muss der globale Admin-PIN erneut eingegeben werden.
+
 Die App wählt **niemals automatisch nach Datum**. Das ist wichtig, weil ein Freitag-Event nach Mitternacht am 1. Mai sonst versehentlich auf Samstag wechseln könnte. Ein Door-Terminal bleibt immer auf dem Event, dessen vollständiger Link geöffnet wurde.
 
 Die Basis-URL ohne `?event=...` öffnet kein Event automatisch. Dadurch wird verhindert, dass ein Gerät aus Versehen das zuletzt verwendete Freitag-Event am Samstag wieder öffnet.
