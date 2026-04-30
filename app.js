@@ -742,6 +742,7 @@ function renderGuestCard(guest) {
             <button class="btn-secondary" data-action="edit-guest" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Bearbeiten</button>
             <button class="btn-warning" data-action="no-show" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>No Show</button>
             <button class="btn-secondary" data-action="reset-open" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Auf Offen</button>
+            <button class="btn-danger" data-action="delete-guest" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Löschen</button>
           ` : ""}
         </div>
       </div>
@@ -814,6 +815,10 @@ function attachGuestCardHandlers(root) {
 
   root.querySelectorAll("[data-action='reset-open']").forEach((button) => {
     button.addEventListener("click", () => updateGuestStatus(button.dataset.guestId, "open"));
+  });
+
+  root.querySelectorAll("[data-action='delete-guest']").forEach((button) => {
+    button.addEventListener("click", () => deleteGuest(button.dataset.guestId));
   });
 }
 
@@ -1000,6 +1005,33 @@ async function updateGuestStatus(guestDocId, status) {
   }
 }
 
+async function deleteGuest(guestDocId) {
+  if (!requireOnline("Gast löschen")) return;
+  if (!isAdmin()) {
+    notify("Nur Admins dürfen Gäste löschen.", "warning");
+    return;
+  }
+  const guest = findGuest(guestDocId);
+  if (!guest) return;
+
+  const label = `${guest.name || "Ohne Name"} (${guest.guestId || guest.id})`;
+  if (!confirm(`Gast wirklich löschen?\n\n${label}\n\nDiese Aktion entfernt den Gast aus diesem Event.`)) return;
+
+  try {
+    await deleteDoc(guestRef(guestDocId));
+    await addAudit("guest_delete", guest, {
+      oldStatus: guest.status || "open",
+      checkedInAt: formatTimestamp(guest.checkedInAt),
+      checkedInBy: guest.checkedInByName || ""
+    });
+    if (appState.ui.editingGuestId === guestDocId) appState.ui.editingGuestId = "";
+    notify(`Gast gelöscht: ${guest.name || guest.guestId || guest.id}.`, "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Gast konnte nicht gelöscht werden: ${error.message || error}`, "error");
+  }
+}
+
 function renderOverview() {
   const content = tabContent();
   content.innerHTML = `
@@ -1163,6 +1195,23 @@ function renderAdmin() {
     </section>
 
     <section class="card">
+      <h2>Event-Einstellungen</h2>
+      <form id="eventNameForm" class="grid two">
+        <div class="form-row">
+          <label for="eventNameInput">Eventname</label>
+          <input id="eventNameInput" value="${escapeHtml(appState.event?.name || "")}" required />
+        </div>
+        <div class="form-row">
+          <label>Event-ID</label>
+          <input value="${escapeHtml(appState.eventId || "")}" readonly />
+        </div>
+        <div class="actions" style="grid-column:1/-1">
+          <button class="btn-primary" type="submit">Eventname speichern</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
       <h2>Event-Links für Door-Leads</h2>
       <p class="small">Diese Links an Check-in-Geräte geben. Mitarbeiter:innen benötigen zusätzlich den Check-in-PIN. Nicht die Basis-URL verwenden.</p>
       ${renderKnownEventLinks()}
@@ -1254,6 +1303,7 @@ function renderAdmin() {
 
   bindKnownLinkCopyButtons();
   bindKnownEventButtons();
+  document.getElementById("eventNameForm")?.addEventListener("submit", updateEventNameFromForm);
   document.getElementById("addGuestForm")?.addEventListener("submit", addGuestFromForm);
   document.getElementById("previewImportBtn")?.addEventListener("click", previewCsvImport);
   document.getElementById("runImportBtn")?.addEventListener("click", runCsvImport);
@@ -1262,6 +1312,44 @@ function renderAdmin() {
   document.getElementById("markOpenNoShowBtn")?.addEventListener("click", markOpenGuestsNoShow);
   document.getElementById("resetPinsToggle")?.addEventListener("click", () => document.getElementById("pinResetPanel").classList.toggle("hidden"));
   document.getElementById("pinResetForm")?.addEventListener("submit", resetPinsFromForm);
+}
+
+async function updateEventNameFromForm(event) {
+  event.preventDefault();
+  if (!requireOnline("Eventname speichern")) return;
+  if (!isAdmin()) {
+    notify("Nur Admins dürfen den Eventnamen ändern.", "warning");
+    return;
+  }
+
+  const name = val("eventNameInput").trim();
+  if (!name) {
+    notify("Eventname darf nicht leer sein.", "warning");
+    return;
+  }
+
+  const oldName = appState.event?.name || "";
+  if (name === oldName) {
+    notify("Eventname ist unverändert.", "info");
+    return;
+  }
+
+  try {
+    await updateDoc(eventRef(), {
+      name,
+      updatedAt: serverTimestamp()
+    });
+    appState.event = { ...appState.event, name };
+    els.eventTitle.textContent = name;
+    setEventMeta();
+    saveKnownEvent(appState.event);
+    await addAudit("event_update", { name }, { field: "name", oldName, newName: name });
+    renderAdmin();
+    notify("Eventname gespeichert.", "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Eventname konnte nicht gespeichert werden: ${error.message || error}`, "error");
+  }
 }
 
 async function addGuestFromForm(event) {
@@ -1582,6 +1670,8 @@ function labelForAction(action) {
     status_update: "Status geändert",
     guest_create: "Gast erstellt",
     guest_update: "Gast geändert",
+    guest_delete: "Gast gelöscht",
+    event_update: "Event geändert",
     guest_import: "CSV Import",
     guest_export: "CSV Export",
     audit_export: "Audit Log Export",
@@ -2014,8 +2104,8 @@ function getKnownEvents() {
     if (!normalized) return;
     const existing = byId.get(normalized.id);
     byId.set(normalized.id, {
-      ...normalized,
-      ...existing
+      ...(existing || {}),
+      ...normalized
     });
   });
   return [...byId.values()].sort((a, b) => {
