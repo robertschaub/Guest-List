@@ -402,7 +402,8 @@ function renderJoin() {
         </div>
         <div class="form-row">
           <label for="memberPin">PIN</label>
-          <input id="memberPin" type="password" minlength="4" required autocomplete="off" />
+          <input id="memberPin" type="password" minlength="${PIN_MIN_LENGTH}" required autocomplete="off" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
+          <p class="field-help">Admin: globaler Admin-PIN. Check-in Staff: Event-spezifischer Check-in-PIN.</p>
         </div>
         <div class="form-row">
           <label for="memberName">Name Mitarbeiter:in</label>
@@ -431,6 +432,12 @@ async function joinEventFromForm(event) {
   const pin = val("memberPin");
   const displayName = val("memberName").trim() || "Check-in";
   const deviceLabel = val("deviceLabel").trim();
+
+  if (pin.length < PIN_MIN_LENGTH) {
+    result.innerHTML = `<p class="notice warning">PIN ist zu kurz. Bitte den vollständigen PIN mit mindestens ${PIN_MIN_LENGTH} Zeichen eingeben.</p>`;
+    return;
+  }
+
   const pinHash = await hashPin(appState.eventId, role, pin);
 
   try {
