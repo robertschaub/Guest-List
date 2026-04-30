@@ -184,6 +184,10 @@ Check-in Staff sieht bewusst nur den Check-in-Modus sowie `Event wechseln` und `
 3. Globalen Admin-PIN eingeben.
 4. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder No Shows setzen.
 5. Bei riskanten Massenaktionen die aktuelle Event-ID eintippen: Import mit Löschen und `Alle offenen Gäste auf No Show setzen`.
+6. Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.
+7. Vor Eventstart unter `Export / Backup` Gäste-CSV und Audit-Log-CSV herunterladen.
+8. Event-Link und beide PINs extern sichern; PINs sind später nicht auslesbar.
+9. Bei Geräteproblemen: Seite hart neu laden (`Ctrl+F5`), Event-Link neu öffnen, PIN erneut eingeben.
 
 ## CSV-Import
 

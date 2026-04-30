@@ -1101,7 +1101,7 @@ function renderAdmin() {
         <li>Nur mit kompletter URL inklusive <code>?event=...</code> arbeiten, nicht mit der Basis-URL.</li>
         <li>Keine automatische Datumswahl: nach Mitternacht bleibt ein Terminal auf dem Event seines Links.</li>
         <li>Keine echten Gäste zum Test einchecken; Testgast löschen/zurücksetzen.</li>
-        <li>Bei Geräteproblemen: Seite neu laden, Event-Link neu öffnen, PIN erneut eingeben.</li>
+        <li>Bei Geräteproblemen: Seite hart neu laden (<code>Ctrl+F5</code>), Event-Link neu öffnen, PIN erneut eingeben.</li>
       </ul>
     </section>
 
