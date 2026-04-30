@@ -6,12 +6,13 @@
 
 window.GUESTLIST_APP_CONFIG = {
   firebaseConfig: {
-    apiKey: "PASTE_FIREBASE_API_KEY",
-    authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
-    projectId: "PASTE_PROJECT_ID",
-    storageBucket: "PASTE_PROJECT_ID.appspot.com",
-    messagingSenderId: "PASTE_MESSAGING_SENDER_ID",
-    appId: "PASTE_APP_ID"
+    apiKey: "AIzaSyD3rw5R3kTXMYPc95XRdRXZLHA-_vgIUik",
+    authDomain: "guest-list-mvp.firebaseapp.com",
+    projectId: "guest-list-mvp",
+    storageBucket: "guest-list-mvp.firebasestorage.app",
+    messagingSenderId: "18533148309",
+    appId: "1:18533148309:web:51b3632982ff8430785d9c",
+    measurementId: "G-NQYPLLXDFQ"
   },
   app: {
     defaultEventName: "Event Gästeliste",
