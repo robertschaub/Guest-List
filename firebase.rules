@@ -158,7 +158,7 @@ service cloud.firestore {
       }
 
       match /members/{uid} {
-        allow get: if isMember(eventId) && (uid == request.auth.uid || isAdmin(eventId));
+        allow get: if (signedIn() && uid == request.auth.uid) || isAdmin(eventId);
         allow list: if isAdmin(eventId);
         allow create, update: if validMemberWrite(eventId, uid);
         allow delete: if isAdmin(eventId);

@@ -102,7 +102,12 @@ async function boot() {
     onAuthStateChanged(appState.auth, async (user) => {
       if (!user) return;
       appState.user = user;
-      await startApp();
+      try {
+        await startApp();
+      } catch (error) {
+        console.error(error);
+        renderError("App konnte nicht geladen werden.", startupErrorMessage(error));
+      }
     });
 
     await signInAnonymously(appState.auth);
@@ -142,13 +147,37 @@ async function startApp() {
   els.eventTitle.textContent = appState.event.name || "Gästeliste";
   setEventMeta();
 
-  const memberSnap = await getDoc(memberRef(appState.user.uid));
+  const memberSnap = await getCurrentMemberSnap();
   if (memberSnap.exists()) {
     appState.member = { id: memberSnap.id, ...memberSnap.data() };
     loadMainApp();
   } else {
     renderJoin();
   }
+}
+
+async function getCurrentMemberSnap() {
+  try {
+    return await getDoc(memberRef(appState.user.uid));
+  } catch (error) {
+    if (isPermissionError(error)) {
+      return { exists: () => false };
+    }
+    throw error;
+  }
+}
+
+function isPermissionError(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "");
+  return code.includes("permission-denied") || /permission|insufficient/i.test(message);
+}
+
+function startupErrorMessage(error) {
+  if (isPermissionError(error)) {
+    return "Berechtigung fehlt. Bitte Event-Link neu öffnen und PIN erneut eingeben.";
+  }
+  return error?.message || String(error);
 }
 
 function isConfigMissing() {
