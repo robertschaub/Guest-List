@@ -123,7 +123,7 @@ App mit Setup-Parameter öffnen:
 https://<github-user>.github.io/<repo>/?setup=1
 ```
 
-Dann Eventname, Admin-PIN, Check-in-PIN setzen und Event-Link kopieren.
+Dann Eventname, globalen Admin-PIN und event-spezifischen Check-in-PIN setzen und Event-Link kopieren.
 
 ## 10. Gäste importieren und testen
 

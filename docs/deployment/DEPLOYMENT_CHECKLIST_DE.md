@@ -20,7 +20,7 @@
 
 - [ ] URL `?setup=1` geöffnet
 - [ ] Event erstellt
-- [ ] Admin-PIN gespeichert
+- [ ] Globaler Admin-PIN gespeichert
 - [ ] Check-in-PIN gespeichert
 - [ ] Event-Link kopiert
 
@@ -51,5 +51,5 @@
 
 - [ ] Aktuelle CSV auf Laptop gespeichert
 - [ ] Optional ausgedruckte Liste vorhanden
-- [ ] Admin-PIN bei Verantwortlichem
+- [ ] Globaler Admin-PIN bei Verantwortlichem
 - [ ] Check-in-PIN bei Eingangsteam

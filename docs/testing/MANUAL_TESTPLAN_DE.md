@@ -39,19 +39,19 @@ Prüfen:
 ## Test 2 — Setup Flow
 
 **Gegeben** App wird mit `?setup=1` geöffnet.  
-**Wenn** Eventname, Admin-PIN und Check-in-PIN gesetzt werden.  
+**Wenn** Eventname, globaler Admin-PIN und Check-in-PIN gesetzt werden.
 **Dann** wird ein Event erstellt und ein Event-Link angezeigt.
 
 Prüfen:
 
 - Event-Link enthält `?event=...`.
-- PINs sicher notieren.
+- Globalen Admin-PIN und Check-in-PIN sicher notieren.
 - Kategorien enthalten GA, Member GA, Member VIP, On Stage, Mitarbeiter.
 
 ## Test 3 — Admin Login
 
 **Gegeben** Event-Link ist geöffnet.  
-**Wenn** Rolle Admin und Admin-PIN eingegeben werden.  
+**Wenn** Rolle Admin und globaler Admin-PIN eingegeben werden.
 **Dann** sind Admin-Funktionen sichtbar.
 
 Prüfen:

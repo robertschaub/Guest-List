@@ -16,6 +16,7 @@ window.GUESTLIST_APP_CONFIG = {
   },
   app: {
     defaultEventName: "Event Gästeliste",
+    globalAdminEventId: "the-garden-w-dj-prospa",
     knownEvents: [
       {
         id: "the-garden-w-dj-prospa",

@@ -29,6 +29,7 @@ const DEFAULT_CATEGORIES = CONFIG.app?.categories || ["GA", "Member GA", "Member
 const DEFAULT_STATUSES = ["open", "checked_in", "no_show"];
 const CONFIGURED_EVENTS = Array.isArray(CONFIG.app?.knownEvents) ? CONFIG.app.knownEvents : [];
 const KNOWN_EVENTS_STORAGE_KEY = "guestlist:knownEvents";
+const GLOBAL_ADMIN_EVENT_ID = CONFIG.app?.globalAdminEventId || CONFIGURED_EVENTS[0]?.id || "";
 const PIN_MIN_LENGTH = 8;
 
 const STATUS_META = {
@@ -203,7 +204,7 @@ function renderWelcome() {
 
     <section class="card">
       <h2>Neues Event initialisieren</h2>
-      <p class="notice warning">Nur einmal durch den Verantwortlichen ausführen. Die PINs können später nicht ausgelesen werden, nur neu gesetzt.</p>
+      <p class="notice warning">Nur durch Admin ausführen. Der globale Admin-PIN gilt für alle Events; der Check-in-PIN bleibt pro Event separat.</p>
       <form id="createEventForm" class="grid two">
         <div class="form-row">
           <label for="newEventName">Eventname</label>
@@ -214,8 +215,8 @@ function renderWelcome() {
           <input id="newEventDate" type="date" required />
         </div>
         <div class="form-row">
-          <label for="adminPin">Admin-PIN / Passwort</label>
-          <input id="adminPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
+          <label for="adminPin">Globaler Admin-PIN</label>
+          <input id="adminPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="für Event-Erstellung und Admin-Zugriff" />
         </div>
         <div class="form-row">
           <label for="checkinPin">Check-in-PIN</label>
@@ -278,6 +279,14 @@ async function createEventFromForm(event) {
   }
 
   try {
+    if (!GLOBAL_ADMIN_EVENT_ID) {
+      result.innerHTML = `<p class="notice error">Globaler Admin-Event ist nicht konfiguriert.</p>`;
+      return;
+    }
+
+    result.innerHTML = `<p class="notice info">Globaler Admin-PIN wird geprüft…</p>`;
+    await verifyGlobalAdminPin(adminPin, displayName, deviceLabel);
+
     const adminPinHash = await hashPin(eventId, "admin", adminPin);
     const checkinPinHash = await hashPin(eventId, "checkin", checkinPin);
 
@@ -319,7 +328,7 @@ async function createEventFromForm(event) {
     }, 800);
   } catch (error) {
     console.error(error);
-    result.innerHTML = `<p class="notice error">Event konnte nicht erstellt werden: ${escapeHtml(error.message || String(error))}</p>`;
+    result.innerHTML = `<p class="notice error">Event konnte nicht erstellt werden: ${escapeHtml(setupErrorMessage(error))}</p>`;
   }
 }
 
@@ -408,6 +417,27 @@ async function joinEventFromForm(event) {
     console.error(error);
     result.innerHTML = `<p class="notice error">Verbindung fehlgeschlagen. Prüfe Rolle und PIN.</p>`;
   }
+}
+
+async function verifyGlobalAdminPin(pin, displayName, deviceLabel) {
+  const pinHash = await hashPin(GLOBAL_ADMIN_EVENT_ID, "admin", pin);
+  await setDoc(doc(appState.db, "events", GLOBAL_ADMIN_EVENT_ID, "members", appState.user.uid), {
+    uid: appState.user.uid,
+    role: "admin",
+    pinHash,
+    displayName,
+    deviceLabel,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+function setupErrorMessage(error) {
+  const message = String(error?.message || error || "");
+  if (/permission|insufficient/i.test(message)) {
+    return "Globaler Admin-PIN ist falsch oder die Firebase-Regeln blockieren die Prüfung.";
+  }
+  return message || "Unbekannter Fehler.";
 }
 
 function loadMainApp() {
@@ -926,6 +956,7 @@ function renderAdmin() {
       <ol class="compact-list">
         <li>Oben im Header prüfen: richtiger Eventname, Datum und Event-ID.</li>
         <li>Für Freitag und Samstag getrennte Event-Links und getrennte CSV-Dateien verwenden.</li>
+        <li>Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.</li>
         <li>Unter CSV Import erst UTF-8-CSV auswählen, dann CSV prüfen, danach Import starten.</li>
         <li>Nach jedem Import in Übersicht und Listen Total und Kategorien kontrollieren.</li>
         <li>Vor Eventstart unter Export / Backup eine CSV-Sicherung herunterladen.</li>
@@ -1023,19 +1054,16 @@ function renderAdmin() {
       <h2>Admin-Aktionen</h2>
       <div class="actions">
         <button class="btn-warning" id="markOpenNoShowBtn">Alle offenen Gäste auf No Show setzen</button>
-        <button class="btn-secondary" id="resetPinsToggle">PINs neu setzen</button>
+        <button class="btn-secondary" id="resetPinsToggle">Check-in-PIN neu setzen</button>
       </div>
       <div id="pinResetPanel" class="admin-section hidden">
-        <form id="pinResetForm" class="grid two">
-          <div class="form-row">
-            <label for="newAdminPin">Neuer Admin-PIN</label>
-            <input id="newAdminPin" type="password" minlength="${PIN_MIN_LENGTH}" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
-          </div>
+        <p class="notice info">Der Admin-PIN ist global und wird hier nicht pro Event geändert.</p>
+        <form id="pinResetForm" class="grid">
           <div class="form-row">
             <label for="newCheckinPin">Neuer Check-in-PIN</label>
             <input id="newCheckinPin" type="password" minlength="${PIN_MIN_LENGTH}" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
           </div>
-          <div class="actions" style="grid-column:1/-1"><button class="btn-primary" type="submit">PINs speichern</button></div>
+          <div class="actions"><button class="btn-primary" type="submit">Check-in-PIN speichern</button></div>
         </form>
       </div>
     </section>
@@ -1260,37 +1288,30 @@ async function markOpenGuestsNoShow() {
 
 async function resetPinsFromForm(event) {
   event.preventDefault();
-  if (!requireOnline("PINs neu setzen")) return;
-  const adminPin = val("newAdminPin");
+  if (!requireOnline("Check-in-PIN neu setzen")) return;
   const checkinPin = val("newCheckinPin");
-  if (adminPin.length < PIN_MIN_LENGTH || checkinPin.length < PIN_MIN_LENGTH) {
-    notify(`Beide PINs müssen mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
+  if (checkinPin.length < PIN_MIN_LENGTH) {
+    notify(`Check-in-PIN muss mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
     return;
   }
 
   try {
-    const adminPinHash = await hashPin(appState.eventId, "admin", adminPin);
+    const securityRef = doc(appState.db, "events", appState.eventId, "private", "security");
+    const securitySnap = await getDoc(securityRef);
+    if (!securitySnap.exists()) throw new Error("Security-Dokument fehlt.");
+    const adminPinHash = securitySnap.data().adminPinHash;
     const checkinPinHash = await hashPin(appState.eventId, "checkin", checkinPin);
-    await updateDoc(doc(appState.db, "events", appState.eventId, "private", "security"), {
+    await updateDoc(securityRef, {
       adminPinHash,
       checkinPinHash,
       updatedAt: serverTimestamp()
     });
-    await setDoc(memberRef(appState.user.uid), {
-      uid: appState.user.uid,
-      role: "admin",
-      pinHash: adminPinHash,
-      displayName: appState.member.displayName || "Admin",
-      deviceLabel: appState.member.deviceLabel || "",
-      updatedAt: serverTimestamp()
-    }, { merge: true });
-    appState.member = { ...appState.member, role: "admin", pinHash: adminPinHash };
-    await addAudit("pins_reset", { name: "PINs" }, {});
+    await addAudit("pins_reset", { name: "Check-in-PIN" }, { scope: "checkin_only" });
     document.getElementById("pinResetForm").reset();
-    notify("PINs neu gesetzt. Alte Geräte/PINs verlieren nach der Rules-Aktualisierung den Schreibzugriff.", "success");
+    notify("Check-in-PIN wurde für dieses Event neu gesetzt.", "success");
   } catch (error) {
     console.error(error);
-    notify(`PINs konnten nicht gesetzt werden: ${error.message || error}`, "error");
+    notify(`Check-in-PIN konnte nicht gesetzt werden: ${error.message || error}`, "error");
   }
 }
 
@@ -1339,7 +1360,7 @@ function labelForAction(action) {
     guest_export: "CSV Export",
     duplicate_check_in_attempt: "Doppel-Check-in verhindert",
     bulk_no_show: "Bulk No Show",
-    pins_reset: "PINs neu gesetzt"
+    pins_reset: "Check-in-PIN neu gesetzt"
   };
   return labels[action] || action || "Aktion";
 }

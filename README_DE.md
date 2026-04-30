@@ -80,6 +80,7 @@ window.GUESTLIST_APP_CONFIG = {
   },
   app: {
     defaultEventName: "Event Gästeliste",
+    globalAdminEventId: "the-garden-w-dj-prospa",
     categories: ["GA", "Member GA", "Member VIP", "On Stage", "Mitarbeiter"],
     statuses: ["open", "checked_in", "no_show"]
   }
@@ -116,11 +117,11 @@ https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?setup=1
 Dann:
 
 1. Eventname eingeben.
-2. Admin-PIN setzen.
-3. Check-in-PIN setzen.
+2. Globalen Admin-PIN eingeben.
+3. Check-in-PIN für dieses Event setzen.
 4. Kategorien prüfen.
 5. Event erstellen.
-6. Admin-PIN und Check-in-PIN sicher speichern.
+6. Check-in-PIN sicher speichern.
 
 Danach erzeugt die App einen Event-Link:
 
@@ -133,6 +134,8 @@ Diesen Link gibst du an die Check-in-Geräte weiter. Die Mitarbeiter:innen brauc
 ### Mehrere Events und Event-Wechsel
 
 Jedes Event hat eine eigene Event-ID und damit eine eigene Gästeliste in Firestore.
+
+Der Admin-PIN ist global und gilt für alle Events. Beim Erstellen eines neuen Events wird dieser globale Admin-PIN geprüft und danach automatisch als Admin-PIN des neuen Events verwendet. Check-in-PINs bleiben pro Event separat.
 
 Für THE GARDEN sind in der App zwei Eventtage vorbereitet:
 
@@ -171,7 +174,7 @@ docs/operations/CHECKIN_PERSONAL_KURZANLEITUNG_DE.md
 
 1. Event-Link öffnen.
 2. Rolle `Admin` wählen.
-3. Admin-PIN eingeben.
+3. Globalen Admin-PIN eingeben.
 4. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder No Shows setzen.
 
 ## CSV-Import
@@ -267,7 +270,7 @@ Bewusst enthalten:
 ## Sicherheitshinweise
 
 - Verwende keine kurzen Zahlen-PINs wie `1234`; neue Events erzwingen mindestens 8 Zeichen.
-- Check-in-PIN und Admin-PIN unterschiedlich setzen.
+- Check-in-PINs und globalen Admin-PIN unterschiedlich setzen.
 - Event-Link nicht öffentlich posten.
 - Admin-PIN nur an Verantwortliche geben.
 - Vor jedem Event CSV-Backup herunterladen.
