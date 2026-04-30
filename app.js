@@ -457,67 +457,61 @@ function renderRolePinSections(showAdminTools) {
       </form>
       <div id="joinResult"></div>
     </section>
-    ${showAdminTools ? renderPinManagementSection() : ""}
+    ${showAdminTools ? renderAdminPinSection() : ""}
   `;
 }
 
-function renderPinManagementSection() {
+function renderAdminPinSection() {
   return `
     <section class="card">
-      <h2>PINs verwalten</h2>
-      <ul class="compact-list">
-        <li>Admin-PIN gilt global; Check-in-PINs gelten pro Event.</li>
-        <li>PINs extern sichern; sie sind später nicht auslesbar.</li>
-      </ul>
-      <div class="grid two">
-        <div class="admin-section">
-          <h3>Check-in-PIN aktueller Event</h3>
-          <p class="small">Gilt nur für <strong>${escapeHtml(appState.event?.name || appState.eventId || "aktueller Event")}</strong>. Andere Events behalten ihren eigenen Check-in-PIN.</p>
-          <form id="checkinPinForm" class="grid">
-            <div class="form-row">
-              <label for="eventCheckinPin">Neuer Check-in-PIN</label>
-              <input id="eventCheckinPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
-            </div>
-            <div class="form-row">
-              <label for="eventCheckinPinConfirm">Neuer Check-in-PIN wiederholen</label>
-              <input id="eventCheckinPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
-            </div>
-            <div class="actions">
-              <button class="btn-primary" type="submit">Check-in-PIN speichern</button>
-            </div>
-          </form>
-          <div id="checkinPinResult"></div>
+      <h2>Admin-PIN ändern</h2>
+      <form id="adminPinForm" class="grid">
+        <div class="form-row">
+          <label for="currentAdminPin">Aktueller Admin-PIN</label>
+          <input id="currentAdminPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="bisheriger Admin-PIN" />
         </div>
+        <div class="form-row">
+          <label for="newAdminPin">Neuer Admin-PIN</label>
+          <input id="newAdminPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
+        </div>
+        <div class="form-row">
+          <label for="newAdminPinConfirm">Neuer Admin-PIN wiederholen</label>
+          <input id="newAdminPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
+        </div>
+        <div class="actions">
+          <button class="btn-primary" type="submit">Admin-PIN speichern</button>
+        </div>
+      </form>
+      <div id="adminPinResult"></div>
+    </section>
+  `;
+}
 
-        <div class="admin-section">
-          <h3>Admin-PIN ändern</h3>
-          <form id="adminPinForm" class="grid">
-            <div class="form-row">
-              <label for="currentAdminPin">Aktueller Admin-PIN</label>
-              <input id="currentAdminPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="bisheriger Admin-PIN" />
-            </div>
-            <div class="form-row">
-              <label for="newAdminPin">Neuer Admin-PIN</label>
-              <input id="newAdminPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
-            </div>
-            <div class="form-row">
-              <label for="newAdminPinConfirm">Neuer Admin-PIN wiederholen</label>
-              <input id="newAdminPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
-            </div>
-            <div class="actions">
-              <button class="btn-primary" type="submit">Admin-PIN speichern</button>
-            </div>
-          </form>
-          <div id="adminPinResult"></div>
+function renderCheckinPinSection() {
+  return `
+    <section class="card">
+      <h2>Check-in-PIN aktueller Event</h2>
+      <p class="small">Gilt nur für <strong>${escapeHtml(appState.event?.name || appState.eventId || "aktueller Event")}</strong>. Andere Events behalten ihren eigenen Check-in-PIN.</p>
+      <form id="checkinPinForm" class="grid two">
+        <div class="form-row">
+          <label for="eventCheckinPin">Neuer Check-in-PIN</label>
+          <input id="eventCheckinPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
         </div>
-      </div>
+        <div class="form-row">
+          <label for="eventCheckinPinConfirm">Neuer Check-in-PIN wiederholen</label>
+          <input id="eventCheckinPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
+        </div>
+        <div class="actions" style="grid-column:1/-1">
+          <button class="btn-primary" type="submit">Check-in-PIN speichern</button>
+        </div>
+      </form>
+      <div id="checkinPinResult"></div>
     </section>
   `;
 }
 
 function bindRolePinHandlers() {
   document.getElementById("joinForm")?.addEventListener("submit", joinEventFromForm);
-  document.getElementById("checkinPinForm")?.addEventListener("submit", updateCheckinPinFromForm);
   document.getElementById("adminPinForm")?.addEventListener("submit", updateGlobalAdminPinFromForm);
 }
 
@@ -1306,7 +1300,7 @@ function renderAdmin() {
           <input value="${escapeHtml(appState.eventId || "")}" readonly />
         </div>
         <div class="actions" style="grid-column:1/-1">
-          <button class="btn-primary" type="submit">Eventname speichern</button>
+          <button class="btn-primary" id="eventNameSaveBtn" type="submit" disabled>Eventname speichern</button>
         </div>
       </form>
     </section>
@@ -1316,6 +1310,8 @@ function renderAdmin() {
       <p class="small">Diese Links an Check-in-Geräte geben. Mitarbeiter:innen benötigen zusätzlich den Check-in-PIN. Nicht die Basis-URL verwenden.</p>
       ${renderCurrentEventLink()}
     </section>
+
+    ${renderCheckinPinSection()}
 
     <section class="card">
       <h2>CSV Import</h2>
@@ -1363,12 +1359,29 @@ function renderAdmin() {
 
   bindKnownLinkCopyButtons();
   bindKnownEventButtons();
-  document.getElementById("eventNameForm")?.addEventListener("submit", updateEventNameFromForm);
+  bindEventNameForm();
+  document.getElementById("checkinPinForm")?.addEventListener("submit", updateCheckinPinFromForm);
   document.getElementById("previewImportBtn")?.addEventListener("click", previewCsvImport);
   document.getElementById("runImportBtn")?.addEventListener("click", runCsvImport);
   document.querySelectorAll("[data-export]").forEach((btn) => btn.addEventListener("click", () => exportGuests(btn.dataset.export)));
   document.getElementById("exportAuditBtn")?.addEventListener("click", exportAuditLog);
   document.getElementById("markOpenNoShowBtn")?.addEventListener("click", markOpenGuestsNoShow);
+}
+
+function bindEventNameForm() {
+  const form = document.getElementById("eventNameForm");
+  const input = document.getElementById("eventNameInput");
+  const button = document.getElementById("eventNameSaveBtn");
+  if (!form || !input || !button) return;
+
+  const originalName = appState.event?.name || "";
+  const updateButtonState = () => {
+    button.disabled = input.value.trim() === originalName || !input.value.trim();
+  };
+
+  updateButtonState();
+  input.addEventListener("input", updateButtonState);
+  form.addEventListener("submit", updateEventNameFromForm);
 }
 
 async function updateEventNameFromForm(event) {
