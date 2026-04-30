@@ -786,6 +786,8 @@ function renderCheckin() {
         </div>
       </div>
       <p class="small">${filteredCount} Treffer · maximal 60 sichtbar. Für schnellen Eingang: mindestens 2–3 Buchstaben suchen.</p>
+    </section>
+    <section class="card compact">
       <div class="actions">
         <button class="btn-secondary" id="checkinAuthBtn" type="button">${isEventMember() ? "Abmelden" : "Anmelden"}</button>
       </div>
@@ -1440,7 +1442,7 @@ function renderAdmin() {
     <section class="card">
       <h2>Tagesabschluss</h2>
       <div class="actions">
-        <button class="btn-warning" id="markOpenNoShowBtn">Offene Gäste auf No Show setzen</button>
+        <button class="btn-secondary" id="markOpenNoShowBtn">Offene Gäste auf No Show setzen</button>
       </div>
     </section>
   `;
