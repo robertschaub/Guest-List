@@ -181,6 +181,7 @@ function renderWelcome() {
       <section class="card">
         <h2>Bestehende Events</h2>
         <p class="small">Für Freitag und Samstag jeweils den passenden Event öffnen. Die PIN wird danach abgefragt.</p>
+        <p class="notice warning">Es gibt keine automatische Auswahl nach Datum. Door-Terminals müssen immer den spezifischen Event-Link öffnen, auch nach Mitternacht.</p>
         ${renderKnownEventList()}
       </section>
     ` : ""}
@@ -934,6 +935,7 @@ function renderAdmin() {
       <ul class="compact-list">
         <li>Event-Link und beide PINs extern sichern; PINs sind später nicht auslesbar.</li>
         <li>Nur mit kompletter URL inklusive <code>?event=...</code> arbeiten, nicht mit der Basis-URL.</li>
+        <li>Keine automatische Datumswahl: nach Mitternacht bleibt ein Terminal auf dem Event seines Links.</li>
         <li>Keine echten Gäste zum Test einchecken; Testgast löschen/zurücksetzen.</li>
         <li>Bei Geräteproblemen: Seite neu laden, Event-Link neu öffnen, PIN erneut eingeben.</li>
       </ul>
@@ -946,6 +948,12 @@ function renderAdmin() {
         <input id="eventLink" value="${escapeHtml(link)}" readonly />
         <button class="btn-secondary" id="copyLinkBtn">Kopieren</button>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>Door-Lead Links</h2>
+      <p class="small">Diese Links sind absichtlich fix. Nicht die Basis-URL an Door-Leads geben.</p>
+      ${renderKnownEventLinks()}
     </section>
 
     <section class="card">
@@ -1034,6 +1042,7 @@ function renderAdmin() {
   `;
 
   document.getElementById("copyLinkBtn")?.addEventListener("click", copyEventLink);
+  bindKnownLinkCopyButtons();
   bindKnownEventButtons();
   document.getElementById("addGuestForm")?.addEventListener("submit", addGuestFromForm);
   document.getElementById("previewImportBtn")?.addEventListener("click", previewCsvImport);
@@ -1803,6 +1812,43 @@ function renderKnownEventList(currentEventId = "") {
       }).join("")}
     </div>
   `;
+}
+
+function renderKnownEventLinks() {
+  const events = getKnownEvents();
+  if (!events.length) return `<p class="notice warning">Noch keine bekannten Events in dieser Installation.</p>`;
+
+  return `
+    <div class="grid">
+      ${events.map((event) => {
+        const link = urlWithEvent(event.id);
+        return `
+          <div class="form-row">
+            <label>${escapeHtml(event.name || event.id)}${event.date ? ` · ${escapeHtml(formatEventDate(event.date))}` : ""}</label>
+            <div class="copy-field">
+              <input value="${escapeHtml(link)}" readonly />
+              <button class="btn-secondary" type="button" data-copy-known-link="${escapeHtml(link)}">Kopieren</button>
+            </div>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function bindKnownLinkCopyButtons() {
+  document.querySelectorAll("[data-copy-known-link]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const link = button.getAttribute("data-copy-known-link") || "";
+      if (!link) return;
+      try {
+        await navigator.clipboard.writeText(link);
+        notify("Door-Lead-Link kopiert.", "success");
+      } catch {
+        notify("Link konnte nicht automatisch kopiert werden. Bitte Feld markieren und kopieren.", "warning");
+      }
+    });
+  });
 }
 
 function bindKnownEventButtons() {

@@ -143,6 +143,8 @@ https://robertschaub.github.io/Guest-List/?event=the-garden-2026-05-02
 
 Auf der Startseite und im Admin-Tab gibt es eine Liste **Bestehende Events**. Dort können Admins den Freitag- oder Samstag-Event bewusst auswählen. Im laufenden UI führt der Button **Event wechseln** ebenfalls zur Event-Auswahl. Dort kann auch weiterhin eine Event-ID manuell geöffnet oder ein neues Event erstellt werden.
 
+Die App wählt **niemals automatisch nach Datum**. Das ist wichtig, weil ein Freitag-Event nach Mitternacht am 1. Mai sonst versehentlich auf Samstag wechseln könnte. Ein Door-Terminal bleibt immer auf dem Event, dessen vollständiger Link geöffnet wurde.
+
 Die Basis-URL ohne `?event=...` öffnet kein Event automatisch. Dadurch wird verhindert, dass ein Gerät aus Versehen das zuletzt verwendete Freitag-Event am Samstag wieder öffnet.
 
 CSV-Import und CSV-Export gelten immer nur für das aktuell geöffnete Event. Für zwei Eventtage werden daher zwei separate CSV-Dateien empfohlen, z.B. `the-garden-freitag.csv` und `the-garden-samstag.csv`.
