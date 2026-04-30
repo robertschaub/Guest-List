@@ -409,16 +409,31 @@ function renderJoin() {
   const eventName = appState.event?.name || "Event";
   els.eventTitle.textContent = eventName;
   setEventMeta();
-  render(`
+  render(renderRolePinSections(false));
+  bindRolePinHandlers();
+}
+
+function renderRolePinTab() {
+  const content = tabContent();
+  content.innerHTML = renderRolePinSections(isAdmin());
+  bindRolePinHandlers();
+}
+
+function renderRolePinSections(showAdminTools) {
+  const currentRole = appState.member?.role || "checkin";
+  const displayName = appState.member?.displayName || localStorage.getItem("guestlist:memberName") || "";
+  const deviceLabel = appState.member?.deviceLabel || "";
+
+  return `
     <section class="card">
-      <h2>Mit Event verbinden</h2>
+      <h2>Rolle wechseln</h2>
       <p class="small">Event-ID: <code>${escapeHtml(appState.eventId)}</code></p>
       <form id="joinForm" class="grid two">
         <div class="form-row">
           <label for="memberRole">Rolle</label>
           <select id="memberRole">
-            <option value="checkin">Check-in Staff</option>
-            <option value="admin">Admin</option>
+            <option value="checkin" ${currentRole === "checkin" ? "selected" : ""}>Check-in Staff</option>
+            <option value="admin" ${currentRole === "admin" ? "selected" : ""}>Admin</option>
           </select>
         </div>
         <div class="form-row">
@@ -428,20 +443,76 @@ function renderJoin() {
         </div>
         <div class="form-row">
           <label for="memberName">Name Mitarbeiter:in</label>
-          <input id="memberName" value="${escapeHtml(localStorage.getItem("guestlist:memberName") || "")}" required placeholder="z.B. Eingang 1 / Max" />
+          <input id="memberName" value="${escapeHtml(displayName)}" required placeholder="z.B. Eingang 1 / Max" />
         </div>
         <div class="form-row">
           <label for="deviceLabel">Gerät <span class="optional-label">optional</span></label>
-          <input id="deviceLabel" value="" placeholder="z.B. iPad Eingang links" />
+          <input id="deviceLabel" value="${escapeHtml(deviceLabel)}" placeholder="z.B. iPad Eingang links" />
         </div>
         <div class="actions" style="grid-column:1/-1">
-          <button class="btn-primary" type="submit">Verbinden</button>
+          <button class="btn-primary" type="submit">Rolle aktivieren</button>
         </div>
       </form>
       <div id="joinResult"></div>
     </section>
-  `);
-  document.getElementById("joinForm").addEventListener("submit", joinEventFromForm);
+    ${showAdminTools ? renderPinManagementSection() : ""}
+  `;
+}
+
+function renderPinManagementSection() {
+  return `
+    <section class="card">
+      <h2>PINs verwalten</h2>
+      <div class="grid two">
+        <div class="admin-section">
+          <h3>Check-in-PIN aktueller Event</h3>
+          <p class="small">Gilt nur für <strong>${escapeHtml(appState.event?.name || appState.eventId || "aktueller Event")}</strong>. Andere Events behalten ihren eigenen Check-in-PIN.</p>
+          <form id="checkinPinForm" class="grid">
+            <div class="form-row">
+              <label for="eventCheckinPin">Neuer Check-in-PIN</label>
+              <input id="eventCheckinPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
+            </div>
+            <div class="form-row">
+              <label for="eventCheckinPinConfirm">Neuer Check-in-PIN wiederholen</label>
+              <input id="eventCheckinPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
+            </div>
+            <div class="actions">
+              <button class="btn-primary" type="submit">Check-in-PIN speichern</button>
+            </div>
+          </form>
+          <div id="checkinPinResult"></div>
+        </div>
+
+        <div class="admin-section">
+          <h3>Admin-PIN ändern</h3>
+          <form id="adminPinForm" class="grid">
+            <div class="form-row">
+              <label for="currentAdminPin">Aktueller Admin-PIN</label>
+              <input id="currentAdminPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="bisheriger Admin-PIN" />
+            </div>
+            <div class="form-row">
+              <label for="newAdminPin">Neuer Admin-PIN</label>
+              <input id="newAdminPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
+            </div>
+            <div class="form-row">
+              <label for="newAdminPinConfirm">Neuer Admin-PIN wiederholen</label>
+              <input id="newAdminPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
+            </div>
+            <div class="actions">
+              <button class="btn-primary" type="submit">Admin-PIN speichern</button>
+            </div>
+          </form>
+          <div id="adminPinResult"></div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function bindRolePinHandlers() {
+  document.getElementById("joinForm")?.addEventListener("submit", joinEventFromForm);
+  document.getElementById("checkinPinForm")?.addEventListener("submit", updateCheckinPinFromForm);
+  document.getElementById("adminPinForm")?.addEventListener("submit", updateGlobalAdminPinFromForm);
 }
 
 async function joinEventFromForm(event) {
@@ -567,7 +638,7 @@ function renderShell() {
       <button data-tab="checkin" class="${tabClass("checkin")}">Check-in</button>
       ${isAdmin() ? `<button data-tab="overview" class="${tabClass("overview")}">Übersicht</button><button data-tab="lists" class="${tabClass("lists")}">Listen</button><button data-tab="admin" class="${tabClass("admin")}">Event Gäste & Betrieb</button>` : ""}
       <button data-tab="setup" class="${tabClass("setup")}" type="button">Events Erstellen</button>
-      <button id="switchRoleBtn" type="button">Rolle/PIN wechseln</button>
+      <button data-tab="role" class="${tabClass("role")}" type="button">Rolle/PIN wechseln</button>
       ${isAdmin() ? `<button data-tab="log" class="${tabClass("log")}">Log</button>` : ""}
     </nav>
     <section id="tabContent"></section>
@@ -580,7 +651,6 @@ function renderShell() {
       renderActiveTab();
     });
   });
-  document.getElementById("switchRoleBtn")?.addEventListener("click", () => renderJoin());
 }
 
 function renderActiveTab() {
@@ -590,6 +660,7 @@ function renderActiveTab() {
   else if (appState.currentTab === "lists") renderLists();
   else if (appState.currentTab === "admin") renderAdmin();
   else if (appState.currentTab === "setup") renderEventSetup();
+  else if (appState.currentTab === "role") renderRolePinTab();
   else if (appState.currentTab === "log") renderAuditLog();
 }
 
@@ -1288,17 +1359,6 @@ function renderAdmin() {
       <h2>Admin-Aktionen</h2>
       <div class="actions">
         <button class="btn-warning" id="markOpenNoShowBtn">Alle offenen Gäste auf No Show setzen</button>
-        <button class="btn-secondary" id="resetPinsToggle">Check-in-PIN neu setzen</button>
-      </div>
-      <div id="pinResetPanel" class="admin-section hidden">
-        <p class="notice info">Der Admin-PIN ist global und wird hier nicht pro Event geändert.</p>
-        <form id="pinResetForm" class="grid">
-          <div class="form-row">
-            <label for="newCheckinPin">Neuer Check-in-PIN</label>
-            <input id="newCheckinPin" type="password" minlength="${PIN_MIN_LENGTH}" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
-          </div>
-          <div class="actions"><button class="btn-primary" type="submit">Check-in-PIN speichern</button></div>
-        </form>
       </div>
     </section>
   `;
@@ -1311,8 +1371,6 @@ function renderAdmin() {
   document.querySelectorAll("[data-export]").forEach((btn) => btn.addEventListener("click", () => exportGuests(btn.dataset.export)));
   document.getElementById("exportAuditBtn")?.addEventListener("click", exportAuditLog);
   document.getElementById("markOpenNoShowBtn")?.addEventListener("click", markOpenGuestsNoShow);
-  document.getElementById("resetPinsToggle")?.addEventListener("click", () => document.getElementById("pinResetPanel").classList.toggle("hidden"));
-  document.getElementById("pinResetForm")?.addEventListener("submit", resetPinsFromForm);
 }
 
 async function updateEventNameFromForm(event) {
@@ -1595,12 +1653,23 @@ async function markOpenGuestsNoShow() {
   }
 }
 
-async function resetPinsFromForm(event) {
+async function updateCheckinPinFromForm(event) {
   event.preventDefault();
   if (!requireOnline("Check-in-PIN neu setzen")) return;
-  const checkinPin = val("newCheckinPin");
+  if (!isAdmin()) {
+    notify("Nur Admins dürfen PINs ändern.", "warning");
+    return;
+  }
+
+  const result = document.getElementById("checkinPinResult");
+  const checkinPin = val("eventCheckinPin");
+  const checkinPinConfirm = val("eventCheckinPinConfirm");
   if (checkinPin.length < PIN_MIN_LENGTH) {
     notify(`Check-in-PIN muss mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
+    return;
+  }
+  if (checkinPin !== checkinPinConfirm) {
+    notify("Check-in-PIN und Wiederholung stimmen nicht überein.", "warning");
     return;
   }
 
@@ -1608,19 +1677,93 @@ async function resetPinsFromForm(event) {
     const securityRef = doc(appState.db, "events", appState.eventId, "private", "security");
     const securitySnap = await getDoc(securityRef);
     if (!securitySnap.exists()) throw new Error("Security-Dokument fehlt.");
-    const adminPinHash = securitySnap.data().adminPinHash;
     const checkinPinHash = await hashPin(appState.eventId, "checkin", checkinPin);
     await updateDoc(securityRef, {
-      adminPinHash,
       checkinPinHash,
       updatedAt: serverTimestamp()
     });
-    await addAudit("pins_reset", { name: "Check-in-PIN" }, { scope: "checkin_only" });
-    document.getElementById("pinResetForm").reset();
-    notify("Check-in-PIN wurde für dieses Event neu gesetzt.", "success");
+    await addAudit("pins_reset", { name: "Check-in-PIN" }, { scope: "current_event" });
+    document.getElementById("checkinPinForm")?.reset();
+    if (result) result.innerHTML = `<p class="notice success">Check-in-PIN für diesen Event gespeichert.</p>`;
+    notify("Check-in-PIN für diesen Event gespeichert.", "success");
   } catch (error) {
     console.error(error);
     notify(`Check-in-PIN konnte nicht gesetzt werden: ${error.message || error}`, "error");
+    if (result) result.innerHTML = `<p class="notice error">${escapeHtml(error.message || error)}</p>`;
+  }
+}
+
+async function updateGlobalAdminPinFromForm(event) {
+  event.preventDefault();
+  if (!requireOnline("Admin-PIN speichern")) return;
+  if (!isAdmin()) {
+    notify("Nur Admins dürfen PINs ändern.", "warning");
+    return;
+  }
+
+  const result = document.getElementById("adminPinResult");
+  const currentPin = val("currentAdminPin");
+  const newPin = val("newAdminPin");
+  const newPinConfirm = val("newAdminPinConfirm");
+  if (currentPin.length < PIN_MIN_LENGTH || newPin.length < PIN_MIN_LENGTH) {
+    notify(`Admin-PIN muss mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
+    return;
+  }
+  if (newPin !== newPinConfirm) {
+    notify("Neuer Admin-PIN und Wiederholung stimmen nicht überein.", "warning");
+    return;
+  }
+
+  const targetEvents = getAdminPinTargetEvents();
+  const displayName = appState.member?.displayName || "Admin";
+  const deviceLabel = appState.member?.deviceLabel || "";
+  if (result) result.innerHTML = `<p class="notice info">Admin-PIN wird für ${targetEvents.length} bekannte Events geprüft…</p>`;
+
+  const failedAccess = [];
+  for (const target of targetEvents) {
+    try {
+      await connectAdminToEvent(target.id, currentPin, displayName);
+    } catch (error) {
+      console.error(error);
+      failedAccess.push(target.name || target.id);
+    }
+  }
+
+  if (failedAccess.length) {
+    const message = `Admin-PIN wurde nicht geändert. Prüfung fehlgeschlagen für: ${failedAccess.join(", ")}`;
+    if (result) result.innerHTML = `<p class="notice error">${escapeHtml(message)}</p>`;
+    notify(message, "error");
+    return;
+  }
+
+  try {
+    for (const target of targetEvents) {
+      const adminPinHash = await hashPin(target.id, "admin", newPin);
+      await updateDoc(doc(appState.db, "events", target.id, "private", "security"), {
+        adminPinHash,
+        updatedAt: serverTimestamp()
+      });
+      await setDoc(doc(appState.db, "events", target.id, "members", appState.user.uid), {
+        uid: appState.user.uid,
+        role: "admin",
+        pinHash: adminPinHash,
+        displayName,
+        deviceLabel,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
+
+    saveAdminSession(newPin, displayName);
+    const memberSnap = await getMemberSnapForEvent(appState.eventId);
+    if (memberSnap.exists()) appState.member = { id: memberSnap.id, ...memberSnap.data() };
+    await addAudit("admin_pin_reset", { name: "Admin-PIN" }, { scope: "known_events", count: targetEvents.length });
+    document.getElementById("adminPinForm")?.reset();
+    if (result) result.innerHTML = `<p class="notice success">Admin-PIN für ${targetEvents.length} bekannte Events gespeichert.</p>`;
+    notify("Admin-PIN gespeichert.", "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Admin-PIN konnte nicht gesetzt werden: ${error.message || error}`, "error");
+    if (result) result.innerHTML = `<p class="notice error">${escapeHtml(error.message || error)}</p>`;
   }
 }
 
@@ -1682,7 +1825,8 @@ function labelForAction(action) {
     audit_export: "Audit Log Export",
     duplicate_check_in_attempt: "Doppel-Check-in verhindert",
     bulk_no_show: "Bulk No Show",
-    pins_reset: "Check-in-PIN neu gesetzt"
+    pins_reset: "Check-in-PIN neu gesetzt",
+    admin_pin_reset: "Admin-PIN neu gesetzt"
   };
   return labels[action] || action || "Aktion";
 }
@@ -2126,6 +2270,24 @@ function getKnownEvents() {
   });
 }
 
+function getAdminPinTargetEvents() {
+  const byId = new Map();
+  [
+    ...getKnownEvents(),
+    appState.event ? { id: appState.eventId, ...appState.event } : null,
+    GLOBAL_ADMIN_EVENT_ID ? { id: GLOBAL_ADMIN_EVENT_ID, name: GLOBAL_ADMIN_EVENT_ID } : null
+  ].forEach((event) => {
+    const normalized = normalizeKnownEvent(event);
+    if (!normalized) return;
+    byId.set(normalized.id, normalized);
+  });
+  return [...byId.values()].sort((a, b) => {
+    const dateCompare = String(a.date || "").localeCompare(String(b.date || ""));
+    if (dateCompare) return dateCompare;
+    return String(a.name || a.id).localeCompare(String(b.name || b.id), "de");
+  });
+}
+
 function getStoredKnownEvents() {
   try {
     const parsed = JSON.parse(localStorage.getItem(KNOWN_EVENTS_STORAGE_KEY) || "[]");
@@ -2286,7 +2448,6 @@ async function activateKnownEvent(eventId) {
 
   if (appState.member) {
     loadMainApp();
-    notify(`${appState.event.name || targetEventId} ist jetzt der aktuelle Event.`, "success");
     return;
   }
 
