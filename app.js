@@ -29,6 +29,7 @@ const DEFAULT_CATEGORIES = CONFIG.app?.categories || ["GA", "Member GA", "Member
 const DEFAULT_STATUSES = ["open", "checked_in", "no_show"];
 const CONFIGURED_EVENTS = Array.isArray(CONFIG.app?.knownEvents) ? CONFIG.app.knownEvents : [];
 const KNOWN_EVENTS_STORAGE_KEY = "guestlist:knownEvents";
+const EVENT_ALIASES = CONFIG.app?.eventAliases || {};
 const GLOBAL_ADMIN_EVENT_ID = CONFIG.app?.globalAdminEventId || CONFIGURED_EVENTS[0]?.id || "";
 const PIN_MIN_LENGTH = 8;
 
@@ -113,11 +114,17 @@ async function boot() {
 
 async function startApp() {
   const params = new URLSearchParams(window.location.search);
-  const eventParam = params.get("event");
+  const rawEventParam = params.get("event");
+  const eventParam = resolveEventId(rawEventParam);
   const setupParam = params.get("setup");
 
   if (setupParam === "1" || !eventParam) {
     renderWelcome();
+    return;
+  }
+
+  if (rawEventParam && eventParam !== rawEventParam) {
+    window.location.replace(urlWithEvent(eventParam));
     return;
   }
 
@@ -1774,8 +1781,8 @@ function getKnownEvents() {
     if (!normalized) return;
     const existing = byId.get(normalized.id);
     byId.set(normalized.id, {
-      ...existing,
-      ...normalized
+      ...normalized,
+      ...existing
     });
   });
   return [...byId.values()].sort((a, b) => {
@@ -1804,13 +1811,18 @@ function saveKnownEvent(event) {
 }
 
 function normalizeKnownEvent(event) {
-  const id = String(event?.id || "").trim();
+  const id = resolveEventId(String(event?.id || "").trim());
   if (!id) return null;
   return {
     id,
     name: String(event?.name || id).trim(),
     date: String(event?.date || "").trim()
   };
+}
+
+function resolveEventId(id) {
+  const raw = String(id || "").trim();
+  return EVENT_ALIASES[raw] || raw;
 }
 
 function renderKnownEventList(currentEventId = "") {

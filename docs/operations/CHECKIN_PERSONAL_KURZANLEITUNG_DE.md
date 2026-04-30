@@ -5,8 +5,8 @@
 Verwende immer den Link für deinen Event. Die App wählt den Event nicht automatisch nach Datum.
 
 ```text
-1. Mai / Prospa:
-https://robertschaub.github.io/Guest-List/?event=the-garden-w-dj-prospa
+1. Mai / BLOND:ISH:
+https://robertschaub.github.io/Guest-List/?event=the-garden-w-blondish
 
 2. Mai / &ME:
 https://robertschaub.github.io/Guest-List/?event=the-garden-w-me

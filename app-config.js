@@ -16,11 +16,14 @@ window.GUESTLIST_APP_CONFIG = {
   },
   app: {
     defaultEventName: "Event Gästeliste",
-    globalAdminEventId: "the-garden-w-dj-prospa",
+    globalAdminEventId: "the-garden-w-blondish",
+    eventAliases: {
+      "the-garden-w-dj-prospa": "the-garden-w-blondish"
+    },
     knownEvents: [
       {
-        id: "the-garden-w-dj-prospa",
-        name: "THE GARDEN w/ DJ Prospa",
+        id: "the-garden-w-blondish",
+        name: "THE GARDEN w/ BLOND:ISH",
         date: "2026-05-01"
       },
       {

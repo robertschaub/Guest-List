@@ -80,7 +80,10 @@ window.GUESTLIST_APP_CONFIG = {
   },
   app: {
     defaultEventName: "Event Gästeliste",
-    globalAdminEventId: "the-garden-w-dj-prospa",
+    globalAdminEventId: "the-garden-w-blondish",
+    eventAliases: {
+      "the-garden-w-dj-prospa": "the-garden-w-blondish"
+    },
     categories: ["GA", "Member GA", "Member VIP", "On Stage", "Mitarbeiter"],
     statuses: ["open", "checked_in", "no_show"]
   }
@@ -140,7 +143,7 @@ Der Admin-PIN ist global und gilt für alle Events. Beim Erstellen eines neuen E
 Für THE GARDEN sind in der App zwei Eventtage vorbereitet:
 
 ```text
-https://robertschaub.github.io/Guest-List/?event=the-garden-w-dj-prospa
+https://robertschaub.github.io/Guest-List/?event=the-garden-w-blondish
 https://robertschaub.github.io/Guest-List/?event=the-garden-w-me
 ```
 
