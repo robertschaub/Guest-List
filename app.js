@@ -647,6 +647,7 @@ function renderCheckin() {
     ${renderSummaryCards()}
     ${isOffline() ? `<div class="notice error"><strong>Offline:</strong> Check-in und Änderungen sind gesperrt. Bitte Verbindung prüfen und Seite neu laden.</div>` : ""}
     ${renderEmptyEventWarning()}
+    ${isAdmin() ? renderAddGuestPanel(categories) : ""}
     <section class="card search-sticky">
       <div class="grid three">
         <div class="form-row" style="grid-column: span 2;">
@@ -691,6 +692,7 @@ function renderCheckin() {
     appState.ui.statusFilter = e.target.value;
     renderCheckin();
   });
+  document.getElementById("addGuestForm")?.addEventListener("submit", addGuestFromForm);
 
   attachGuestCardHandlers(content);
 }
@@ -711,6 +713,36 @@ function renderEmptyEventWarning() {
       <strong>Dieses Event hat aktuell 0 Gäste.</strong>
       Bitte Admin informieren und prüfen lassen, ob der richtige Event-Link geöffnet und die CSV importiert wurde.
     </div>
+  `;
+}
+
+function renderAddGuestPanel(categories) {
+  return `
+    <section class="card compact">
+      <details>
+        <summary class="details-summary">Gast manuell hinzufügen</summary>
+        <p class="small">Nur für kurzfristige Ergänzungen verwenden. Der neue Gast erscheint danach direkt in dieser Liste.</p>
+        <form id="addGuestForm" class="grid two">
+          <div class="form-row">
+            <label for="addName">Name</label>
+            <input id="addName" required />
+          </div>
+          <div class="form-row">
+            <label for="addCategory">Kategorie</label>
+            <select id="addCategory">${categories.map((cat) => `<option>${escapeHtml(cat)}</option>`).join("")}</select>
+          </div>
+          <div class="form-row" style="grid-column:1/-1">
+            <label for="addSupportComment">Support-Kommentar</label>
+            <textarea id="addSupportComment"></textarea>
+          </div>
+          <div class="form-row" style="grid-column:1/-1">
+            <label for="addInternalNote">Interne Notiz</label>
+            <textarea id="addInternalNote"></textarea>
+          </div>
+          <div class="actions" style="grid-column:1/-1"><button class="btn-primary" type="submit">Gast speichern</button></div>
+        </form>
+      </details>
+    </section>
   `;
 }
 
@@ -1233,29 +1265,6 @@ function renderAdmin() {
     </section>
 
     <section class="card">
-      <h2>Gast hinzufügen</h2>
-      <form id="addGuestForm" class="grid two">
-        <div class="form-row">
-          <label for="addName">Name</label>
-          <input id="addName" required />
-        </div>
-        <div class="form-row">
-          <label for="addCategory">Kategorie</label>
-          <select id="addCategory">${categories.map((cat) => `<option>${escapeHtml(cat)}</option>`).join("")}</select>
-        </div>
-        <div class="form-row" style="grid-column:1/-1">
-          <label for="addSupportComment">Support-Kommentar</label>
-          <textarea id="addSupportComment"></textarea>
-        </div>
-        <div class="form-row" style="grid-column:1/-1">
-          <label for="addInternalNote">Interne Notiz</label>
-          <textarea id="addInternalNote"></textarea>
-        </div>
-        <div class="actions" style="grid-column:1/-1"><button class="btn-primary" type="submit">Gast speichern</button></div>
-      </form>
-    </section>
-
-    <section class="card">
       <h2>CSV Import</h2>
       <p class="small">Erwartete Spalten: <code>Name</code>, <code>Kategorie</code>, optional <code>Guest ID</code>, <code>Support Kommentar</code>, <code>Notiz</code>. Excel vorher als CSV speichern.</p>
       <div class="grid two">
@@ -1313,7 +1322,6 @@ function renderAdmin() {
   bindKnownLinkCopyButtons();
   bindKnownEventButtons();
   document.getElementById("eventNameForm")?.addEventListener("submit", updateEventNameFromForm);
-  document.getElementById("addGuestForm")?.addEventListener("submit", addGuestFromForm);
   document.getElementById("previewImportBtn")?.addEventListener("click", previewCsvImport);
   document.getElementById("runImportBtn")?.addEventListener("click", runCsvImport);
   document.querySelectorAll("[data-export]").forEach((btn) => btn.addEventListener("click", () => exportGuests(btn.dataset.export)));
@@ -1364,6 +1372,10 @@ async function updateEventNameFromForm(event) {
 async function addGuestFromForm(event) {
   event.preventDefault();
   if (!requireOnline("Gast hinzufügen")) return;
+  if (!isAdmin()) {
+    notify("Nur Admins dürfen Gäste hinzufügen.", "warning");
+    return;
+  }
   const guest = buildGuestRecord({
     name: val("addName"),
     category: val("addCategory"),
