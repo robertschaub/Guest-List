@@ -684,11 +684,51 @@ function loadMainApp() {
   renderActiveTab();
 }
 
+function visibleTabs() {
+  const baseTabs = [
+    { id: "checkin", label: "Check-in" }
+  ];
+
+  if (isAdmin()) {
+    return [
+      ...baseTabs,
+      { id: "overview", label: "Übersicht" },
+      { id: "admin", label: "Event Gäste & Betrieb" },
+      { id: "setup", label: "Events Erstellen" },
+      { id: "role", label: "Anmelden" },
+      { id: "adminSettings", label: "Admin" },
+      { id: "log", label: "Log" }
+    ];
+  }
+
+  if (isCheckinStaff()) {
+    return [
+      ...baseTabs,
+      { id: "overview", label: "Übersicht" },
+      { id: "role", label: "Anmelden" }
+    ];
+  }
+
+  return [
+    ...baseTabs,
+    { id: "setup", label: "Events Erstellen" },
+    { id: "role", label: "Anmelden" }
+  ];
+}
+
+function ensureCurrentTabVisible() {
+  if (appState.currentTab === "lists") appState.currentTab = "overview";
+  const tabs = visibleTabs();
+  if (!tabs.some((tab) => tab.id === appState.currentTab)) {
+    appState.currentTab = tabs[0]?.id || "checkin";
+  }
+}
+
 function renderShell() {
   const role = ROLE_META[appState.member?.role] || appState.member?.role || "User";
-  if (appState.currentTab === "lists") appState.currentTab = "overview";
-  if (!isAdmin() && ["overview", "admin", "adminSettings", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
+  ensureCurrentTabVisible();
   const tabClass = (tab) => appState.currentTab === tab ? "active" : "";
+  const tabs = visibleTabs();
   els.eventTitle.textContent = appState.event?.name || "Gästeliste";
   setEventMeta();
   els.footerText.textContent = `${role} · ${appState.member?.displayName || ""} · ${appState.member?.deviceLabel || ""} · Event: ${appState.eventId || "-"}`;
@@ -696,11 +736,7 @@ function renderShell() {
   render(`
     <div id="flash"></div>
     <nav class="nav-tabs" id="navTabs">
-      <button data-tab="checkin" class="${tabClass("checkin")}">Check-in</button>
-      ${isAdmin() ? `<button data-tab="overview" class="${tabClass("overview")}">Übersicht</button><button data-tab="admin" class="${tabClass("admin")}">Event Gäste & Betrieb</button>` : ""}
-      <button data-tab="setup" class="${tabClass("setup")}" type="button">Events Erstellen</button>
-      <button data-tab="role" class="${tabClass("role")}" type="button">Anmelden</button>
-      ${isAdmin() ? `<button data-tab="adminSettings" class="${tabClass("adminSettings")}">Admin</button><button data-tab="log" class="${tabClass("log")}">Log</button>` : ""}
+      ${tabs.map((tab) => `<button data-tab="${tab.id}" class="${tabClass(tab.id)}" type="button">${tab.label}</button>`).join("")}
     </nav>
     <section id="tabContent"></section>
   `);
@@ -715,8 +751,7 @@ function renderShell() {
 }
 
 function renderActiveTab() {
-  if (appState.currentTab === "lists") appState.currentTab = "overview";
-  if (!isAdmin() && ["overview", "admin", "adminSettings", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
+  ensureCurrentTabVisible();
   if (appState.currentTab === "checkin") renderCheckin();
   else if (appState.currentTab === "overview") renderOverview();
   else if (appState.currentTab === "admin") renderAdmin();
@@ -2274,6 +2309,10 @@ function findGuest(id) {
 
 function isAdmin() {
   return appState.member?.role === "admin";
+}
+
+function isCheckinStaff() {
+  return appState.member?.role === "checkin";
 }
 
 function val(id) {
