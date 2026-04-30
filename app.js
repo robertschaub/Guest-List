@@ -14,6 +14,7 @@ import {
   setDoc,
   addDoc,
   updateDoc,
+  deleteField,
   writeBatch,
   runTransaction,
   onSnapshot,
@@ -1132,7 +1133,8 @@ async function checkInGuest(guestDocId, force = false) {
         checkedInDevice: appState.member.deviceLabel || "",
         updatedAt: serverTimestamp(),
         lastActionAt: serverTimestamp(),
-        lastActionByName: appState.member.displayName || "Check-in"
+        lastActionByName: appState.member.displayName || "Check-in",
+        ...(isAdmin() ? staleGuestFieldDeletes() : {})
       });
     });
 
@@ -1172,7 +1174,8 @@ async function saveGuestComment(guestDocId) {
       supportComment: newComment,
       updatedAt: serverTimestamp(),
       lastActionAt: serverTimestamp(),
-      lastActionByName: appState.member.displayName || "Check-in"
+      lastActionByName: appState.member.displayName || "Check-in",
+      ...(isAdmin() ? staleGuestFieldDeletes() : {})
     });
     await addAudit("support_comment_update", guest, {
       oldComment: staffInfoForGuest(guest),
@@ -1229,7 +1232,8 @@ async function saveEditedGuest(event, guestDocId) {
       adminStaffInfo,
       updatedAt: serverTimestamp(),
       lastActionAt: serverTimestamp(),
-      lastActionByName: appState.member.displayName || "Admin"
+      lastActionByName: appState.member.displayName || "Admin",
+      ...staleGuestFieldDeletes()
     });
     if (internalNote) {
       batch.set(guestAdminNoteRef(guestDocId), {
@@ -1269,7 +1273,8 @@ async function updateGuestStatus(guestDocId, status) {
       status,
       updatedAt: serverTimestamp(),
       lastActionAt: serverTimestamp(),
-      lastActionByName: appState.member.displayName || "Admin"
+      lastActionByName: appState.member.displayName || "Admin",
+      ...staleGuestFieldDeletes()
     };
     if (status !== "checked_in") {
       update.checkedInAt = null;
@@ -1892,7 +1897,8 @@ async function markOpenGuestsNoShow() {
           status: "no_show",
           updatedAt: serverTimestamp(),
           lastActionAt: serverTimestamp(),
-          lastActionByName: appState.member.displayName || "Admin"
+          lastActionByName: appState.member.displayName || "Admin",
+          ...staleGuestFieldDeletes()
         });
       });
       await batch.commit();
@@ -2423,6 +2429,13 @@ function adminStaffInfoForGuest(guest) {
 
 function adminOnlyInfoForGuest(guest) {
   return String(appState.adminNotes[guest.id]?.internalNote || "").trim();
+}
+
+function staleGuestFieldDeletes() {
+  return {
+    internalNote: deleteField(),
+    adminPrivateInfo: deleteField()
+  };
 }
 
 function isAdmin() {
