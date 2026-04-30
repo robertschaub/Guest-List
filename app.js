@@ -856,7 +856,7 @@ function renderCheckin() {
         <button class="btn-secondary" id="checkinAuthBtn" type="button">${isEventMember() ? "Abmelden" : "Anmelden"}</button>
       </div>
     </section>
-    ${isAdmin() ? renderAddGuestPanel(categories) : ""}
+    ${renderAddGuestPanel(categories)}
     <section class="guest-list">
       ${results.length ? results.map(renderGuestCard).join("") : `<div class="card compact"><strong>Keine Treffer</strong><p class="small">Prüfe Schreibweise, Kategorie oder Statusfilter.</p></div>`}
     </section>
@@ -930,6 +930,7 @@ function logoutCurrentMember(nextTab = "role") {
 }
 
 function renderAddGuestPanel(categories) {
+  if (!isAdmin()) return "";
   const disabled = writeDisabledAttr();
   return `
     <section class="card compact">
