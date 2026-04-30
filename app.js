@@ -411,24 +411,24 @@ function renderJoin() {
   const eventName = appState.event?.name || "Event";
   els.eventTitle.textContent = eventName;
   setEventMeta();
-  render(renderRolePinSections(false));
+  render(renderRolePinSections());
   bindRolePinHandlers();
 }
 
 function renderRolePinTab() {
   const content = tabContent();
-  content.innerHTML = renderRolePinSections(isAdmin());
+  content.innerHTML = renderRolePinSections();
   bindRolePinHandlers();
 }
 
-function renderRolePinSections(showAdminTools) {
+function renderRolePinSections() {
   const currentRole = appState.member?.role || "checkin";
   const displayName = appState.member?.displayName || localStorage.getItem("guestlist:memberName") || "";
   const deviceLabel = appState.member?.deviceLabel || "";
 
   return `
     <section class="card">
-      <h2>Rolle wechseln</h2>
+      <h2>Anmelden</h2>
       <p class="small">Event-ID: <code>${escapeHtml(appState.eventId)}</code></p>
       <form id="joinForm" class="grid two">
         <div class="form-row">
@@ -452,13 +452,22 @@ function renderRolePinSections(showAdminTools) {
           <input id="deviceLabel" value="${escapeHtml(deviceLabel)}" placeholder="z.B. iPad Eingang links" />
         </div>
         <div class="actions" style="grid-column:1/-1">
-          <button class="btn-primary" type="submit">Rolle aktivieren</button>
+          <button class="btn-primary" id="joinSubmitBtn" type="submit" disabled>Anmelden</button>
+          <button class="btn-secondary" id="logoutBtn" type="button" ${isEventMember() ? "" : "disabled"}>Abmelden</button>
         </div>
       </form>
       <div id="joinResult"></div>
     </section>
-    ${showAdminTools ? renderAdminPinSection() : ""}
   `;
+}
+
+function renderAdminSettings() {
+  if (!isAdmin()) {
+    tabContent().innerHTML = `<section class="card"><h2>Kein Zugriff</h2><p>Admin-Rechte erforderlich.</p></section>`;
+    return;
+  }
+  tabContent().innerHTML = renderAdminPinSection();
+  bindAdminPinForm();
 }
 
 function renderAdminPinSection() {
@@ -479,7 +488,7 @@ function renderAdminPinSection() {
           <input id="newAdminPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
         </div>
         <div class="actions">
-          <button class="btn-primary" type="submit">Admin-PIN speichern</button>
+          <button class="btn-primary" id="adminPinSaveBtn" type="submit" disabled>Admin-PIN speichern</button>
         </div>
       </form>
       <div id="adminPinResult"></div>
@@ -502,7 +511,7 @@ function renderCheckinPinSection() {
           <input id="eventCheckinPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
         </div>
         <div class="actions" style="grid-column:1/-1">
-          <button class="btn-primary" type="submit">Check-in-PIN speichern</button>
+          <button class="btn-primary" id="checkinPinSaveBtn" type="submit" disabled>Check-in-PIN speichern</button>
         </div>
       </form>
       <div id="checkinPinResult"></div>
@@ -511,8 +520,59 @@ function renderCheckinPinSection() {
 }
 
 function bindRolePinHandlers() {
-  document.getElementById("joinForm")?.addEventListener("submit", joinEventFromForm);
-  document.getElementById("adminPinForm")?.addEventListener("submit", updateGlobalAdminPinFromForm);
+  bindJoinForm();
+  document.getElementById("logoutBtn")?.addEventListener("click", logoutCurrentMember);
+}
+
+function bindJoinForm() {
+  const form = document.getElementById("joinForm");
+  const roleInput = document.getElementById("memberRole");
+  const pinInput = document.getElementById("memberPin");
+  const nameInput = document.getElementById("memberName");
+  const deviceInput = document.getElementById("deviceLabel");
+  const button = document.getElementById("joinSubmitBtn");
+  if (!form || !roleInput || !pinInput || !nameInput || !deviceInput || !button) return;
+
+  const original = {
+    role: appState.member?.role || "checkin",
+    displayName: appState.member?.displayName || localStorage.getItem("guestlist:memberName") || "",
+    deviceLabel: appState.member?.deviceLabel || ""
+  };
+  const updateButtonState = () => {
+    const hasPin = pinInput.value.length >= PIN_MIN_LENGTH;
+    const hasName = Boolean(nameInput.value.trim());
+    const changed = roleInput.value !== original.role
+      || nameInput.value.trim() !== original.displayName
+      || deviceInput.value.trim() !== original.deviceLabel;
+    button.disabled = !hasPin || !hasName || (appState.member && !changed);
+  };
+
+  updateButtonState();
+  [roleInput, pinInput, nameInput, deviceInput].forEach((input) => {
+    input.addEventListener("input", updateButtonState);
+    input.addEventListener("change", updateButtonState);
+  });
+  form.addEventListener("submit", joinEventFromForm);
+}
+
+function bindAdminPinForm() {
+  const form = document.getElementById("adminPinForm");
+  const currentInput = document.getElementById("currentAdminPin");
+  const newInput = document.getElementById("newAdminPin");
+  const confirmInput = document.getElementById("newAdminPinConfirm");
+  const button = document.getElementById("adminPinSaveBtn");
+  if (!form || !currentInput || !newInput || !confirmInput || !button) return;
+
+  const updateButtonState = () => {
+    button.disabled = currentInput.value.length < PIN_MIN_LENGTH
+      || newInput.value.length < PIN_MIN_LENGTH
+      || newInput.value !== confirmInput.value
+      || currentInput.value === newInput.value;
+  };
+
+  updateButtonState();
+  [currentInput, newInput, confirmInput].forEach((input) => input.addEventListener("input", updateButtonState));
+  form.addEventListener("submit", updateGlobalAdminPinFromForm);
 }
 
 async function joinEventFromForm(event) {
@@ -627,7 +687,7 @@ function loadMainApp() {
 function renderShell() {
   const role = ROLE_META[appState.member?.role] || appState.member?.role || "User";
   if (appState.currentTab === "lists") appState.currentTab = "overview";
-  if (!isAdmin() && ["overview", "admin", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
+  if (!isAdmin() && ["overview", "admin", "adminSettings", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
   const tabClass = (tab) => appState.currentTab === tab ? "active" : "";
   els.eventTitle.textContent = appState.event?.name || "Gästeliste";
   setEventMeta();
@@ -639,8 +699,8 @@ function renderShell() {
       <button data-tab="checkin" class="${tabClass("checkin")}">Check-in</button>
       ${isAdmin() ? `<button data-tab="overview" class="${tabClass("overview")}">Übersicht</button><button data-tab="admin" class="${tabClass("admin")}">Event Gäste & Betrieb</button>` : ""}
       <button data-tab="setup" class="${tabClass("setup")}" type="button">Events Erstellen</button>
-      <button data-tab="role" class="${tabClass("role")}" type="button">Rolle/PIN wechseln</button>
-      ${isAdmin() ? `<button data-tab="log" class="${tabClass("log")}">Log</button>` : ""}
+      <button data-tab="role" class="${tabClass("role")}" type="button">Anmelden</button>
+      ${isAdmin() ? `<button data-tab="adminSettings" class="${tabClass("adminSettings")}">Admin</button><button data-tab="log" class="${tabClass("log")}">Log</button>` : ""}
     </nav>
     <section id="tabContent"></section>
   `);
@@ -656,12 +716,13 @@ function renderShell() {
 
 function renderActiveTab() {
   if (appState.currentTab === "lists") appState.currentTab = "overview";
-  if (!isAdmin() && ["overview", "admin", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
+  if (!isAdmin() && ["overview", "admin", "adminSettings", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
   if (appState.currentTab === "checkin") renderCheckin();
   else if (appState.currentTab === "overview") renderOverview();
   else if (appState.currentTab === "admin") renderAdmin();
   else if (appState.currentTab === "setup") renderEventSetup();
   else if (appState.currentTab === "role") renderRolePinTab();
+  else if (appState.currentTab === "adminSettings") renderAdminSettings();
   else if (appState.currentTab === "log") renderAuditLog();
 }
 
@@ -725,6 +786,9 @@ function renderCheckin() {
         </div>
       </div>
       <p class="small">${filteredCount} Treffer · maximal 60 sichtbar. Für schnellen Eingang: mindestens 2–3 Buchstaben suchen.</p>
+      <div class="actions">
+        <button class="btn-secondary" id="checkinAuthBtn" type="button">${isEventMember() ? "Abmelden" : "Anmelden"}</button>
+      </div>
     </section>
     ${isAdmin() ? renderAddGuestPanel(categories) : ""}
     <section class="guest-list">
@@ -748,6 +812,7 @@ function renderCheckin() {
     appState.ui.statusFilter = e.target.value;
     renderCheckin();
   });
+  document.getElementById("checkinAuthBtn")?.addEventListener("click", handleCheckinAuthButton);
   document.getElementById("addGuestForm")?.addEventListener("submit", addGuestFromForm);
 
   attachGuestCardHandlers(content);
@@ -772,7 +837,28 @@ function renderEmptyEventWarning() {
   `;
 }
 
+function handleCheckinAuthButton() {
+  if (isEventMember()) {
+    logoutCurrentMember("checkin");
+    return;
+  }
+
+  appState.currentTab = "role";
+  renderShell();
+  renderActiveTab();
+}
+
+function logoutCurrentMember(nextTab = "role") {
+  clearAdminSession();
+  appState.member = null;
+  appState.ui.editingGuestId = "";
+  appState.currentTab = nextTab;
+  renderShell();
+  renderActiveTab();
+}
+
 function renderAddGuestPanel(categories) {
+  const disabled = writeDisabledAttr();
   return `
     <section class="card compact">
       <details>
@@ -780,21 +866,21 @@ function renderAddGuestPanel(categories) {
         <form id="addGuestForm" class="grid two">
           <div class="form-row">
             <label for="addName">Name</label>
-            <input id="addName" required />
+            <input id="addName" required ${disabled} />
           </div>
           <div class="form-row">
             <label for="addCategory">Kategorie</label>
-            <select id="addCategory">${categories.map((cat) => `<option>${escapeHtml(cat)}</option>`).join("")}</select>
+            <select id="addCategory" ${disabled}>${categories.map((cat) => `<option>${escapeHtml(cat)}</option>`).join("")}</select>
           </div>
           <div class="form-row" style="grid-column:1/-1">
             <label for="addSupportComment">Support-Kommentar</label>
-            <textarea id="addSupportComment"></textarea>
+            <textarea id="addSupportComment" ${disabled}></textarea>
           </div>
           <div class="form-row" style="grid-column:1/-1">
             <label for="addInternalNote">Interne Notiz</label>
-            <textarea id="addInternalNote"></textarea>
+            <textarea id="addInternalNote" ${disabled}></textarea>
           </div>
-          <div class="actions" style="grid-column:1/-1"><button class="btn-primary" type="submit">Gast speichern</button></div>
+          <div class="actions" style="grid-column:1/-1"><button class="btn-primary" type="submit" ${disabled}>Gast speichern</button></div>
         </form>
       </details>
     </section>
@@ -810,7 +896,7 @@ function renderGuestCard(guest) {
   const alreadyChecked = guest.status === "checked_in";
   const canOverride = isAdmin();
   const commentId = `comment-${guest.id}`;
-  const disabled = isOffline() ? "disabled" : "";
+  const disabled = writeDisabledAttr();
 
   return `
     <article class="guest-card" data-guest-id="${escapeHtml(guest.id)}">
@@ -848,7 +934,7 @@ function renderGuestCard(guest) {
 
 function renderGuestEditCard(guest) {
   const categories = getCategories();
-  const disabled = isOffline() ? "disabled" : "";
+  const disabled = writeDisabledAttr();
   return `
     <article class="guest-card edit-card" data-guest-id="${escapeHtml(guest.id)}">
       <h3 class="guest-title">Gast bearbeiten</h3>
@@ -919,6 +1005,7 @@ function attachGuestCardHandlers(root) {
 }
 
 async function checkInGuest(guestDocId, force = false) {
+  if (!requireEventMember("Check-in")) return;
   if (!requireOnline("Check-in")) return;
   if (appState.checkInLocks.has(guestDocId)) return;
   const guest = findGuest(guestDocId);
@@ -985,6 +1072,7 @@ async function checkInGuest(guestDocId, force = false) {
 }
 
 async function saveGuestComment(guestDocId) {
+  if (!requireEventMember("Kommentar speichern")) return;
   if (!requireOnline("Kommentar speichern")) return;
   const guest = findGuest(guestDocId);
   const textarea = document.querySelector(`[data-comment-for="${cssEscape(guestDocId)}"]`);
@@ -1360,7 +1448,7 @@ function renderAdmin() {
   bindKnownLinkCopyButtons();
   bindKnownEventButtons();
   bindEventNameForm();
-  document.getElementById("checkinPinForm")?.addEventListener("submit", updateCheckinPinFromForm);
+  bindCheckinPinForm();
   document.getElementById("previewImportBtn")?.addEventListener("click", previewCsvImport);
   document.getElementById("runImportBtn")?.addEventListener("click", runCsvImport);
   document.querySelectorAll("[data-export]").forEach((btn) => btn.addEventListener("click", () => exportGuests(btn.dataset.export)));
@@ -1382,6 +1470,24 @@ function bindEventNameForm() {
   updateButtonState();
   input.addEventListener("input", updateButtonState);
   form.addEventListener("submit", updateEventNameFromForm);
+}
+
+function bindCheckinPinForm() {
+  const form = document.getElementById("checkinPinForm");
+  const pinInput = document.getElementById("eventCheckinPin");
+  const confirmInput = document.getElementById("eventCheckinPinConfirm");
+  const button = document.getElementById("checkinPinSaveBtn");
+  if (!form || !pinInput || !confirmInput || !button) return;
+
+  const updateButtonState = () => {
+    const pin = pinInput.value;
+    button.disabled = pin.length < PIN_MIN_LENGTH || pin !== confirmInput.value;
+  };
+
+  updateButtonState();
+  pinInput.addEventListener("input", updateButtonState);
+  confirmInput.addEventListener("input", updateButtonState);
+  form.addEventListener("submit", updateCheckinPinFromForm);
 }
 
 async function updateEventNameFromForm(event) {
@@ -1695,6 +1801,8 @@ async function updateCheckinPinFromForm(event) {
     });
     await addAudit("pins_reset", { name: "Check-in-PIN" }, { scope: "current_event" });
     document.getElementById("checkinPinForm")?.reset();
+    const saveButton = document.getElementById("checkinPinSaveBtn");
+    if (saveButton) saveButton.disabled = true;
     if (result) result.innerHTML = `<p class="notice success">Check-in-PIN für diesen Event gespeichert.</p>`;
     notify("Check-in-PIN für diesen Event gespeichert.", "success");
   } catch (error) {
@@ -1769,6 +1877,8 @@ async function updateGlobalAdminPinFromForm(event) {
     if (memberSnap.exists()) appState.member = { id: memberSnap.id, ...memberSnap.data() };
     await addAudit("admin_pin_reset", { name: "Admin-PIN" }, { scope: "known_events", count: targetEvents.length });
     document.getElementById("adminPinForm")?.reset();
+    const saveButton = document.getElementById("adminPinSaveBtn");
+    if (saveButton) saveButton.disabled = true;
     if (result) result.innerHTML = `<p class="notice success">Admin-PIN für ${targetEvents.length} bekannte Events gespeichert.</p>`;
     notify("Admin-PIN gespeichert.", "success");
   } catch (error) {
@@ -2245,6 +2355,20 @@ function requireOnline(action) {
   if (!isOffline()) return true;
   notify(`${action} nicht möglich: Gerät ist offline.`, "error");
   return false;
+}
+
+function isEventMember() {
+  return Boolean(appState.member?.role);
+}
+
+function requireEventMember(action) {
+  if (isEventMember()) return true;
+  notify(`${action} nicht möglich: Bitte zuerst anmelden.`, "warning");
+  return false;
+}
+
+function writeDisabledAttr() {
+  return isOffline() || !isEventMember() ? "disabled" : "";
 }
 
 function setEventMeta() {
