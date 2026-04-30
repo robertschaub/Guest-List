@@ -580,7 +580,7 @@ function renderShell() {
     <div id="flash"></div>
     <nav class="nav-tabs" id="navTabs">
       <button data-tab="checkin" class="active">Check-in</button>
-      ${isAdmin() ? `<button data-tab="overview">Übersicht</button><button data-tab="lists">Listen</button><button data-tab="admin">Admin</button><button data-tab="event">Event bearbeiten</button><button data-tab="log">Log</button>` : `<button id="switchEventBtn" type="button">Event wechseln</button>`}
+      ${isAdmin() ? `<button data-tab="overview">Übersicht</button><button data-tab="lists">Listen</button><button data-tab="admin">Event Gäste & Betrieb</button><button data-tab="event">Events Erstellen</button><button data-tab="log">Log</button>` : `<button id="switchEventBtn" type="button">Event wechseln</button>`}
       <button id="switchRoleBtn" type="button">Rolle/PIN wechseln</button>
     </nav>
     <section id="tabContent"></section>
