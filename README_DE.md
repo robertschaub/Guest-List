@@ -130,6 +130,21 @@ https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=evt-...
 
 Diesen Link gibst du an die Check-in-Geräte weiter. Die Mitarbeiter:innen brauchen zusätzlich den Check-in-PIN.
 
+### Mehrere Events und Event-Wechsel
+
+Jedes Event hat eine eigene Event-ID und damit eine eigene Gästeliste in Firestore.
+
+Beispiel:
+
+```text
+https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=evt-freitag
+https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=evt-samstag
+```
+
+Im laufenden UI führt der Button **Event wechseln** zur Eingabeseite. Dort kann eine andere Event-ID geöffnet oder über `?setup=1` ein neues Event erstellt werden.
+
+CSV-Import und CSV-Export gelten immer nur für das aktuell geöffnete Event. Für zwei Eventtage werden daher zwei separate CSV-Dateien empfohlen, z.B. `the-garden-freitag.csv` und `the-garden-samstag.csv`.
+
 ## Nutzung am Event
 
 ### Check-in Staff

@@ -406,6 +406,7 @@ function renderShell() {
       ${isAdmin() ? `<button data-tab="admin">Admin</button>` : ""}
       <button data-tab="log">Log</button>
       <button id="switchRoleBtn" type="button">Rolle/PIN wechseln</button>
+      <button id="switchEventBtn" type="button">Event wechseln</button>
     </nav>
     <section id="tabContent"></section>
   `);
@@ -418,6 +419,9 @@ function renderShell() {
     });
   });
   document.getElementById("switchRoleBtn")?.addEventListener("click", () => renderJoin());
+  document.getElementById("switchEventBtn")?.addEventListener("click", () => {
+    window.location.href = `${urlWithoutParams()}?setup=1`;
+  });
 }
 
 function renderActiveTab() {
