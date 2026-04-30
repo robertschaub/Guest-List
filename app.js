@@ -885,6 +885,18 @@ function renderAdmin() {
   const categories = getCategories();
   content.innerHTML = `
     <section class="card">
+      <h2>Kurzanleitung Admin</h2>
+      <ol class="compact-list">
+        <li>Oben im Header prüfen: richtiger Eventname, Datum und Event-ID.</li>
+        <li>Für Freitag und Samstag getrennte Event-Links und getrennte CSV-Dateien verwenden.</li>
+        <li>Unter CSV Import erst Datei auswählen, dann CSV prüfen, danach Import starten.</li>
+        <li>Nach jedem Import in Übersicht und Listen Total und Kategorien kontrollieren.</li>
+        <li>Vor Eventstart unter Export / Backup eine CSV-Sicherung herunterladen.</li>
+        <li>Mit einem zweiten Gerät den Event-Link öffnen und Check-in-PIN testen.</li>
+      </ol>
+    </section>
+
+    <section class="card">
       <h2>Deployment / Event-Link</h2>
       <p class="small">Diesen Link an Check-in-Geräte geben. Die Mitarbeiter:innen benötigen zusätzlich den Check-in-PIN.</p>
       <div class="copy-field">
