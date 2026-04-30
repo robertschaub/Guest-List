@@ -1080,7 +1080,6 @@ function renderAdmin() {
   }
 
   const content = tabContent();
-  const link = urlWithEvent(appState.eventId);
   const categories = getCategories();
   content.innerHTML = `
     <section class="card">
@@ -1106,17 +1105,8 @@ function renderAdmin() {
     </section>
 
     <section class="card">
-      <h2>Deployment / Event-Link</h2>
-      <p class="small">Diesen Link an Check-in-Geräte geben. Die Mitarbeiter:innen benötigen zusätzlich den Check-in-PIN.</p>
-      <div class="copy-field">
-        <input id="eventLink" value="${escapeHtml(link)}" readonly />
-        <button class="btn-secondary" id="copyLinkBtn">Kopieren</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Door-Lead Links</h2>
-      <p class="small">Diese Links sind absichtlich fix. Nicht die Basis-URL an Door-Leads geben.</p>
+      <h2>Event-Links für Door-Leads</h2>
+      <p class="small">Diese Links an Check-in-Geräte geben. Mitarbeiter:innen benötigen zusätzlich den Check-in-PIN. Nicht die Basis-URL verwenden.</p>
       ${renderKnownEventLinks()}
     </section>
 
@@ -1204,7 +1194,6 @@ function renderAdmin() {
     </section>
   `;
 
-  document.getElementById("copyLinkBtn")?.addEventListener("click", copyEventLink);
   bindKnownLinkCopyButtons();
   bindKnownEventButtons();
   document.getElementById("addGuestForm")?.addEventListener("submit", addGuestFromForm);
@@ -1215,18 +1204,6 @@ function renderAdmin() {
   document.getElementById("markOpenNoShowBtn")?.addEventListener("click", markOpenGuestsNoShow);
   document.getElementById("resetPinsToggle")?.addEventListener("click", () => document.getElementById("pinResetPanel").classList.toggle("hidden"));
   document.getElementById("pinResetForm")?.addEventListener("submit", resetPinsFromForm);
-}
-
-async function copyEventLink() {
-  const field = document.getElementById("eventLink");
-  try {
-    await navigator.clipboard.writeText(field.value);
-    notify("Event-Link kopiert.", "success");
-  } catch {
-    field.select();
-    document.execCommand("copy");
-    notify("Event-Link kopiert.", "success");
-  }
 }
 
 async function addGuestFromForm(event) {
