@@ -242,11 +242,14 @@ function renderWelcome() {
   const savedEventId = localStorage.getItem("guestlist:lastEventId") || "";
   const knownEvents = getKnownEvents();
   render(`
+    <nav class="nav-tabs">
+      <button class="active" type="button">Events Erstellen</button>
+      ${savedEventId ? `<button id="returnLastEventBtn" type="button">Zurück zum Event</button>` : ""}
+    </nav>
+
     ${knownEvents.length ? `
       <section class="card">
         <h2>Bestehende Events</h2>
-        <p class="small">Für Freitag und Samstag jeweils den passenden Event öffnen. Die PIN wird danach abgefragt.</p>
-        <p class="notice warning">Es gibt keine automatische Auswahl nach Datum. Door-Terminals müssen immer den spezifischen Event-Link öffnen, auch nach Mitternacht.</p>
         ${renderKnownEventList()}
       </section>
     ` : ""}
@@ -270,7 +273,6 @@ function renderWelcome() {
 
     <section class="card">
       <h2>Neues Event initialisieren</h2>
-      <p class="notice warning">Nur durch Admin ausführen. Der globale Admin-PIN gilt für alle Events; der Check-in-PIN bleibt pro Event separat.</p>
       <form id="createEventForm" class="grid two">
         <div class="form-row">
           <label for="newEventName">Eventname</label>
@@ -311,6 +313,9 @@ function renderWelcome() {
 
   bindKnownLinkCopyButtons();
   bindKnownEventButtons();
+  document.getElementById("returnLastEventBtn")?.addEventListener("click", () => {
+    window.location.href = urlWithEvent(savedEventId);
+  });
 
   document.getElementById("joinExistingForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -580,8 +585,8 @@ function renderShell() {
     <div id="flash"></div>
     <nav class="nav-tabs" id="navTabs">
       <button data-tab="checkin" class="active">Check-in</button>
-      ${isAdmin() ? `<button data-tab="overview">Übersicht</button><button data-tab="lists">Listen</button><button data-tab="admin">Admin</button><button data-tab="log">Log</button>` : ""}
-      <button id="switchEventBtn" type="button">Event wechseln</button>
+      ${isAdmin() ? `<button data-tab="overview">Übersicht</button><button data-tab="lists">Listen</button><button data-tab="admin">Event Gäste & Betrieb</button><button data-tab="log">Log</button>` : ""}
+      <button id="switchEventBtn" type="button">Events Erstellen</button>
       <button id="switchRoleBtn" type="button">Rolle/PIN wechseln</button>
     </nav>
     <section id="tabContent"></section>
@@ -1236,6 +1241,12 @@ function renderAdmin() {
     </section>
 
     <section class="card">
+      <h2>Event wechseln</h2>
+      <p class="small">Öffnet ein anderes vorbereitetes Event in diesem Browser. Gäste, Import und Export bleiben pro Event getrennt.</p>
+      ${renderKnownEventList(appState.eventId)}
+    </section>
+
+    <section class="card">
       <h2>Event-Einstellungen</h2>
       <form id="eventNameForm" class="grid two">
         <div class="form-row">
@@ -1256,12 +1267,6 @@ function renderAdmin() {
       <h2>Event-Links für Door-Leads</h2>
       <p class="small">Diese Links an Check-in-Geräte geben. Mitarbeiter:innen benötigen zusätzlich den Check-in-PIN. Nicht die Basis-URL verwenden.</p>
       ${renderKnownEventLinks()}
-    </section>
-
-    <section class="card">
-      <h2>Event wechseln</h2>
-      <p class="small">Öffnet ein anderes vorbereitetes Event in diesem Browser. Gäste, Import und Export bleiben pro Event getrennt.</p>
-      ${renderKnownEventList(appState.eventId)}
     </section>
 
     <section class="card">
