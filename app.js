@@ -243,8 +243,9 @@ function renderWelcome() {
   bindEventSetupHandlers();
 }
 
-function renderEventSetupSections() {
+function renderEventSetupSections(options = {}) {
   const knownEvents = getKnownEvents();
+  const omitAdminPin = Boolean(options.omitAdminPin);
   return `
     ${knownEvents.length ? `
       <section class="card">
@@ -262,12 +263,13 @@ function renderEventSetupSections() {
         <div class="form-row">
           <label for="newEventDate">Datum</label>
           <input id="newEventDate" type="date" required />
-          <p class="field-help">Die Event-ID wird aus den ersten zwei Wörtern und dem Datum erzeugt, z.B. <code>the-garden-260501</code>.</p>
         </div>
-        <div class="form-row">
-          <label for="adminPin">Globaler Admin-PIN</label>
-          <input id="adminPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="für Event-Erstellung und Admin-Zugriff" />
-        </div>
+        ${omitAdminPin ? "" : `
+          <div class="form-row">
+            <label for="adminPin">Globaler Admin-PIN</label>
+            <input id="adminPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="für Event-Erstellung und Admin-Zugriff" />
+          </div>
+        `}
         <div class="form-row">
           <label for="checkinPin">Check-in-PIN</label>
           <input id="checkinPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
@@ -301,7 +303,7 @@ function bindEventSetupHandlers() {
 }
 
 function renderEventSetup() {
-  tabContent().innerHTML = renderEventSetupSections();
+  tabContent().innerHTML = renderEventSetupSections({ omitAdminPin: isAdmin() && Boolean(getAdminSession()?.pin) });
   bindEventSetupHandlers();
 }
 
@@ -312,7 +314,7 @@ async function createEventFromForm(event) {
 
   const name = val("newEventName").trim();
   const date = val("newEventDate").trim();
-  const adminPin = val("adminPin");
+  const adminPin = val("adminPin") || (isAdmin() ? getAdminSession()?.pin || "" : "");
   const checkinPin = val("checkinPin");
   const displayName = val("setupName").trim() || "Admin";
   const deviceLabel = val("setupDevice").trim();
@@ -336,7 +338,7 @@ async function createEventFromForm(event) {
       return;
     }
 
-    result.innerHTML = `<p class="notice info">Globaler Admin-PIN wird geprüft…</p>`;
+    result.innerHTML = `<p class="notice info">Admin-Zugriff wird geprüft…</p>`;
     await verifyGlobalAdminPin(adminPin, displayName, deviceLabel);
 
     const targetEventRef = doc(appState.db, "events", eventId);
@@ -463,6 +465,10 @@ function renderPinManagementSection() {
   return `
     <section class="card">
       <h2>PINs verwalten</h2>
+      <ul class="compact-list">
+        <li>Admin-PIN gilt global; Check-in-PINs gelten pro Event.</li>
+        <li>PINs extern sichern; sie sind später nicht auslesbar.</li>
+      </ul>
       <div class="grid two">
         <div class="admin-section">
           <h3>Check-in-PIN aktueller Event</h3>
@@ -1281,16 +1287,6 @@ function renderAdmin() {
   const categories = getCategories();
   content.innerHTML = `
     <section class="card">
-      <h2>Kurzanleitung Admin</h2>
-      <ul class="compact-list">
-        <li>Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.</li>
-        <li>Vor Eventstart unter Export / Backup eine CSV-Sicherung herunterladen.</li>
-        <li>Event-Link und beide PINs extern sichern; PINs sind später nicht auslesbar.</li>
-        <li>Bei Geräteproblemen: Seite hart neu laden (<code>Ctrl+F5</code>), Event-Link neu öffnen, PIN erneut eingeben.</li>
-      </ul>
-    </section>
-
-    <section class="card">
       <h2>Event wechseln</h2>
       <p class="small">Aktiviert ein anderes vorbereitetes Event in diesem Browser. Gäste, Import und Export bleiben pro Event getrennt.</p>
       ${renderKnownEventList(appState.eventId)}
@@ -1356,9 +1352,9 @@ function renderAdmin() {
     </section>
 
     <section class="card">
-      <h2>Admin-Aktionen</h2>
+      <h2>Tagesabschluss</h2>
       <div class="actions">
-        <button class="btn-warning" id="markOpenNoShowBtn">Alle offenen Gäste auf No Show setzen</button>
+        <button class="btn-warning" id="markOpenNoShowBtn">Offene Gäste auf No Show setzen</button>
       </div>
     </section>
   `;
