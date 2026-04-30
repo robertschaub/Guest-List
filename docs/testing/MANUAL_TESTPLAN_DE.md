@@ -196,14 +196,15 @@ Prüfen alle Kategorien:
 
 Prüfen:
 
+- Vor der Massenaktion muss die aktuelle Event-ID eingetippt werden.
 - Bereits eingecheckte Gäste bleiben eingecheckt.
 - Nur offene Gäste ändern Status.
 
 ## Test 13 — Export / Backup
 
 **Gegeben** Gästeliste enthält Gäste mit verschiedenen Status.  
-**Wenn** Admin CSV exportiert.  
-**Dann** enthält CSV erwartete Daten.
+**Wenn** Admin Gäste-CSV und Audit-Log-CSV exportiert.
+**Dann** enthalten die CSVs erwartete Daten und der Backup-Hinweis zeigt Dateiname, Anzahl und Uhrzeit.
 
 Prüfen:
 
@@ -211,9 +212,11 @@ Prüfen:
 - Eingecheckte CSV.
 - Offene CSV.
 - No Show CSV.
+- Audit Log CSV.
+- Backup-Hinweis nach Export sichtbar.
 - Umlaute in Export.
 - Datei lässt sich in Excel/Google Sheets öffnen.
-- Audit Log enthält `CSV Export`.
+- Audit Log enthält `CSV Export` und `Audit Log Export`.
 
 ## Test 14 — Firestore Rules Smoke Test
 

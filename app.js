@@ -45,6 +45,29 @@ const ROLE_META = {
   admin: "Admin"
 };
 
+const GUEST_EXPORT_HEADERS = [
+  "Guest ID",
+  "Name",
+  "Kategorie",
+  "Status",
+  "Check-in Zeit",
+  "Check-in durch",
+  "Check-in Gerät",
+  "Support Kommentar",
+  "Interne Notiz"
+];
+
+const AUDIT_EXPORT_HEADERS = [
+  "Zeit",
+  "Aktion",
+  "Guest ID",
+  "Gast",
+  "Kategorie",
+  "Mitarbeiter",
+  "Gerät",
+  "Details"
+];
+
 const appState = {
   firebaseApp: null,
   auth: null,
@@ -54,6 +77,8 @@ const appState = {
   event: null,
   member: null,
   guests: [],
+  guestsLoaded: false,
+  auditEntries: [],
   guestUnsubscribe: null,
   auditUnsubscribe: null,
   checkInLocks: new Set(),
@@ -66,7 +91,8 @@ const appState = {
     listStatus: "all",
     importRows: [],
     importPreview: [],
-    importInProgress: false
+    importInProgress: false,
+    lastBackupMessage: ""
   }
 };
 
@@ -527,6 +553,7 @@ function setupErrorMessage(error) {
 
 function loadMainApp() {
   unsubscribeAll();
+  appState.guestsLoaded = false;
   renderShell();
   subscribeGuests();
   renderActiveTab();
@@ -544,8 +571,7 @@ function renderShell() {
       <button data-tab="checkin" class="active">Check-in</button>
       <button data-tab="overview">Übersicht</button>
       <button data-tab="lists">Listen</button>
-      ${isAdmin() ? `<button data-tab="admin">Admin</button>` : ""}
-      <button data-tab="log">Log</button>
+      ${isAdmin() ? `<button data-tab="admin">Admin</button><button data-tab="log">Log</button>` : ""}
       <button id="switchEventBtn" type="button">Event wechseln</button>
       <button id="switchRoleBtn" type="button">Rolle/PIN wechseln</button>
     </nav>
@@ -566,6 +592,7 @@ function renderShell() {
 }
 
 function renderActiveTab() {
+  if (!isAdmin() && ["admin", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
   if (appState.currentTab === "checkin") renderCheckin();
   else if (appState.currentTab === "overview") renderOverview();
   else if (appState.currentTab === "lists") renderLists();
@@ -577,10 +604,12 @@ function subscribeGuests() {
   const q = query(collection(appState.db, "events", appState.eventId, "guests"), orderBy("searchName"));
   appState.guestUnsubscribe = onSnapshot(q, (snapshot) => {
     appState.guests = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    appState.guestsLoaded = true;
     if (appState.ui.importInProgress && appState.currentTab === "admin") return;
     renderActiveTab();
   }, (error) => {
     console.error(error);
+    appState.guestsLoaded = true;
     notify("Gästeliste konnte nicht geladen werden. Prüfe Berechtigungen und Firestore-Regeln.", "error");
   });
 }
@@ -595,6 +624,7 @@ function renderCheckin() {
   content.innerHTML = `
     ${renderSummaryCards()}
     ${isOffline() ? `<div class="notice error"><strong>Offline:</strong> Check-in und Änderungen sind gesperrt. Bitte Verbindung prüfen und Seite neu laden.</div>` : ""}
+    ${renderEmptyEventWarning()}
     <section class="card search-sticky">
       <div class="grid three">
         <div class="form-row" style="grid-column: span 2;">
@@ -641,6 +671,25 @@ function renderCheckin() {
   });
 
   attachGuestCardHandlers(content);
+}
+
+function renderEmptyEventWarning() {
+  if (!appState.guestsLoaded) return "";
+  if (appState.guests.length) return "";
+  if (isAdmin()) {
+    return `
+      <div class="notice warning">
+        <strong>Dieses Event hat aktuell 0 Gäste.</strong>
+        Prüfe oben Eventname, Datum und Event-ID. Importiere zuerst die passende CSV im Admin-Tab, bevor der Link an Check-in-Geräte geht.
+      </div>
+    `;
+  }
+  return `
+    <div class="notice warning">
+      <strong>Dieses Event hat aktuell 0 Gäste.</strong>
+      Bitte Admin informieren und prüfen lassen, ob der richtige Event-Link geöffnet und die CSV importiert wurde.
+    </div>
+  `;
 }
 
 function renderGuestCard(guest) {
@@ -1043,8 +1092,9 @@ function renderAdmin() {
         <li>Für Freitag und Samstag getrennte Event-Links und getrennte CSV-Dateien verwenden.</li>
         <li>Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.</li>
         <li>Unter CSV Import erst UTF-8-CSV auswählen, dann CSV prüfen, danach Import starten.</li>
+        <li>Bei Import mit Löschen und bei Massen-No-Show muss die Event-ID als Bestätigung eingegeben werden.</li>
         <li>Nach jedem Import in Übersicht und Listen Total und Kategorien kontrollieren.</li>
-        <li>Vor Eventstart unter Export / Backup eine CSV-Sicherung herunterladen.</li>
+        <li>Vor Eventstart unter Export / Backup Gäste-CSV und Audit-Log-CSV herunterladen.</li>
         <li>Mit einem zweiten Gerät den Event-Link öffnen und Check-in-PIN testen.</li>
       </ol>
       <h3 class="compact-heading">Vor Eventstart</h3>
@@ -1132,7 +1182,9 @@ function renderAdmin() {
         <button class="btn-secondary" data-export="checked_in">Eingecheckte CSV</button>
         <button class="btn-secondary" data-export="open">Offene CSV</button>
         <button class="btn-secondary" data-export="no_show">No Show CSV</button>
+        <button class="btn-secondary" id="exportAuditBtn" type="button">Audit Log CSV</button>
       </div>
+      <div id="backupStatus">${appState.ui.lastBackupMessage ? `<p class="notice success">${escapeHtml(appState.ui.lastBackupMessage)}</p>` : ""}</div>
     </section>
 
     <section class="card">
@@ -1161,6 +1213,7 @@ function renderAdmin() {
   document.getElementById("previewImportBtn")?.addEventListener("click", previewCsvImport);
   document.getElementById("runImportBtn")?.addEventListener("click", runCsvImport);
   document.querySelectorAll("[data-export]").forEach((btn) => btn.addEventListener("click", () => exportGuests(btn.dataset.export)));
+  document.getElementById("exportAuditBtn")?.addEventListener("click", exportAuditLog);
   document.getElementById("markOpenNoShowBtn")?.addEventListener("click", markOpenGuestsNoShow);
   document.getElementById("resetPinsToggle")?.addEventListener("click", () => document.getElementById("pinResetPanel").classList.toggle("hidden"));
   document.getElementById("pinResetForm")?.addEventListener("submit", resetPinsFromForm);
@@ -1251,7 +1304,7 @@ async function runCsvImport() {
     return;
   }
 
-  if (replace && !confirm(`${appState.guests.length} bestehende Gäste löschen und ${rows.length} Gäste importieren?`)) return;
+  if (replace && !confirmByTypingEventId(`Du löschst ${appState.guests.length} bestehende Gäste im Event "${appState.event?.name || appState.eventId}" und importierst ${rows.length} Gäste neu.`)) return;
   if (!replace && !confirm(`${rows.length} Gäste zusätzlich importieren?`)) return;
 
   appState.ui.importInProgress = true;
@@ -1335,8 +1388,53 @@ function exportGuests(filter) {
     "Interne Notiz": g.internalNote || ""
   }));
 
-  downloadCsv(`${eventFileStem()}-${filter}-${todayStamp()}.csv`, toCsv(csvRows, ";"));
+  const fileName = `${eventFileStem()}-${filter}-${todayStamp()}.csv`;
+  downloadCsv(fileName, toCsv(csvRows, ";", GUEST_EXPORT_HEADERS));
   void addAudit("guest_export", { name: "CSV Export" }, { filter, count: csvRows.length });
+  const message = `Backup erstellt: ${fileName} · ${csvRows.length} Gäste · ${formatTimestamp(new Date())}`;
+  showBackupStatus(message, "success");
+  notify(message, "success");
+}
+
+async function exportAuditLog() {
+  if (!requireOnline("Audit Log exportieren")) return;
+  if (!isAdmin()) return;
+
+  try {
+    const q = query(collection(appState.db, "events", appState.eventId, "auditLog"), orderBy("createdAt", "desc"), limit(5000));
+    const snapshot = await getDocs(q);
+    const entries = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    const csvRows = entries.map((entry) => ({
+      "Zeit": formatTimestamp(entry.createdAt),
+      "Aktion": labelForAction(entry.action),
+      "Guest ID": entry.guestId || "",
+      "Gast": entry.guestName || "",
+      "Kategorie": entry.category || "",
+      "Mitarbeiter": entry.actorName || "",
+      "Gerät": entry.deviceLabel || "",
+      "Details": entry.details ? JSON.stringify(entry.details) : ""
+    }));
+    const fileName = `${eventFileStem()}-audit-log-${todayStamp()}.csv`;
+    downloadCsv(fileName, toCsv(csvRows, ";", AUDIT_EXPORT_HEADERS));
+    await addAudit("audit_export", { name: "Audit Log Export" }, { count: csvRows.length, limit: 5000 });
+    const message = `Audit-Log exportiert: ${fileName} · ${csvRows.length} Einträge · ${formatTimestamp(new Date())}`;
+    showBackupStatus(message, "success");
+    notify(message, "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Audit-Log konnte nicht exportiert werden: ${error.message || error}`, "error");
+  }
+}
+
+function confirmByTypingEventId(actionText) {
+  const expected = appState.eventId || "";
+  const entered = window.prompt(`${actionText}\n\nDas ist eine irreversible Massenaktion im aktuellen Event.\nZur Bestätigung exakt die Event-ID eingeben:\n${expected}`);
+  if (entered === null) return false;
+  if (entered.trim() !== expected) {
+    notify("Abgebrochen: Event-ID stimmte nicht. Es wurde nichts geändert.", "warning");
+    return false;
+  }
+  return true;
 }
 
 async function markOpenGuestsNoShow() {
@@ -1347,7 +1445,7 @@ async function markOpenGuestsNoShow() {
     notify("Keine offenen Gäste gefunden.", "info");
     return;
   }
-  if (!confirm(`${openGuests.length} offene Gäste auf No Show setzen?`)) return;
+  if (!confirmByTypingEventId(`Du setzt ${openGuests.length} offene Gäste im Event "${appState.event?.name || appState.eventId}" auf No Show.`)) return;
 
   try {
     const chunkSize = 450;
@@ -1401,18 +1499,28 @@ async function resetPinsFromForm(event) {
 }
 
 function renderAuditLog() {
+  if (!isAdmin()) {
+    tabContent().innerHTML = `<section class="card"><h2>Kein Zugriff</h2><p>Admin-Rechte erforderlich.</p></section>`;
+    return;
+  }
   const content = tabContent();
   content.innerHTML = `
     <section class="card">
       <h2>Audit Log</h2>
+      <p class="small">Zeigt die letzten 100 Einträge. Der CSV-Export lädt bis zu 5000 Einträge für dieses Event.</p>
+      <div class="actions">
+        <button class="btn-secondary" id="exportAuditLogTabBtn" type="button">Audit Log CSV exportieren</button>
+      </div>
       <div id="auditList"><p class="small">Lädt…</p></div>
     </section>
   `;
+  document.getElementById("exportAuditLogTabBtn")?.addEventListener("click", exportAuditLog);
 
   if (appState.auditUnsubscribe) appState.auditUnsubscribe();
   const q = query(collection(appState.db, "events", appState.eventId, "auditLog"), orderBy("createdAt", "desc"), limit(100));
   appState.auditUnsubscribe = onSnapshot(q, (snapshot) => {
     const entries = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    appState.auditEntries = entries;
     const list = document.getElementById("auditList");
     if (!list) return;
     list.innerHTML = entries.length ? entries.map(renderAuditLine).join("") : `<p class="small">Noch keine Log-Einträge.</p>`;
@@ -1443,6 +1551,7 @@ function labelForAction(action) {
     guest_update: "Gast geändert",
     guest_import: "CSV Import",
     guest_export: "CSV Export",
+    audit_export: "Audit Log Export",
     duplicate_check_in_attempt: "Doppel-Check-in verhindert",
     bulk_no_show: "Bulk No Show",
     pins_reset: "Check-in-PIN neu gesetzt"
@@ -1671,9 +1780,9 @@ function pick(row, aliases) {
   return "";
 }
 
-function toCsv(rows, delimiter = ",") {
-  if (!rows.length) return "";
-  const headers = Object.keys(rows[0]);
+function toCsv(rows, delimiter = ",", explicitHeaders = null) {
+  const headers = explicitHeaders || Object.keys(rows[0] || {});
+  if (!headers.length) return "";
   const lines = [headers.join(delimiter)];
   for (const row of rows) {
     lines.push(headers.map((h) => csvEscape(row[h], delimiter)).join(delimiter));
@@ -1726,6 +1835,12 @@ function notify(message, type = "info") {
   setTimeout(() => {
     if (flash.innerHTML.includes(escapeHtml(message))) flash.innerHTML = "";
   }, 4500);
+}
+
+function showBackupStatus(message, type = "info") {
+  appState.ui.lastBackupMessage = message;
+  const target = document.getElementById("backupStatus");
+  if (target) target.innerHTML = `<p class="notice ${type}">${escapeHtml(message)}</p>`;
 }
 
 function setConnectionStatus(text, mode = "ok") {

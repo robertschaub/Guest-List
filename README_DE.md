@@ -19,7 +19,7 @@ Statische Web-App für Event-Gästeliste, Check-in auf mehreren Mobile-/Tablet-G
 - Status: Offen, Eingecheckt, No Show
 - Kategorie-Listen mit Summen
 - CSV-Import und CSV-Export
-- Audit Log für Check-in, Doppel-Check-in-Versuch, Kommentar, Gaständerung, Import, Export, No Show und PIN-Reset
+- Audit Log für Check-in, Doppel-Check-in-Versuch, Kommentar, Gaständerung, Import, Export, No Show, Audit-Export und PIN-Reset
 
 ## Technischer Stack
 
@@ -181,6 +181,7 @@ docs/operations/CHECKIN_PERSONAL_KURZANLEITUNG_DE.md
 2. Rolle `Admin` wählen.
 3. Globalen Admin-PIN eingeben.
 4. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder No Shows setzen.
+5. Bei riskanten Massenaktionen die aktuelle Event-ID eintippen: Import mit Löschen und `Alle offenen Gäste auf No Show setzen`.
 
 ## CSV-Import
 
@@ -209,9 +210,9 @@ Sicherheitsprüfungen beim Import:
 - Zeilen ohne Namen werden blockiert.
 - Doppelte `Guest ID` innerhalb der CSV werden blockiert.
 - Bei zusätzlichem Import werden `Guest ID`s blockiert, die bereits im Event existieren.
-- Bei vollständigem Neuimport kann `Vorhandene Gäste vor Import löschen` aktiviert werden.
+- Bei vollständigem Neuimport kann `Vorhandene Gäste vor Import löschen` aktiviert werden. Vor dem Löschen muss die aktuelle Event-ID eingetippt werden.
 
-CSV-Exporte werden als UTF-8 mit BOM und Semikolon-Trennzeichen erzeugt, damit sie in deutschem Excel einfacher geöffnet werden können.
+CSV-Exporte werden als UTF-8 mit BOM und Semikolon-Trennzeichen erzeugt, damit sie in deutschem Excel einfacher geöffnet werden können. Der Admin-Bereich zeigt nach dem Export Dateiname, Anzahl und Uhrzeit als Backup-Hinweis. Zusätzlich kann der Admin das Audit Log als CSV exportieren.
 
 ## Empfohlener Event-Workflow
 
@@ -221,7 +222,7 @@ Am Tag vor dem Event:
 2. Firebase-Regeln testen.
 3. Event initialisieren.
 4. CSV importieren.
-5. Export/Backup herunterladen.
+5. Export/Backup herunterladen: `Alle Gäste CSV` und `Audit Log CSV`.
 6. Check-in mit 2 Geräten testen.
 
 Am Event:
@@ -235,8 +236,8 @@ Am Event:
 
 Nach dem Event:
 
-1. Export `Alle Gäste CSV` herunterladen.
-2. Optional offene Gäste auf `No Show` setzen.
+1. Export `Alle Gäste CSV` und `Audit Log CSV` herunterladen.
+2. Optional offene Gäste auf `No Show` setzen; dafür die Event-ID bewusst eintippen.
 3. Audit Log prüfen.
 
 ## Kosten / Limits
@@ -278,7 +279,7 @@ Bewusst enthalten:
 - Check-in-PINs und globalen Admin-PIN unterschiedlich setzen.
 - Event-Link nicht öffentlich posten.
 - Admin-PIN nur an Verantwortliche geben.
-- Vor jedem Event CSV-Backup herunterladen.
+- Vor jedem Event Gäste-CSV und Audit-Log-CSV herunterladen.
 - Bei kritischen Events zusätzlich eine ausgedruckte Liste oder einen CSV-Export bereithalten.
 
 ## Lokaler Test

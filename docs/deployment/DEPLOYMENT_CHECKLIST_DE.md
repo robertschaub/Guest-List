@@ -34,6 +34,7 @@
 - [ ] Kategorien geprüft
 - [ ] Summen geprüft
 - [ ] Backup CSV exportiert
+- [ ] Audit-Log CSV exportiert
 - [ ] Manueller Gast angelegt und bearbeitet
 
 ## Test vor Ort
@@ -46,10 +47,14 @@
 - [ ] Support-Kommentar getestet
 - [ ] Admin-Übersicht geprüft
 - [ ] Export geprüft
+- [ ] Leeres Event zeigt 0-Gäste-Warnung
+- [ ] Import mit Löschen verlangt Event-ID als Bestätigung
+- [ ] Massen-No-Show verlangt Event-ID als Bestätigung
 
 ## Event-Tag Backup
 
 - [ ] Aktuelle CSV auf Laptop gespeichert
+- [ ] Aktuelle Audit-Log CSV auf Laptop gespeichert
 - [ ] Optional ausgedruckte Liste vorhanden
 - [ ] Globaler Admin-PIN bei Verantwortlichem
 - [ ] Check-in-PIN bei Eingangsteam

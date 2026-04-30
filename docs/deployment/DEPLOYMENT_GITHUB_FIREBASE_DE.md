@@ -132,7 +132,7 @@ Dann Eventname, globalen Admin-PIN und event-spezifischen Check-in-PIN setzen un
 3. Danach optional `data/samples/sample_guests_30_semicolon.csv` testen, um deutsche Excel-CSV mit Semikolon zu prüfen.
 4. Für die Eventprobe `data/samples/sample_guests_1200.csv` importieren.
 5. Import prüfen: Kategorien, Umlaute, Support-Kommentare, doppelte Guest IDs.
-6. Export-Backup herunterladen.
+6. Export-Backup herunterladen: `Alle Gäste CSV` und `Audit Log CSV`.
 7. Mindestens zwei Geräte verbinden und Test-Check-ins durchführen.
 
 ## 11. Pflichtprüfung vor Eventbeginn
@@ -141,4 +141,5 @@ Dann Eventname, globalen Admin-PIN und event-spezifischen Check-in-PIN setzen un
 - Auf Gerät A einen Gast einchecken.
 - Auf Gerät B prüfen, dass Status und Übersicht aktualisiert werden.
 - Denselben Gast parallel oder erneut einchecken und prüfen, dass Doppel-Check-in verhindert wird.
-- Als Admin `Alle Gäste CSV` exportieren und lokal speichern.
+- Als Admin `Alle Gäste CSV` und `Audit Log CSV` exportieren und lokal speichern.
+- Bei Import mit Löschen oder Massen-No-Show prüfen, dass die App die Event-ID als Bestätigung verlangt.
