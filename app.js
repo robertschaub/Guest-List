@@ -279,6 +279,7 @@ function renderWelcome() {
         <div class="form-row">
           <label for="newEventDate">Datum</label>
           <input id="newEventDate" type="date" required />
+          <p class="field-help">Die Event-ID wird aus den ersten zwei Wörtern und dem Datum erzeugt, z.B. <code>the-garden-260501</code>.</p>
         </div>
         <div class="form-row">
           <label for="adminPin">Globaler Admin-PIN</label>
@@ -326,7 +327,6 @@ async function createEventFromForm(event) {
   const result = document.getElementById("setupResult");
   result.innerHTML = `<p class="notice info">Event wird erstellt…</p>`;
 
-  const eventId = `evt-${Date.now().toString(36)}-${randomToken(5)}`;
   const name = val("newEventName").trim();
   const date = val("newEventDate").trim();
   const adminPin = val("adminPin");
@@ -339,6 +339,8 @@ async function createEventFromForm(event) {
     result.innerHTML = `<p class="notice error">Eventname und Datum sind Pflichtfelder.</p>`;
     return;
   }
+
+  const eventId = buildEventId(name, date);
 
   if (adminPin.length < PIN_MIN_LENGTH || checkinPin.length < PIN_MIN_LENGTH) {
     result.innerHTML = `<p class="notice error">PINs müssen mindestens ${PIN_MIN_LENGTH} Zeichen haben.</p>`;
@@ -354,10 +356,17 @@ async function createEventFromForm(event) {
     result.innerHTML = `<p class="notice info">Globaler Admin-PIN wird geprüft…</p>`;
     await verifyGlobalAdminPin(adminPin, displayName, deviceLabel);
 
+    const targetEventRef = doc(appState.db, "events", eventId);
+    const existingEventSnap = await getDoc(targetEventRef);
+    if (existingEventSnap.exists()) {
+      result.innerHTML = `<p class="notice error">Event-ID <code>${escapeHtml(eventId)}</code> existiert bereits. Bitte Eventname oder Datum anpassen.</p>`;
+      return;
+    }
+
     const adminPinHash = await hashPin(eventId, "admin", adminPin);
     const checkinPinHash = await hashPin(eventId, "checkin", checkinPin);
 
-    await setDoc(doc(appState.db, "events", eventId), {
+    await setDoc(targetEventRef, {
       name,
       date,
       categories,
@@ -2051,11 +2060,17 @@ async function hashPin(eventId, role, pin) {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function randomToken(length = 6) {
-  const chars = "abcdefghijkmnpqrstuvwxyz23456789";
-  const values = new Uint32Array(length);
-  crypto.getRandomValues(values);
-  return Array.from(values).map((v) => chars[v % chars.length]).join("");
+function buildEventId(name, date) {
+  const words = normalizeForSearch(name).split(/\s+/).filter(Boolean).slice(0, 2);
+  const namePart = (words.length ? words : ["event"]).join("-");
+  const datePart = shortDateForEventId(date);
+  return [namePart, datePart].filter(Boolean).join("-");
+}
+
+function shortDateForEventId(date) {
+  const match = String(date || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  return `${match[1].slice(2)}${match[2]}${match[3]}`;
 }
 
 function nextGuestCode(num) {
