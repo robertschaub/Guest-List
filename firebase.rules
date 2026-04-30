@@ -1,0 +1,173 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function eventExists(eventId) {
+      return exists(/databases/$(database)/documents/events/$(eventId));
+    }
+
+    function eventData(eventId) {
+      return get(/databases/$(database)/documents/events/$(eventId)).data;
+    }
+
+    function securityExists(eventId) {
+      return exists(/databases/$(database)/documents/events/$(eventId)/private/security);
+    }
+
+    function securityData(eventId) {
+      return get(/databases/$(database)/documents/events/$(eventId)/private/security).data;
+    }
+
+    function isMember(eventId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid));
+    }
+
+    function memberData(eventId) {
+      return get(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid)).data;
+    }
+
+    function isAdmin(eventId) {
+      return isMember(eventId) && memberData(eventId).role == 'admin';
+    }
+
+    function isCheckin(eventId) {
+      return isMember(eventId)
+        && (memberData(eventId).role == 'checkin' || memberData(eventId).role == 'admin');
+    }
+
+    function validRole(role) {
+      return role == 'admin' || role == 'checkin';
+    }
+
+    function validPin(eventId, role, pinHash) {
+      return securityExists(eventId)
+        && (
+          (role == 'admin' && securityData(eventId).adminPinHash == pinHash) ||
+          (role == 'checkin' && securityData(eventId).checkinPinHash == pinHash)
+        );
+    }
+
+    function validMemberWrite(eventId, uid) {
+      return signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && validRole(request.resource.data.role)
+        && request.resource.data.pinHash is string
+        && request.resource.data.displayName is string
+        && request.resource.data.deviceLabel is string
+        && validPin(eventId, request.resource.data.role, request.resource.data.pinHash)
+        && request.resource.data.keys().hasOnly([
+          'uid', 'role', 'pinHash', 'displayName', 'deviceLabel', 'createdAt', 'updatedAt'
+        ]);
+    }
+
+    function validStatus(status) {
+      return status == 'open' || status == 'checked_in' || status == 'no_show';
+    }
+
+    function validSecurityData(data) {
+      return data.adminPinHash is string
+        && data.checkinPinHash is string
+        && data.keys().hasOnly([
+          'adminPinHash', 'checkinPinHash', 'createdAt', 'updatedAt'
+        ]);
+    }
+
+    function validGuestData(data) {
+      return validStatus(data.status)
+        && data.name is string
+        && data.category is string
+        && data.keys().hasOnly([
+          'guestId', 'name', 'searchName', 'category', 'status', 'supportComment', 'internalNote',
+          'checkedInAt', 'checkedInByUid', 'checkedInByName', 'checkedInDevice',
+          'createdAt', 'updatedAt', 'createdByUid', 'createdByName',
+          'lastActionAt', 'lastActionByName'
+        ]);
+    }
+
+    function staffGuestUpdateAllowed(eventId) {
+      return isCheckin(eventId) && (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'supportComment', 'updatedAt', 'lastActionAt', 'lastActionByName'
+        ])
+        ||
+        (
+          resource.data.status != 'checked_in'
+          && request.resource.data.status == 'checked_in'
+          && request.resource.data.checkedInByUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'checkedInAt', 'checkedInByUid', 'checkedInByName', 'checkedInDevice',
+            'updatedAt', 'lastActionAt', 'lastActionByName', 'supportComment'
+          ])
+        )
+      );
+    }
+
+    match /events/{eventId} {
+      // The event document intentionally contains only public event metadata.
+      allow get: if true;
+      allow list: if false;
+
+      allow create: if signedIn()
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.categories is list
+        && request.resource.data.keys().hasOnly([
+          'name', 'date', 'categories', 'statuses', 'createdAt', 'updatedAt', 'createdByUid'
+        ]);
+
+      allow update, delete: if isAdmin(eventId);
+
+      match /private/{docId} {
+        allow get: if isAdmin(eventId);
+        allow update: if isAdmin(eventId)
+          && docId == 'security'
+          && validSecurityData(request.resource.data);
+        allow delete: if false;
+        allow list: if false;
+
+        // Initial security document can only be created by the anonymous user that created the event.
+        allow create: if signedIn()
+          && docId == 'security'
+          && eventExists(eventId)
+          && eventData(eventId).createdByUid == request.auth.uid
+          && !securityExists(eventId)
+          && validSecurityData(request.resource.data);
+      }
+
+      match /members/{uid} {
+        allow get: if isMember(eventId) && (uid == request.auth.uid || isAdmin(eventId));
+        allow list: if isAdmin(eventId);
+        allow create, update: if validMemberWrite(eventId, uid);
+        allow delete: if isAdmin(eventId);
+      }
+
+      match /guests/{guestId} {
+        allow read: if isMember(eventId);
+        allow create: if isAdmin(eventId)
+          && validGuestData(request.resource.data);
+
+        allow update: if (isAdmin(eventId) && validGuestData(request.resource.data))
+          || staffGuestUpdateAllowed(eventId);
+        allow delete: if isAdmin(eventId);
+      }
+
+      match /auditLog/{logId} {
+        allow read: if isMember(eventId);
+        allow create: if isMember(eventId)
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.action is string
+          && request.resource.data.keys().hasOnly([
+            'action', 'guestDocId', 'guestId', 'guestName', 'category', 'details',
+            'actorUid', 'actorName', 'deviceLabel', 'createdAt'
+          ]);
+        allow update, delete: if false;
+      }
+    }
+  }
+}

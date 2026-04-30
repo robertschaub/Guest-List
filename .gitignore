@@ -1,0 +1,34 @@
+.DS_Store
+Thumbs.db
+*.log
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+
+# Local/private event data
+private/
+real_data/
+*.private.csv
+*.backup.csv
+*.real.csv
+docs/legacy/google-sheets/*.xlsx
+
+# Firebase/local tooling output
+firebase-debug.log
+.firebaserc
+firebase.json
+
+# Handoff package source material copied into root and merged
+Guest-List_codex_handoff_contents_only/
+Guest-List_codex_handoff_contents_only*.zip
+COPY_TO_EXISTING_REPO.ps1
+
+# Editors
+.vscode/
+.idea/
+
+# Temporary
+*.tmp
