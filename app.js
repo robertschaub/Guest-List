@@ -239,38 +239,19 @@ function renderConfigMissing() {
 function renderWelcome() {
   els.eventTitle.textContent = "Gästeliste Check-in";
   setHeaderMeta([]);
-  const savedEventId = localStorage.getItem("guestlist:lastEventId") || "";
-  const knownEvents = getKnownEvents();
-  render(`
-    <nav class="nav-tabs">
-      <button class="active" type="button">Events Erstellen</button>
-      ${savedEventId ? `<button id="returnLastEventBtn" type="button">Zurück zum Event</button>` : ""}
-    </nav>
+  render(renderEventSetupSections());
+  bindEventSetupHandlers();
+}
 
+function renderEventSetupSections() {
+  const knownEvents = getKnownEvents();
+  return `
     ${knownEvents.length ? `
       <section class="card">
         <h2>Bestehende Events</h2>
-        ${renderKnownEventList()}
+        ${renderKnownEventList(appState.eventId)}
       </section>
     ` : ""}
-
-    <section class="card compact">
-      <details>
-        <summary class="details-summary">Event per ID öffnen</summary>
-        <p class="small">Nur verwenden, wenn der Event nicht in der Liste steht. Die Basis-URL öffnet kein Event automatisch.</p>
-        ${savedEventId ? `<p class="notice warning">Zuletzt in diesem Browser geöffnet: <code>${escapeHtml(savedEventId)}</code>. Bitte bewusst prüfen, ob das der richtige Tag ist.</p>` : ""}
-        <form id="joinExistingForm" class="grid two">
-          <div class="form-row">
-            <label for="existingEventId">Event-ID</label>
-            <input id="existingEventId" value="" placeholder="z.B. evt-abc123" autocomplete="off" />
-          </div>
-          <div class="form-row" style="align-self:end">
-            <button class="btn-primary" type="submit">Event öffnen</button>
-          </div>
-        </form>
-      </details>
-    </section>
-
     <section class="card">
       <h2>Neues Event initialisieren</h2>
       <form id="createEventForm" class="grid two">
@@ -309,22 +290,19 @@ function renderWelcome() {
       </form>
       <div id="setupResult"></div>
     </section>
-  `);
+  `;
+}
 
+function bindEventSetupHandlers() {
   bindKnownLinkCopyButtons();
   bindKnownEventButtons();
-  document.getElementById("returnLastEventBtn")?.addEventListener("click", () => {
-    window.location.href = urlWithEvent(savedEventId);
-  });
 
-  document.getElementById("joinExistingForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const id = document.getElementById("existingEventId").value.trim();
-    if (!id) return;
-    window.location.href = urlWithEvent(id);
-  });
+  document.getElementById("createEventForm")?.addEventListener("submit", createEventFromForm);
+}
 
-  document.getElementById("createEventForm").addEventListener("submit", createEventFromForm);
+function renderEventSetup() {
+  tabContent().innerHTML = renderEventSetupSections();
+  bindEventSetupHandlers();
 }
 
 async function createEventFromForm(event) {
@@ -577,6 +555,8 @@ function loadMainApp() {
 
 function renderShell() {
   const role = ROLE_META[appState.member?.role] || appState.member?.role || "User";
+  if (!isAdmin() && ["overview", "lists", "admin", "log"].includes(appState.currentTab)) appState.currentTab = "checkin";
+  const tabClass = (tab) => appState.currentTab === tab ? "active" : "";
   els.eventTitle.textContent = appState.event?.name || "Gästeliste";
   setEventMeta();
   els.footerText.textContent = `${role} · ${appState.member?.displayName || ""} · ${appState.member?.deviceLabel || ""} · Event: ${appState.eventId || "-"}`;
@@ -584,10 +564,11 @@ function renderShell() {
   render(`
     <div id="flash"></div>
     <nav class="nav-tabs" id="navTabs">
-      <button data-tab="checkin" class="active">Check-in</button>
-      ${isAdmin() ? `<button data-tab="overview">Übersicht</button><button data-tab="lists">Listen</button><button data-tab="admin">Event Gäste & Betrieb</button><button data-tab="log">Log</button>` : ""}
-      <button id="switchEventBtn" type="button">Events Erstellen</button>
+      <button data-tab="checkin" class="${tabClass("checkin")}">Check-in</button>
+      ${isAdmin() ? `<button data-tab="overview" class="${tabClass("overview")}">Übersicht</button><button data-tab="lists" class="${tabClass("lists")}">Listen</button><button data-tab="admin" class="${tabClass("admin")}">Event Gäste & Betrieb</button>` : ""}
+      <button data-tab="setup" class="${tabClass("setup")}" type="button">Events Erstellen</button>
       <button id="switchRoleBtn" type="button">Rolle/PIN wechseln</button>
+      ${isAdmin() ? `<button data-tab="log" class="${tabClass("log")}">Log</button>` : ""}
     </nav>
     <section id="tabContent"></section>
   `);
@@ -600,9 +581,6 @@ function renderShell() {
     });
   });
   document.getElementById("switchRoleBtn")?.addEventListener("click", () => renderJoin());
-  document.getElementById("switchEventBtn")?.addEventListener("click", () => {
-    window.location.href = `${urlWithoutParams()}?setup=1`;
-  });
 }
 
 function renderActiveTab() {
@@ -611,6 +589,7 @@ function renderActiveTab() {
   else if (appState.currentTab === "overview") renderOverview();
   else if (appState.currentTab === "lists") renderLists();
   else if (appState.currentTab === "admin") renderAdmin();
+  else if (appState.currentTab === "setup") renderEventSetup();
   else if (appState.currentTab === "log") renderAuditLog();
 }
 
