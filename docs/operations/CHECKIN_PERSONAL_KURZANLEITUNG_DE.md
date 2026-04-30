@@ -21,7 +21,7 @@ Die Basis-URL ohne `?event=...` nicht verwenden.
 3. Rolle `Check-in Staff` wählen.
 4. Check-in-PIN vom Door Lead eingeben.
 5. Eigenen Namen oder Position eintragen, z.B. `Door 1`, `Door 2`, `Guest Support`.
-6. Gerätename eintragen, z.B. `iPad Eingang links`.
+6. Gerätename optional eintragen, z.B. `iPad Eingang links`. Das Feld darf leer bleiben.
 
 ## Gast einchecken
 

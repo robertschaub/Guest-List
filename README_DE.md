@@ -168,7 +168,7 @@ docs/operations/CHECKIN_PERSONAL_KURZANLEITUNG_DE.md
 1. Event-Link öffnen.
 2. Rolle `Check-in Staff` wählen.
 3. Check-in-PIN eingeben.
-4. Namen/Gerät eingeben, z.B. `Eingang 1`.
+4. Namen eingeben; Gerät ist optional, z.B. `iPad Eingang links`.
 5. Gäste suchen.
 6. Gast einchecken.
 7. Support-Kommentar bei Bedarf ergänzen.
@@ -226,7 +226,7 @@ Am Event:
 
 1. 5 Geräte öffnen denselben Event-Link.
 2. Jedes Gerät mit Check-in-PIN verbinden.
-3. Jedes Gerät mit eigenem Gerätenamen: `Check-in 1`, `Check-in 2`, etc.
+3. Optional je Gerät einen Gerätenamen eintragen: `Check-in 1`, `Check-in 2`, etc.
 4. Gäste über Name oder Guest ID suchen.
 5. Einchecken.
 6. Admin beobachtet die Übersicht und Kategorie-Summen.

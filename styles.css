@@ -205,6 +205,12 @@ code {
   font-weight: 900;
 }
 
+.optional-label {
+  font-weight: 800;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
 input, select, textarea {
   width: 100%;
   min-height: var(--tap);

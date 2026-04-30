@@ -71,7 +71,7 @@ Prüfen:
 Prüfen:
 
 - Suchfeld sichtbar.
-- Mitarbeitername/Gerätename wird gespeichert/angezeigt.
+- Mitarbeitername wird gespeichert/angezeigt; Gerätename ist optional.
 - Admin-Funktionen sind nicht sichtbar.
 
 ## Test 5 — CSV Import

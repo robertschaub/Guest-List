@@ -264,7 +264,7 @@ function renderWelcome() {
         </div>
         <div class="form-row">
           <label for="setupDevice">Gerät</label>
-          <input id="setupDevice" value="Setup Gerät" required />
+          <input id="setupDevice" value="" placeholder="optional" />
         </div>
         <div class="form-row" style="grid-column:1/-1">
           <label for="categoryList">Kategorien, eine pro Zeile</label>
@@ -301,7 +301,7 @@ async function createEventFromForm(event) {
   const adminPin = val("adminPin");
   const checkinPin = val("checkinPin");
   const displayName = val("setupName").trim() || "Admin";
-  const deviceLabel = val("setupDevice").trim() || "Setup Gerät";
+  const deviceLabel = val("setupDevice").trim();
   const categories = val("categoryList").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 
   if (!name || !date) {
@@ -407,8 +407,8 @@ function renderJoin() {
           <input id="memberName" value="${escapeHtml(localStorage.getItem("guestlist:memberName") || "")}" required placeholder="z.B. Eingang 1 / Max" />
         </div>
         <div class="form-row">
-          <label for="deviceLabel">Gerät</label>
-          <input id="deviceLabel" value="${escapeHtml(localStorage.getItem("guestlist:deviceLabel") || suggestDeviceLabel())}" required />
+          <label for="deviceLabel">Gerät <span class="optional-label">optional</span></label>
+          <input id="deviceLabel" value="${escapeHtml(localStorage.getItem("guestlist:deviceLabel") || "")}" placeholder="z.B. iPad Eingang links" />
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" type="submit">Verbinden</button>
@@ -428,7 +428,7 @@ async function joinEventFromForm(event) {
   const role = val("memberRole");
   const pin = val("memberPin");
   const displayName = val("memberName").trim() || "Check-in";
-  const deviceLabel = val("deviceLabel").trim() || suggestDeviceLabel();
+  const deviceLabel = val("deviceLabel").trim();
   const pinHash = await hashPin(appState.eventId, role, pin);
 
   try {
@@ -443,7 +443,8 @@ async function joinEventFromForm(event) {
     }, { merge: true });
 
     localStorage.setItem("guestlist:memberName", displayName);
-    localStorage.setItem("guestlist:deviceLabel", deviceLabel);
+    if (deviceLabel) localStorage.setItem("guestlist:deviceLabel", deviceLabel);
+    else localStorage.removeItem("guestlist:deviceLabel");
 
     const memberSnap = await getDoc(memberRef(appState.user.uid));
     appState.member = { id: memberSnap.id, ...memberSnap.data() };
@@ -451,8 +452,15 @@ async function joinEventFromForm(event) {
     loadMainApp();
   } catch (error) {
     console.error(error);
-    result.innerHTML = `<p class="notice error">Verbindung fehlgeschlagen. Prüfe Rolle und PIN.</p>`;
+    result.innerHTML = `<p class="notice error">${escapeHtml(joinErrorMessage(error))}</p>`;
   }
+}
+
+function joinErrorMessage(error) {
+  if (isPermissionError(error)) {
+    return "Verbindung fehlgeschlagen. Prüfe Rolle und PIN. Das Feld Gerät darf leer bleiben.";
+  }
+  return `Verbindung fehlgeschlagen: ${error?.message || error}`;
 }
 
 async function verifyGlobalAdminPin(pin, displayName, deviceLabel) {
