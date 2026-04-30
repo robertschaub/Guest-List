@@ -223,19 +223,21 @@ function renderWelcome() {
       </section>
     ` : ""}
 
-    <section class="card">
-      <h2>Event per ID öffnen</h2>
-      <p class="small">Wenn du bereits eine Event-ID hast, kannst du direkt verbinden. Die Basis-URL öffnet kein Event automatisch.</p>
-      ${savedEventId ? `<p class="notice warning">Zuletzt in diesem Browser geöffnet: <code>${escapeHtml(savedEventId)}</code>. Bitte bewusst prüfen, ob das der richtige Tag ist.</p>` : ""}
-      <form id="joinExistingForm" class="grid two">
-        <div class="form-row">
-          <label for="existingEventId">Event-ID</label>
-          <input id="existingEventId" value="${escapeHtml(savedEventId)}" placeholder="z.B. evt-abc123" autocomplete="off" />
-        </div>
-        <div class="form-row" style="align-self:end">
-          <button class="btn-primary" type="submit">Event öffnen</button>
-        </div>
-      </form>
+    <section class="card compact">
+      <details>
+        <summary class="details-summary">Event per ID öffnen</summary>
+        <p class="small">Nur verwenden, wenn der Event nicht in der Liste steht. Die Basis-URL öffnet kein Event automatisch.</p>
+        ${savedEventId ? `<p class="notice warning">Zuletzt in diesem Browser geöffnet: <code>${escapeHtml(savedEventId)}</code>. Bitte bewusst prüfen, ob das der richtige Tag ist.</p>` : ""}
+        <form id="joinExistingForm" class="grid two">
+          <div class="form-row">
+            <label for="existingEventId">Event-ID</label>
+            <input id="existingEventId" value="" placeholder="z.B. evt-abc123" autocomplete="off" />
+          </div>
+          <div class="form-row" style="align-self:end">
+            <button class="btn-primary" type="submit">Event öffnen</button>
+          </div>
+        </form>
+      </details>
     </section>
 
     <section class="card">

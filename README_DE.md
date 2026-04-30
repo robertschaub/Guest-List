@@ -147,7 +147,7 @@ https://robertschaub.github.io/Guest-List/?event=the-garden-w-blondish
 https://robertschaub.github.io/Guest-List/?event=the-garden-w-me
 ```
 
-Auf der Startseite und im Admin-Tab gibt es eine Liste **Bestehende Events**. Dort können Admins den Freitag- oder Samstag-Event bewusst auswählen. Im laufenden UI führt der Button **Event wechseln** ebenfalls zur Event-Auswahl. Dort kann auch weiterhin eine Event-ID manuell geöffnet oder ein neues Event erstellt werden.
+Auf der Startseite und im Admin-Tab gibt es eine Liste **Bestehende Events**. Dort können Admins den Freitag- oder Samstag-Event bewusst auswählen. Im laufenden UI führt der Button **Event wechseln** ebenfalls zur Event-Auswahl. Eine manuelle Event-ID-Eingabe gibt es nur noch als aufgeklappten Expertenbereich, falls ein Event nicht in der Liste steht.
 
 Die App wählt **niemals automatisch nach Datum**. Das ist wichtig, weil ein Freitag-Event nach Mitternacht am 1. Mai sonst versehentlich auf Samstag wechseln könnte. Ein Door-Terminal bleibt immer auf dem Event, dessen vollständiger Link geöffnet wurde.
 

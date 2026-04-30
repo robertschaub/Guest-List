@@ -177,6 +177,16 @@ code {
   margin-top: 0;
 }
 
+.details-summary {
+  cursor: pointer;
+  font-weight: 900;
+  color: var(--text);
+}
+
+details .grid {
+  margin-top: 12px;
+}
+
 .grid {
   display: grid;
   gap: 14px;
