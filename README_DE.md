@@ -272,7 +272,7 @@ Bewusst enthalten:
 
 ## Sicherheitshinweise
 
-- Verwende keine kurzen Zahlen-PINs wie `1234`; neue Events erzwingen mindestens 6 Zeichen.
+- Verwende keine leicht zu erratenden PINs; neue Events erzwingen mindestens 4 Zeichen.
 - Check-in-PINs und globalen Admin-PIN unterschiedlich setzen.
 - Event-Link nicht öffentlich posten.
 - Admin-PIN nur an Verantwortliche geben.

@@ -31,7 +31,7 @@ const CONFIGURED_EVENTS = Array.isArray(CONFIG.app?.knownEvents) ? CONFIG.app.kn
 const KNOWN_EVENTS_STORAGE_KEY = "guestlist:knownEvents";
 const EVENT_ALIASES = CONFIG.app?.eventAliases || {};
 const GLOBAL_ADMIN_EVENT_ID = CONFIG.app?.globalAdminEventId || CONFIGURED_EVENTS[0]?.id || "";
-const PIN_MIN_LENGTH = 6;
+const PIN_MIN_LENGTH = 4;
 
 const STATUS_META = {
   open: { label: "Offen", badge: "warning" },
