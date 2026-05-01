@@ -1003,6 +1003,7 @@ function renderShell() {
   ensureCurrentTabVisible();
   const tabClass = (tab) => appState.currentTab === tab ? "active" : "";
   const tabs = visibleTabs();
+  const mobileAdminTabs = adminMobileTabs(tabs);
   els.eventTitle.textContent = appState.event?.name || "Gästeliste";
   setEventMeta();
   els.footerText.textContent = `${role} · ${appState.member?.displayName || ""} · ${appState.member?.deviceLabel || ""} · Event: ${appState.eventId || "-"}`;
@@ -1011,7 +1012,13 @@ function renderShell() {
     <div id="flash"></div>
     <div class="nav-row">
       <nav class="nav-tabs" id="navTabs">
-        ${tabs.map((tab) => `<button data-tab="${tab.id}" class="${tabClass(tab.id)}" type="button">${tab.label}</button>`).join("")}
+        ${tabs.map((tab) => `<button data-tab="${tab.id}" class="${[tabClass(tab.id), mobileAdminTabs.some((item) => item.id === tab.id) ? "desktop-admin-tab" : ""].filter(Boolean).join(" ")}" type="button">${tab.label}</button>`).join("")}
+        ${mobileAdminTabs.length ? `
+          <select id="mobileAdminTabs" class="mobile-admin-tabs ${mobileAdminTabs.some((tab) => tab.id === appState.currentTab) ? "active" : ""}" aria-label="Admin-Bereich wechseln">
+            <option value="">Admin…</option>
+            ${mobileAdminTabs.map((tab) => option(tab.id, tab.label, appState.currentTab)).join("")}
+          </select>
+        ` : ""}
       </nav>
       <button class="btn-secondary shell-auth-btn" id="shellAuthBtn" type="button">${hasLinkedRole() ? "Abmelden" : "Anmelden"}</button>
     </div>
@@ -1025,7 +1032,20 @@ function renderShell() {
       renderActiveTab();
     });
   });
+  document.getElementById("mobileAdminTabs")?.addEventListener("change", (event) => {
+    const tabId = event.target.value;
+    if (!tabId) return;
+    appState.currentTab = tabId;
+    renderShell();
+    renderActiveTab();
+  });
   document.getElementById("shellAuthBtn")?.addEventListener("click", handleCheckinAuthButton);
+}
+
+function adminMobileTabs(tabs) {
+  if (!isAdmin()) return [];
+  const primaryTabIds = new Set(["checkin", "overview", "role"]);
+  return tabs.filter((tab) => !primaryTabIds.has(tab.id));
 }
 
 function renderActiveTab() {
@@ -1322,14 +1342,20 @@ function renderGuestCard(guest) {
         ${isAdmin() ? `
           <details class="guest-admin-panel">
             <summary>Admin-Aktionen</summary>
-            <p class="small">Korrekturen und gefährliche Aktionen. Nur verwenden, wenn der Status bewusst geändert werden soll.</p>
+            <p class="small">Gastdaten bearbeiten. Statusänderungen und Löschen sind separat geschützt.</p>
             <div class="actions guest-admin-actions">
-              ${overrideCheckinButton}
               <button class="btn-secondary" data-action="edit-guest" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Gast bearbeiten</button>
-              <button class="btn-warning" data-action="no-show" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Auf No Show setzen</button>
-              <button class="btn-secondary" data-action="reset-open" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Auf Offen setzen</button>
-              <button class="btn-danger" data-action="delete-guest" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Gast löschen</button>
             </div>
+            <details class="guest-danger-panel">
+              <summary>Status & Löschen</summary>
+              <p class="small">Bewusste Korrekturen am Einlass. Diese Aktionen fragen zusätzlich nach Bestätigung.</p>
+              <div class="actions guest-danger-actions">
+                ${overrideCheckinButton}
+                <button class="btn-warning" data-action="no-show" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Auf No Show setzen</button>
+                <button class="btn-secondary" data-action="reset-open" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Auf Offen setzen</button>
+                <button class="btn-danger" data-action="delete-guest" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Gast löschen</button>
+              </div>
+            </details>
           </details>
         ` : ""}
       </div>
@@ -1436,9 +1462,10 @@ async function checkInGuest(guestDocId, force = false) {
     return;
   }
 
+  let completed = false;
+  let before = null;
   try {
     appState.checkInLocks.add(guestDocId);
-    let before = null;
     await runTransaction(appState.db, async (transaction) => {
       const ref = guestRef(guestDocId);
       const snap = await transaction.get(ref);
@@ -1465,6 +1492,7 @@ async function checkInGuest(guestDocId, force = false) {
       newStatus: "checked_in",
       force
     });
+    completed = true;
     notify(`${guest.name} eingecheckt.`, "success");
   } catch (error) {
     if (error.message === "ALREADY_CHECKED_IN") {
@@ -1480,7 +1508,14 @@ async function checkInGuest(guestDocId, force = false) {
     }
   } finally {
     appState.checkInLocks.delete(guestDocId);
+    if (completed) resetSearchForNextCheckin();
   }
+}
+
+function resetSearchForNextCheckin() {
+  if (appState.currentTab !== "checkin") return;
+  appState.ui.search = "";
+  renderCheckin();
 }
 
 async function saveGuestComment(guestDocId) {
