@@ -99,6 +99,7 @@ const appState = {
   adminNotes: {},
   adminNotesLoaded: false,
   auditEntries: [],
+  eventUnsubscribe: null,
   memberUnsubscribe: null,
   guestUnsubscribe: null,
   adminNotesUnsubscribe: null,
@@ -485,8 +486,8 @@ function renderRolePinSections() {
     ? `<p class="notice warning">${escapeHtml(checkinStaffAccessMessage())}</p>`
     : "";
   const eventContext = appState.eventId
-    ? `<p class="small">Event-ID: <code>${escapeHtml(appState.eventId)}</code></p>`
-    : `<p class="small">Check-in Staff wird automatisch mit dem Event verbunden, dessen PIN zum heutigen Event passt. Bis 02:00 Uhr wird zusätzlich das Event vom Vortag geprüft.</p>`;
+    ? `<p class="small">Event-ID: <code>${escapeHtml(appState.eventId)}</code></p>${renderCheckinAccessLoginStatus()}`
+    : `<p class="small">Ohne Event-Link wird ein heute aktives Check-in-Event gesucht. Für Tests oder ältere Demo-Events bitte den konkreten Event-Link öffnen.</p>`;
 
   return `
     <section class="card">
@@ -519,6 +520,12 @@ function renderRolePinSections() {
       <div id="joinResult"></div>
     </section>
   `;
+}
+
+function renderCheckinAccessLoginStatus() {
+  if (!appState.event) return "";
+  const status = checkinAccessStatus(appState.event);
+  return `<p class="notice ${status.type}"><strong>Check-in Staff:</strong> ${escapeHtml(status.detail)}</p>`;
 }
 
 async function renderAdminSettings() {
@@ -815,7 +822,7 @@ async function joinCheckinStaffFromAllowedEvents(pin, displayName, deviceLabel) 
     if (!eventSnap.exists()) continue;
 
     const eventData = { id: eventSnap.id, ...eventSnap.data() };
-    if (!isEventDateAllowedForCheckinStaff(eventData.date)) continue;
+    if (!isEventAccessWindowOpen(eventData)) continue;
 
     const authFields = await memberAuthFields(eventData.id, "checkin", pin, displayName);
     try {
@@ -952,6 +959,7 @@ function loadMainApp() {
   appState.adminNotesLoaded = false;
   if (isAdmin()) void ensureCurrentEventAccessWindowFields();
   renderShell();
+  subscribeCurrentEvent();
   subscribeCurrentMember();
   if (hasActiveEventAccess()) {
     subscribeGuests();
@@ -1063,6 +1071,55 @@ function renderActiveTab() {
   else if (appState.currentTab === "role") renderRolePinTab();
   else if (appState.currentTab === "adminSettings") renderAdminSettings();
   else if (appState.currentTab === "log") renderAuditLog();
+}
+
+function subscribeCurrentEvent() {
+  if (!appState.eventId) return;
+  if (appState.eventUnsubscribe) {
+    appState.eventUnsubscribe();
+    appState.eventUnsubscribe = null;
+  }
+
+  appState.eventUnsubscribe = onSnapshot(eventRef(), (snapshot) => {
+    if (!snapshot.exists()) {
+      renderEventNotFound(appState.eventId);
+      return;
+    }
+
+    appState.event = { id: snapshot.id, ...snapshot.data() };
+    saveKnownEvent(appState.event);
+    els.eventTitle.textContent = appState.event.name || "Gästeliste";
+    setEventMeta();
+
+    if (!hasActiveEventAccess()) {
+      unsubscribeGuestData();
+      appState.guestsLoaded = false;
+    } else {
+      ensureGuestDataSubscriptions();
+    }
+
+    renderShell();
+    renderActiveTab();
+  }, (error) => {
+    console.error(error);
+    notify("Event-Daten konnten nicht aktualisiert werden.", "error");
+  });
+}
+
+function ensureGuestDataSubscriptions() {
+  if (!appState.guestUnsubscribe) subscribeGuests();
+  if (isAdmin() && !appState.adminNotesUnsubscribe) subscribeAdminNotes();
+}
+
+function unsubscribeGuestData() {
+  if (appState.guestUnsubscribe) {
+    appState.guestUnsubscribe();
+    appState.guestUnsubscribe = null;
+  }
+  if (appState.adminNotesUnsubscribe) {
+    appState.adminNotesUnsubscribe();
+    appState.adminNotesUnsubscribe = null;
+  }
 }
 
 function subscribeGuests() {
@@ -1885,6 +1942,8 @@ function renderAdmin() {
       ${renderCurrentEventLink()}
     </section>
 
+    ${renderCheckinAccessSection()}
+
     ${renderCheckinPinSection()}
 
     <section class="card">
@@ -1937,6 +1996,7 @@ function renderAdmin() {
   bindKnownLinkCopyButtons();
   bindKnownEventButtons();
   bindEventNameForm();
+  bindCheckinAccessForm();
   bindCheckinPinForm();
   bindNamedCheckinPinForm();
   bindCheckinPinVisibilityToggle();
@@ -1963,6 +2023,58 @@ function bindEventNameForm() {
   updateButtonState();
   input.addEventListener("input", updateButtonState);
   form.addEventListener("submit", updateEventNameFromForm);
+}
+
+function renderCheckinAccessSection() {
+  const accessWindow = checkinStaffAccessWindow();
+  const status = checkinAccessStatus(appState.event);
+  const startValue = dateTimeLocalValue(accessWindow?.start);
+  const endValue = dateTimeLocalValue(accessWindow?.end);
+
+  return `
+    <section class="card">
+      <h2>Event-Zugang für Check-in Staff</h2>
+      <p class="notice ${status.type}"><strong>${escapeHtml(status.label)}:</strong> ${escapeHtml(status.detail)}</p>
+      <p class="small">Admins können Start und Ende jederzeit anpassen. Check-in Staff kann nur innerhalb dieses Zeitfensters den Event-Link nutzen, Gäste lesen und Check-ins schreiben.</p>
+      <form id="checkinAccessForm" class="grid two">
+        <div class="form-row">
+          <label for="checkinAccessStartInput">Zugang ab</label>
+          <input id="checkinAccessStartInput" type="datetime-local" value="${escapeHtml(startValue)}" required />
+        </div>
+        <div class="form-row">
+          <label for="checkinAccessEndInput">Zugang bis</label>
+          <input id="checkinAccessEndInput" type="datetime-local" value="${escapeHtml(endValue)}" required />
+        </div>
+        <div class="actions" style="grid-column:1/-1">
+          <button class="btn-primary" id="checkinAccessSaveBtn" type="submit" disabled>Zeitfenster speichern</button>
+        </div>
+      </form>
+      <div id="checkinAccessResult"></div>
+    </section>
+  `;
+}
+
+function bindCheckinAccessForm() {
+  const form = document.getElementById("checkinAccessForm");
+  const startInput = document.getElementById("checkinAccessStartInput");
+  const endInput = document.getElementById("checkinAccessEndInput");
+  const button = document.getElementById("checkinAccessSaveBtn");
+  if (!form || !startInput || !endInput || !button) return;
+
+  const accessWindow = checkinStaffAccessWindow();
+  const originalStart = dateTimeLocalValue(accessWindow?.start);
+  const originalEnd = dateTimeLocalValue(accessWindow?.end);
+  const updateButtonState = () => {
+    const start = parseDateTimeLocalValue(startInput.value);
+    const end = parseDateTimeLocalValue(endInput.value);
+    const unchanged = startInput.value === originalStart && endInput.value === originalEnd;
+    button.disabled = !start || !end || start >= end || unchanged;
+  };
+
+  updateButtonState();
+  startInput.addEventListener("input", updateButtonState);
+  endInput.addEventListener("input", updateButtonState);
+  form.addEventListener("submit", updateCheckinAccessWindowFromForm);
 }
 
 function bindCheckinPinForm() {
@@ -2051,6 +2163,68 @@ async function updateEventNameFromForm(event) {
   } catch (error) {
     console.error(error);
     notify(`Eventname konnte nicht gespeichert werden: ${error.message || error}`, "error");
+  }
+}
+
+async function updateCheckinAccessWindowFromForm(event) {
+  event.preventDefault();
+  if (!requireOnline("Check-in-Staff-Zugang speichern")) return;
+  if (!isAdmin()) {
+    notify("Nur Admins dürfen den Check-in-Staff-Zugang ändern.", "warning");
+    return;
+  }
+
+  const start = parseDateTimeLocalValue(val("checkinAccessStartInput"));
+  const end = parseDateTimeLocalValue(val("checkinAccessEndInput"));
+  const result = document.getElementById("checkinAccessResult");
+
+  if (!start || !end) {
+    if (result) result.innerHTML = `<p class="notice error">Bitte Start und Ende vollständig eingeben.</p>`;
+    return;
+  }
+  if (start >= end) {
+    if (result) result.innerHTML = `<p class="notice error">Das Ende muss nach dem Start liegen.</p>`;
+    return;
+  }
+
+  const oldWindow = checkinStaffAccessWindow();
+  const button = document.getElementById("checkinAccessSaveBtn");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Speichert…";
+  }
+  if (result) result.innerHTML = `<p class="notice info">Zeitfenster wird gespeichert…</p>`;
+
+  try {
+    await updateDoc(eventRef(), {
+      checkinAccessStartsAt: start,
+      checkinAccessEndsAt: end,
+      updatedAt: serverTimestamp()
+    });
+    appState.event = {
+      ...appState.event,
+      checkinAccessStartsAt: start,
+      checkinAccessEndsAt: end
+    };
+    saveKnownEvent(appState.event);
+    await addAudit("event_update", { name: appState.event?.name || "Event" }, {
+      field: "checkinAccessWindow",
+      oldStartsAt: formatTimestamp(oldWindow?.start),
+      oldEndsAt: formatTimestamp(oldWindow?.end),
+      newStartsAt: formatTimestamp(start),
+      newEndsAt: formatTimestamp(end)
+    });
+    renderAdmin();
+    notify("Check-in-Staff-Zugang gespeichert.", "success");
+  } catch (error) {
+    console.error(error);
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Zeitfenster speichern";
+    }
+    const message = error.message || String(error);
+    if (result) result.innerHTML = `<p class="notice error">Zeitfenster konnte nicht gespeichert werden: ${escapeHtml(message)}</p>`;
+    notify(`Zeitfenster konnte nicht gespeichert werden: ${message}`, "error");
   }
 }
 
@@ -3273,6 +3447,12 @@ function auditSummary(entry) {
     case "event_create":
       return { subject: entry.guestName || "Event", detail: `${details.date ? formatEventDate(details.date) : ""}${details.eventId ? ` · ${details.eventId}` : ""}`.trim() };
     case "event_update":
+      if (details.field === "checkinAccessWindow") {
+        return {
+          subject: entry.guestName || "Event",
+          detail: `Check-in-Zugang: ${details.oldStartsAt || "?"} bis ${details.oldEndsAt || "?"} → ${details.newStartsAt || "?"} bis ${details.newEndsAt || "?"}`
+        };
+      }
       return { subject: entry.guestName || "Event", detail: "Eventname geändert" };
     case "member_login":
       return { subject, detail: `${ROLE_META[details.role] || details.role || "Rolle"} angemeldet${details.deviceLabel ? ` · ${details.deviceLabel}` : ""}` };
@@ -3894,8 +4074,8 @@ function shortDateForEventId(date) {
   return `${match[1].slice(2)}${match[2]}${match[3]}`;
 }
 
-function checkinStaffAccessWindow() {
-  return checkinAccessWindowForDate(appState.event?.date);
+function checkinStaffAccessWindow(event = appState.event) {
+  return eventAccessWindow(event);
 }
 
 function checkinAccessWindowForDate(eventDate) {
@@ -3907,6 +4087,21 @@ function checkinAccessWindowForDate(eventDate) {
   end.setDate(end.getDate() + 1);
   end.setHours(2, 0, 0, 0);
   return { start, end };
+}
+
+function eventAccessWindow(event) {
+  const startMillis = timestampMillis(event?.checkinAccessStartsAt);
+  const endMillis = timestampMillis(event?.checkinAccessEndsAt);
+  if (startMillis && endMillis) {
+    return {
+      start: new Date(startMillis),
+      end: new Date(endMillis),
+      source: "event"
+    };
+  }
+
+  const fallback = checkinAccessWindowForDate(event?.date);
+  return fallback ? { ...fallback, source: "date" } : null;
 }
 
 function hasEventAccessWindow(event) {
@@ -3938,44 +4133,100 @@ async function ensureCurrentEventAccessWindowFields() {
 }
 
 function isCheckinStaffAccessOpen(now = new Date()) {
-  return isEventDateAllowedForCheckinStaff(appState.event?.date, now);
+  return isEventAccessWindowOpen(appState.event, now);
 }
 
-function checkinStaffAccessMessage() {
-  const accessWindow = checkinStaffAccessWindow();
+function isEventAccessWindowOpen(event, now = new Date()) {
+  const accessWindow = eventAccessWindow(event);
+  if (!accessWindow) return false;
+  const nowMillis = now.getTime();
+  return nowMillis >= accessWindow.start.getTime() && nowMillis < accessWindow.end.getTime();
+}
+
+function checkinStaffAccessMessage(event = appState.event, now = new Date()) {
+  const accessWindow = checkinStaffAccessWindow(event);
   if (!accessWindow) return "Check-in Staff Zugriff ist nicht aktiv, weil kein Eventdatum gesetzt ist.";
-  return `Check-in Staff Zugriff ist nur am Eventtag ${formatEventDate(appState.event.date)} bis 02:00 Uhr am Folgetag möglich.`;
+  if (accessWindow.start >= accessWindow.end) return "Check-in Staff Zugriff ist nicht aktiv, weil Start und Ende ungültig sind.";
+  if (now < accessWindow.start) {
+    return `Check-in Staff Zugriff ist erst ab ${formatTimestamp(accessWindow.start)} aktiv.`;
+  }
+  if (now >= accessWindow.end) {
+    return `Check-in Staff Zugriff ist seit ${formatTimestamp(accessWindow.end)} abgelaufen. Admin kann das Zeitfenster im Tab "Event verwalten" anpassen.`;
+  }
+  return `Check-in Staff Zugriff ist bis ${formatTimestamp(accessWindow.end)} aktiv.`;
 }
 
 function getCheckinStaffLoginCandidates(now = new Date()) {
-  const candidates = [];
+  const byId = new Map();
+  const addCandidate = (event) => {
+    const id = resolveEventId(String(event?.id || "").trim());
+    if (!id || byId.has(id)) return;
+    byId.set(id, { ...event, id });
+  };
+
+  addCandidate(appState.event ? { id: appState.eventId, ...appState.event } : { id: appState.eventId });
+
   const todayEvent = findKnownEventByDate(localDateKey(now));
-  if (todayEvent) candidates.push(todayEvent);
+  addCandidate(todayEvent);
 
   if (now.getHours() < 2) {
     const previousEvent = findKnownEventByDate(localDateKey(addDays(now, -1)));
-    if (previousEvent && previousEvent.id !== todayEvent?.id) candidates.push(previousEvent);
+    addCandidate(previousEvent);
   }
 
-  return candidates;
+  return [...byId.values()];
 }
 
 function findKnownEventByDate(date) {
   return getKnownEvents().find((event) => event.date === date) || null;
 }
 
-function isEventDateAllowedForCheckinStaff(eventDate, now = new Date()) {
-  if (!eventDate) return false;
-  if (eventDate === localDateKey(now)) return true;
-  return now.getHours() < 2 && eventDate === localDateKey(addDays(now, -1));
-}
-
 function checkinStaffLoginErrorMessage() {
   const candidates = getCheckinStaffLoginCandidates();
   if (!candidates.length) {
-    return "Kein Check-in Event für heute gefunden. Bis 02:00 Uhr wird zusätzlich das Event vom Vortag berücksichtigt.";
+    return "Kein Check-in Event gefunden. Bitte Event-Link öffnen oder Admin nach dem richtigen Link fragen.";
   }
+  if (appState.eventId && !isEventAccessWindowOpen(appState.event)) return checkinStaffAccessMessage(appState.event);
   return "Name und Check-in-PIN passen zu keinem aktuell erlaubten Event.";
+}
+
+function checkinAccessStatus(event = appState.event, now = new Date()) {
+  const accessWindow = eventAccessWindow(event);
+  if (!accessWindow) {
+    return {
+      type: "warning",
+      label: "Nicht gesetzt",
+      detail: "Kein gültiges Zeitfenster für Check-in Staff vorhanden."
+    };
+  }
+
+  const windowText = `${formatTimestamp(accessWindow.start)} bis ${formatTimestamp(accessWindow.end)}`;
+  if (accessWindow.start >= accessWindow.end) {
+    return {
+      type: "error",
+      label: "Ungültig",
+      detail: `Start und Ende passen nicht: ${windowText}.`
+    };
+  }
+  if (now < accessWindow.start) {
+    return {
+      type: "info",
+      label: "Geplant",
+      detail: `Check-in Staff kann sich ab ${formatTimestamp(accessWindow.start)} anmelden. Ende: ${formatTimestamp(accessWindow.end)}.`
+    };
+  }
+  if (now >= accessWindow.end) {
+    return {
+      type: "warning",
+      label: "Abgelaufen",
+      detail: `Check-in Staff kann sich nicht anmelden. Ende war ${formatTimestamp(accessWindow.end)}.`
+    };
+  }
+  return {
+    type: "success",
+    label: "Aktiv",
+    detail: `Check-in Staff kann sich anmelden bis ${formatTimestamp(accessWindow.end)}.`
+  };
 }
 
 function localDateKey(date) {
@@ -4360,6 +4611,31 @@ function timestampMillis(value) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
+function dateTimeLocalValue(value) {
+  const millis = timestampMillis(value);
+  if (!millis) return "";
+  const date = new Date(millis);
+  const pad = (part) => String(part).padStart(2, "0");
+  return [
+    date.getFullYear(),
+    "-",
+    pad(date.getMonth() + 1),
+    "-",
+    pad(date.getDate()),
+    "T",
+    pad(date.getHours()),
+    ":",
+    pad(date.getMinutes())
+  ].join("");
+}
+
+function parseDateTimeLocalValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function formatTimestamp(value) {
   if (!value) return "";
   const millis = timestampMillis(value);
@@ -4402,6 +4678,10 @@ function debounce(fn, delay) {
 }
 
 function unsubscribeAll() {
+  if (appState.eventUnsubscribe) {
+    appState.eventUnsubscribe();
+    appState.eventUnsubscribe = null;
+  }
   if (appState.memberUnsubscribe) {
     appState.memberUnsubscribe();
     appState.memberUnsubscribe = null;

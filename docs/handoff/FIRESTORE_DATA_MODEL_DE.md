@@ -37,8 +37,8 @@ Erwartete Felder:
 
 - `name`
 - `date`
-- `checkinAccessStartsAt`: Beginn des Check-in-Staff-Zugriffs als Firestore Timestamp
-- `checkinAccessEndsAt`: Ende des Check-in-Staff-Zugriffs als Firestore Timestamp, Eventtag plus Folgetag 02:00 Uhr
+- `checkinAccessStartsAt`: Beginn des Check-in-Staff-Zugriffs als Firestore Timestamp, durch Admins im Event bearbeitbar
+- `checkinAccessEndsAt`: Ende des Check-in-Staff-Zugriffs als Firestore Timestamp, durch Admins im Event verlängerbar oder verkürzbar
 - `categories`
 - `statuses`
 - `createdAt`
@@ -129,7 +129,7 @@ Erwartete Felder:
 - `status` darf nur `open`, `checked_in`, `no_show` sein.
 - Doppel-Check-in-Schutz muss per Firestore Transaction geschehen.
 - Check-in Staff darf Status auf `checked_in` setzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen.
-- Check-in Staff darf nur innerhalb des Firestore-geprüften Zeitfensters `checkinAccessStartsAt` bis `checkinAccessEndsAt` lesen und schreiben.
+- Check-in Staff darf nur innerhalb des Firestore-geprüften Zeitfensters `checkinAccessStartsAt` bis `checkinAccessEndsAt` lesen und schreiben. Admins können dieses Zeitfenster pro Event ändern, um Test- oder Demo-Events kontrolliert weiterzuverwenden.
 - Admin darf Import, Export, Massen-No-Show, PIN-Reset und Korrekturen durchführen.
 - Nur der namenlose Master Admin-PIN darf ein komplettes Event löschen. Dabei müssen Gäste, Admin-Notizen, Geräte/Sessions, Event-PINs und Audit Log vor bzw. mit dem Event entfernt werden.
 - Admin darf angemeldete Geräte über deren `members/{uid}` Dokument abmelden; Benutzer dürfen ihr eigenes Member-Dokument zum Abmelden löschen.
