@@ -116,6 +116,7 @@ const appState = {
     importPreview: [],
     importInProgress: false,
     editingGuestId: "",
+    masterAdmin: null,
     showCheckinPins: false,
     lastBackupMessage: ""
   }
@@ -296,15 +297,21 @@ function renderWelcome() {
 
 function renderEventSetupSections(options = {}) {
   const knownEvents = getKnownEvents();
+  const visibleKnownEvents = knownEvents.filter((event) => !isEventHidden(event));
   const omitAdminPin = Boolean(options.omitAdminPin);
   const setupName = getAdminSession()?.displayName || appState.member?.displayName || "Admin";
   return `
-    ${knownEvents.length ? `
+    ${visibleKnownEvents.length ? `
       <section class="card">
         <h2>Bestehende Events</h2>
         ${renderKnownEventList(appState.eventId)}
       </section>
     ` : ""}
+    <section class="card">
+      <h2>Event öffnen</h2>
+      <p class="small">Für ältere Events: Event-ID oder vollständigen Event-Link einfügen. Admins können das Event danach bearbeiten.</p>
+      ${renderOpenEventForm()}
+    </section>
     <section class="card">
       <h2>Neues Event erstellen</h2>
       <form id="createEventForm" class="grid two">
@@ -346,6 +353,7 @@ function renderEventSetupSections(options = {}) {
 function bindEventSetupHandlers() {
   bindKnownLinkCopyButtons();
   bindKnownEventButtons();
+  bindOpenEventForm();
 
   document.getElementById("createEventForm")?.addEventListener("submit", createEventFromForm);
 }
@@ -1915,8 +1923,13 @@ function renderAdmin() {
   content.innerHTML = `
     <section class="card">
       <h2>Event wechseln</h2>
-      <p class="small">Öffnet ein anderes vorbereitetes Event in diesem Browser. Gäste, Import und Export bleiben pro Event getrennt.</p>
+      <p class="small">Öffnet ein anderes bekanntes Event, auch vergangene Events. Gäste, Import und Export bleiben pro Event getrennt.</p>
       ${renderKnownEventList(appState.eventId)}
+      <div class="admin-section">
+        <h3>Event per ID oder Link öffnen</h3>
+        <p class="small">Für alte Events, die in dieser Liste noch fehlen: Event-ID oder vollständigen Event-Link einfügen.</p>
+        ${renderOpenEventForm()}
+      </div>
     </section>
 
     <section class="card">
@@ -1991,10 +2004,12 @@ function renderAdmin() {
     </section>
 
     <div id="eventDeleteSection"></div>
+    <div id="eventVisibilitySection"></div>
   `;
 
   bindKnownLinkCopyButtons();
   bindKnownEventButtons();
+  bindOpenEventForm();
   bindEventNameForm();
   bindCheckinAccessForm();
   bindCheckinPinForm();
@@ -2007,6 +2022,7 @@ function renderAdmin() {
   document.getElementById("exportAuditBtn")?.addEventListener("click", exportAuditLog);
   document.getElementById("markOpenNoShowBtn")?.addEventListener("click", markOpenGuestsNoShow);
   void renderEventDeleteSection();
+  void renderEventVisibilitySection();
 }
 
 function bindEventNameForm() {
@@ -2225,6 +2241,135 @@ async function updateCheckinAccessWindowFromForm(event) {
     const message = error.message || String(error);
     if (result) result.innerHTML = `<p class="notice error">Zeitfenster konnte nicht gespeichert werden: ${escapeHtml(message)}</p>`;
     notify(`Zeitfenster konnte nicht gespeichert werden: ${message}`, "error");
+  }
+}
+
+async function renderEventVisibilitySection() {
+  const target = document.getElementById("eventVisibilitySection");
+  if (!target || !isAdmin()) return;
+
+  let isMaster = false;
+  try {
+    isMaster = await currentAdminIsMasterAdmin();
+    appState.ui.masterAdmin = isMaster;
+  } catch (error) {
+    console.error(error);
+    target.innerHTML = `<section class="card"><p class="notice error">Event-Sichtbarkeit konnte nicht geprüft werden.</p></section>`;
+    return;
+  }
+
+  if (!document.body.contains(target)) return;
+  if (!isMaster) {
+    target.innerHTML = "";
+    return;
+  }
+
+  const hidden = isEventHidden(appState.event);
+  const hiddenKnownEvents = getKnownEvents()
+    .filter((event) => isEventHidden(event) && event.id !== appState.eventId);
+
+  target.innerHTML = `
+    <section class="card">
+      <h2>Event-Sichtbarkeit</h2>
+      <p class="notice ${hidden ? "warning" : "info"}">
+        <strong>${hidden ? "Versteckt" : "Sichtbar"}:</strong>
+        ${hidden
+          ? "Dieses Event ist aus normalen Eventlisten ausgeblendet. Nur Haupt-Admins können es wieder sichtbar machen."
+          : "Dieses Event ist in normalen Eventlisten sichtbar."}
+      </p>
+      <div class="actions">
+        <button class="${hidden ? "btn-primary" : "btn-warning"}" id="toggleEventVisibilityBtn" type="button">${hidden ? "Event wieder sichtbar machen" : "Event verstecken"}</button>
+      </div>
+      ${hiddenKnownEvents.length ? `
+        <div class="admin-section">
+          <h3>Versteckte bekannte Events</h3>
+          <p class="small">Nur Haupt-Admins sehen diese Liste. Öffnen, prüfen und bei Bedarf wieder sichtbar machen.</p>
+          <div class="event-switch-list">
+            ${hiddenKnownEvents.map((event) => renderKnownEventCard(event, appState.eventId, { openLabel: "Öffnen" })).join("")}
+          </div>
+        </div>
+      ` : ""}
+      <div id="eventVisibilityResult"></div>
+    </section>
+  `;
+
+  document.getElementById("toggleEventVisibilityBtn")?.addEventListener("click", toggleCurrentEventVisibility);
+  bindKnownLinkCopyButtons(target);
+  bindKnownEventButtons(target);
+}
+
+async function toggleCurrentEventVisibility() {
+  if (!requireOnline("Event-Sichtbarkeit ändern")) return;
+  if (!isAdmin()) {
+    notify("Nur Admins dürfen Events verwalten.", "warning");
+    return;
+  }
+  if (!(await currentAdminIsMasterAdmin())) {
+    notify("Nur Haupt-Admins dürfen Events verstecken oder wieder sichtbar machen.", "warning");
+    return;
+  }
+
+  const hidden = isEventHidden(appState.event);
+  const eventName = appState.event?.name || appState.eventId;
+  const nextHidden = !hidden;
+  if (nextHidden && !window.confirm(`Event "${eventName}" aus normalen Eventlisten verstecken? Nur Haupt-Admins können es wieder sichtbar machen.`)) {
+    return;
+  }
+
+  const button = document.getElementById("toggleEventVisibilityBtn");
+  const result = document.getElementById("eventVisibilityResult");
+  if (button) {
+    button.disabled = true;
+    button.textContent = nextHidden ? "Versteckt…" : "Macht sichtbar…";
+  }
+  if (result) result.innerHTML = `<p class="notice info">Event-Sichtbarkeit wird gespeichert…</p>`;
+
+  const update = nextHidden
+    ? {
+        hidden: true,
+        hiddenAt: serverTimestamp(),
+        hiddenByUid: appState.user.uid,
+        hiddenByName: appState.member?.displayName || "",
+        updatedAt: serverTimestamp()
+      }
+    : {
+        hidden: false,
+        hiddenAt: deleteField(),
+        hiddenByUid: deleteField(),
+        hiddenByName: deleteField(),
+        updatedAt: serverTimestamp()
+      };
+
+  try {
+    await updateDoc(eventRef(), update);
+    appState.event = {
+      ...appState.event,
+      hidden: nextHidden,
+      ...(nextHidden
+        ? { hiddenByUid: appState.user.uid, hiddenByName: appState.member?.displayName || "" }
+        : {})
+    };
+    if (!nextHidden) {
+      delete appState.event.hiddenAt;
+      delete appState.event.hiddenByUid;
+      delete appState.event.hiddenByName;
+    }
+    saveKnownEvent(appState.event);
+    await addAudit("event_update", { name: eventName }, {
+      field: "visibility",
+      hidden: nextHidden
+    });
+    renderAdmin();
+    notify(nextHidden ? "Event versteckt." : "Event wieder sichtbar.", "success");
+  } catch (error) {
+    console.error(error);
+    const message = error.message || String(error);
+    if (button) {
+      button.disabled = false;
+      button.textContent = hidden ? "Event wieder sichtbar machen" : "Event verstecken";
+    }
+    if (result) result.innerHTML = `<p class="notice error">Event-Sichtbarkeit konnte nicht gespeichert werden: ${escapeHtml(message)}</p>`;
+    notify(`Event-Sichtbarkeit konnte nicht gespeichert werden: ${message}`, "error");
   }
 }
 
@@ -3453,6 +3598,9 @@ function auditSummary(entry) {
           detail: `Check-in-Zugang: ${details.oldStartsAt || "?"} bis ${details.oldEndsAt || "?"} → ${details.newStartsAt || "?"} bis ${details.newEndsAt || "?"}`
         };
       }
+      if (details.field === "visibility") {
+        return { subject: entry.guestName || "Event", detail: details.hidden ? "Event versteckt" : "Event wieder sichtbar" };
+      }
       return { subject: entry.guestName || "Event", detail: "Eventname geändert" };
     case "member_login":
       return { subject, detail: `${ROLE_META[details.role] || details.role || "Rolle"} angemeldet${details.deviceLabel ? ` · ${details.deviceLabel}` : ""}` };
@@ -4137,6 +4285,7 @@ function isCheckinStaffAccessOpen(now = new Date()) {
 }
 
 function isEventAccessWindowOpen(event, now = new Date()) {
+  if (isEventHidden(event)) return false;
   const accessWindow = eventAccessWindow(event);
   if (!accessWindow) return false;
   const nowMillis = now.getTime();
@@ -4144,6 +4293,7 @@ function isEventAccessWindowOpen(event, now = new Date()) {
 }
 
 function checkinStaffAccessMessage(event = appState.event, now = new Date()) {
+  if (isEventHidden(event)) return "Dieses Event ist versteckt. Check-in Staff Zugriff ist gesperrt, bis ein Haupt-Admin das Event wieder sichtbar macht.";
   const accessWindow = checkinStaffAccessWindow(event);
   if (!accessWindow) return "Check-in Staff Zugriff ist nicht aktiv, weil kein Eventdatum gesetzt ist.";
   if (accessWindow.start >= accessWindow.end) return "Check-in Staff Zugriff ist nicht aktiv, weil Start und Ende ungültig sind.";
@@ -4191,6 +4341,14 @@ function checkinStaffLoginErrorMessage() {
 }
 
 function checkinAccessStatus(event = appState.event, now = new Date()) {
+  if (isEventHidden(event)) {
+    return {
+      type: "warning",
+      label: "Versteckt",
+      detail: "Check-in Staff kann sich nicht anmelden, bis ein Haupt-Admin das Event wieder sichtbar macht."
+    };
+  }
+
   const accessWindow = eventAccessWindow(event);
   if (!accessWindow) {
     return {
@@ -4320,7 +4478,7 @@ function getKnownEvents() {
     });
   });
   return [...byId.values()].sort((a, b) => {
-    const dateCompare = String(a.date || "").localeCompare(String(b.date || ""));
+    const dateCompare = String(b.date || "").localeCompare(String(a.date || ""));
     if (dateCompare) return dateCompare;
     return String(a.name || a.id).localeCompare(String(b.name || b.id), "de");
   });
@@ -4373,7 +4531,7 @@ function saveKnownEvent(event) {
 
   const events = getStoredKnownEvents().filter((item) => normalizeKnownEvent(item)?.id !== normalized.id);
   events.unshift(normalized);
-  localStorage.setItem(KNOWN_EVENTS_STORAGE_KEY, JSON.stringify(events.slice(0, 12)));
+  localStorage.setItem(KNOWN_EVENTS_STORAGE_KEY, JSON.stringify(events.slice(0, 50)));
 }
 
 function removeStoredKnownEvent(eventId) {
@@ -4388,8 +4546,13 @@ function normalizeKnownEvent(event) {
   return {
     id,
     name: String(event?.name || id).trim(),
-    date: String(event?.date || "").trim()
+    date: String(event?.date || "").trim(),
+    hidden: isEventHidden(event)
   };
+}
+
+function isEventHidden(event) {
+  return event?.hidden === true;
 }
 
 function resolveEventId(id) {
@@ -4398,28 +4561,60 @@ function resolveEventId(id) {
 }
 
 function renderKnownEventList(currentEventId = "") {
-  const events = getKnownEvents();
+  const events = getKnownEvents().filter((event) => !isEventHidden(event));
   if (!events.length) return `<p class="notice warning">Noch keine bekannten Events in dieser Installation.</p>`;
+
+  const today = localDateKey(new Date());
+  const upcoming = events.filter((event) => !event.date || event.date >= today);
+  const past = events.filter((event) => event.date && event.date < today);
+  const groups = [
+    { title: "Aktuelle und kommende Events", events: upcoming },
+    { title: "Vergangene Events", events: past }
+  ].filter((group) => group.events.length);
 
   return `
     <div class="event-switch-list">
-      ${events.map((event) => {
-        const isCurrent = event.id === currentEventId;
-        const link = urlWithEvent(event.id);
-        return `
-          <div class="event-switch-card ${isCurrent ? "current" : ""}">
-            <span>
-              <strong>${escapeHtml(event.name || event.id)}</strong>
-              <small>${event.date ? escapeHtml(formatEventDate(event.date)) : "ohne Datum"} · ${escapeHtml(event.id)}</small>
-            </span>
-            <span class="event-switch-actions">
-              <button class="btn-secondary" type="button" data-copy-known-link="${escapeHtml(link)}">Link kopieren</button>
-              <button class="${isCurrent ? "btn-secondary" : "btn-primary"}" type="button" data-activate-event="${escapeHtml(event.id)}">${isCurrent ? "Aktuell" : "Zu Event wechseln"}</button>
-            </span>
-          </div>
-        `;
-      }).join("")}
+      ${groups.map((group) => `
+        <div class="event-switch-group">
+          <h3>${escapeHtml(group.title)}</h3>
+          ${group.events.map((event) => renderKnownEventCard(event, currentEventId)).join("")}
+        </div>
+      `).join("")}
     </div>
+  `;
+}
+
+function renderKnownEventCard(event, currentEventId = "", options = {}) {
+  const isCurrent = event.id === currentEventId;
+  const link = urlWithEvent(event.id);
+  const hiddenBadge = isEventHidden(event) ? ` <span class="badge warning">Versteckt</span>` : "";
+  return `
+    <div class="event-switch-card ${isCurrent ? "current" : ""}">
+      <span>
+        <strong>${escapeHtml(event.name || event.id)}${hiddenBadge}</strong>
+        <small>${event.date ? escapeHtml(formatEventDate(event.date)) : "ohne Datum"} · ${escapeHtml(event.id)}</small>
+        <small>${escapeHtml(link)}</small>
+      </span>
+      <span class="event-switch-actions">
+        <button class="btn-secondary" type="button" data-copy-known-link="${escapeHtml(link)}">Link kopieren</button>
+        <button class="${isCurrent ? "btn-secondary" : "btn-primary"}" type="button" data-activate-event="${escapeHtml(event.id)}">${isCurrent ? "Aktuell" : (options.openLabel || "Öffnen")}</button>
+      </span>
+    </div>
+  `;
+}
+
+function renderOpenEventForm() {
+  return `
+    <form id="openEventForm" class="grid two">
+      <div class="form-row" style="grid-column:1/-1">
+        <label for="openEventInput">Event-ID oder Event-Link</label>
+        <input id="openEventInput" placeholder="z.B. demo-201257-260501 oder https://.../?event=..." autocomplete="off" />
+      </div>
+      <div class="actions" style="grid-column:1/-1">
+        <button class="btn-primary" type="submit">Event öffnen</button>
+      </div>
+    </form>
+    <div id="openEventResult"></div>
   `;
 }
 
@@ -4444,8 +4639,8 @@ function renderCurrentEventLink() {
   `;
 }
 
-function bindKnownLinkCopyButtons() {
-  document.querySelectorAll("[data-copy-known-link]").forEach((button) => {
+function bindKnownLinkCopyButtons(root = document) {
+  root.querySelectorAll("[data-copy-known-link]").forEach((button) => {
     button.addEventListener("click", async () => {
       const link = button.getAttribute("data-copy-known-link") || "";
       if (!link) return;
@@ -4459,8 +4654,8 @@ function bindKnownLinkCopyButtons() {
   });
 }
 
-function bindKnownEventButtons() {
-  document.querySelectorAll("[data-activate-event]").forEach((button) => {
+function bindKnownEventButtons(root = document) {
+  root.querySelectorAll("[data-activate-event]").forEach((button) => {
     button.addEventListener("click", async () => {
       const eventId = button.getAttribute("data-activate-event");
       if (!eventId) return;
@@ -4485,6 +4680,63 @@ function bindKnownEventButtons() {
   });
 }
 
+function bindOpenEventForm() {
+  document.getElementById("openEventForm")?.addEventListener("submit", openEventFromForm);
+}
+
+async function openEventFromForm(event) {
+  event.preventDefault();
+  const input = document.getElementById("openEventInput");
+  const result = document.getElementById("openEventResult");
+  const eventId = parseEventIdOrLink(input?.value || "");
+  if (!eventId) {
+    if (result) result.innerHTML = `<p class="notice warning">Bitte Event-ID oder Event-Link eingeben.</p>`;
+    return;
+  }
+
+  const submitButton = event.currentTarget.querySelector("button[type='submit']");
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Öffnet…";
+  }
+  if (result) result.innerHTML = `<p class="notice info">Event wird geöffnet…</p>`;
+
+  try {
+    await activateKnownEvent(eventId);
+  } catch (error) {
+    console.error(error);
+    if (result) result.innerHTML = `<p class="notice error">Event konnte nicht geöffnet werden: ${escapeHtml(error?.message || error)}</p>`;
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = "Event öffnen";
+    }
+  }
+}
+
+function parseEventIdOrLink(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw, window.location.origin);
+    const eventId = url.searchParams.get("event");
+    if (eventId) return resolveEventId(eventId);
+  } catch {
+    // Fall through to direct Event-ID parsing.
+  }
+
+  const eventMatch = raw.match(/[?&]event=([^&#\s]+)/);
+  if (eventMatch?.[1]) {
+    try {
+      return resolveEventId(decodeURIComponent(eventMatch[1]));
+    } catch {
+      return resolveEventId(eventMatch[1]);
+    }
+  }
+
+  return resolveEventId(raw);
+}
+
 async function activateKnownEvent(eventId) {
   const targetEventId = resolveEventId(eventId);
   const previousTab = appState.currentTab;
@@ -4492,6 +4744,7 @@ async function activateKnownEvent(eventId) {
   if (!eventSnap.exists()) {
     throw new Error(`Event ${targetEventId} wurde nicht gefunden.`);
   }
+  const eventData = { id: eventSnap.id, ...eventSnap.data() };
 
   let memberSnap = await getMemberSnapForEvent(targetEventId);
   if (isAdmin()) {
@@ -4503,6 +4756,9 @@ async function activateKnownEvent(eventId) {
       } catch (error) {
         console.error(error);
         clearAdminSession();
+        if (isEventHidden(eventData) && isPermissionError(error)) {
+          throw new Error("Dieses Event ist versteckt. Nur Haupt-Admins können es öffnen und wieder sichtbar machen.");
+        }
         if (!memberSnap.exists()) {
           throw new Error("Automatischer Admin-Wechsel fehlgeschlagen. Bitte beim Ziel-Event erneut einloggen.");
         }
@@ -4512,7 +4768,7 @@ async function activateKnownEvent(eventId) {
 
   unsubscribeAll();
   appState.eventId = targetEventId;
-  appState.event = { id: eventSnap.id, ...eventSnap.data() };
+  appState.event = eventData;
   appState.member = memberSnap.exists() ? { id: memberSnap.id, ...memberSnap.data() } : null;
   appState.guests = [];
   appState.adminNotes = {};

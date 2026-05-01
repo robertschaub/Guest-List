@@ -41,6 +41,8 @@ Erwartete Felder:
 - `checkinAccessEndsAt`: Ende des Check-in-Staff-Zugriffs als Firestore Timestamp, durch Admins im Event verlängerbar oder verkürzbar
 - `categories`
 - `statuses`
+- `hidden`: optionaler Boolean; `true` blendet das Event aus normalen Eventlisten aus
+- `hiddenAt`, `hiddenByUid`, `hiddenByName`: optionale Audit-Metadaten zum Verstecken
 - `createdAt`
 - `updatedAt`
 - `createdByUid`
@@ -131,6 +133,8 @@ Erwartete Felder:
 - Check-in Staff darf Status auf `checked_in` setzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen.
 - Check-in Staff darf nur innerhalb des Firestore-geprüften Zeitfensters `checkinAccessStartsAt` bis `checkinAccessEndsAt` lesen und schreiben. Admins können dieses Zeitfenster pro Event ändern, um Test- oder Demo-Events kontrolliert weiterzuverwenden.
 - Admin darf Import, Export, Massen-No-Show, PIN-Reset und Korrekturen durchführen.
+- Admin darf auch vergangene Events per Event-ID oder Event-Link öffnen und bearbeiten, sofern das Event nicht versteckt ist.
+- Nur Haupt-Admins dürfen Events verstecken oder wieder sichtbar machen. Versteckte Events sind für Check-in Staff gesperrt und für normale Admins nicht verwaltbar.
 - Nur der namenlose Master Admin-PIN darf ein komplettes Event löschen. Dabei müssen Gäste, Admin-Notizen, Geräte/Sessions, Event-PINs und Audit Log vor bzw. mit dem Event entfernt werden.
 - Admin darf angemeldete Geräte über deren `members/{uid}` Dokument abmelden; Benutzer dürfen ihr eigenes Member-Dokument zum Abmelden löschen.
 - Benutzer geben beim Anmelden keinen Gerätenamen ein. Die App erzeugt lokal eine Geräte-ID; Admins dürfen den Gerätenamen im Admin-Tab ändern.

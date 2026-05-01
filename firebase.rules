@@ -128,12 +128,28 @@ service cloud.firestore {
         );
     }
 
+    function eventHidden(eventId) {
+      return eventExists(eventId)
+        && eventData(eventId).keys().hasAny(['hidden'])
+        && eventData(eventId).hidden == true;
+    }
+
+    function hasMasterAdminPin(eventId) {
+      return hasCurrentPin(eventId)
+        && memberData(eventId).role == 'admin'
+        && adminSecurityExists()
+        && validAdminPinForData(adminSecurityData(), memberData(eventId).pinHash, '');
+    }
+
     function isAdmin(eventId) {
-      return hasCurrentPin(eventId) && memberData(eventId).role == 'admin';
+      return hasCurrentPin(eventId)
+        && memberData(eventId).role == 'admin'
+        && (!eventHidden(eventId) || hasMasterAdminPin(eventId));
     }
 
     function checkinAccessWindowOpen(eventId) {
       return eventExists(eventId)
+        && !eventHidden(eventId)
         && eventData(eventId).keys().hasAll(['checkinAccessStartsAt', 'checkinAccessEndsAt'])
         && eventData(eventId).checkinAccessStartsAt is timestamp
         && eventData(eventId).checkinAccessEndsAt is timestamp
@@ -151,7 +167,16 @@ service cloud.firestore {
     }
 
     function memberWriteAllowedForRole(eventId, role) {
-      return role == 'admin'
+      return (
+          role == 'admin'
+          && (
+            !eventHidden(eventId)
+            || (
+              adminSecurityExists()
+              && validAdminPinForData(adminSecurityData(), request.resource.data.pinHash, '')
+            )
+          )
+        )
         || (
           role == 'checkin'
           && checkinAccessWindowOpen(eventId)
@@ -266,9 +291,7 @@ service cloud.firestore {
     }
 
     function isMasterAdmin(eventId) {
-      return isAdmin(eventId)
-        && adminSecurityExists()
-        && validAdminPinForData(adminSecurityData(), memberData(eventId).pinHash, '');
+      return hasMasterAdminPin(eventId);
     }
 
     function requestedAdminAuthorizingMember(data) {
@@ -296,6 +319,13 @@ service cloud.firestore {
           'name', 'date', 'checkinAccessStartsAt', 'checkinAccessEndsAt',
           'categories', 'statuses', 'createdAt', 'updatedAt', 'createdByUid'
         ]);
+    }
+
+    function eventVisibilityUpdateAllowed(eventId) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'hidden', 'hiddenAt', 'hiddenByUid', 'hiddenByName'
+        ])
+        || isMasterAdmin(eventId);
     }
 
     function validGuestData(data) {
@@ -382,7 +412,8 @@ service cloud.firestore {
         && request.resource.data.createdByUid == request.auth.uid
         && validEventCreateData(request.resource.data);
 
-      allow update: if isAdmin(eventId);
+      allow update: if isAdmin(eventId)
+        && eventVisibilityUpdateAllowed(eventId);
       allow delete: if isMasterAdmin(eventId);
 
       match /private/{docId} {

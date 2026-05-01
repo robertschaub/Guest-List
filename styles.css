@@ -623,6 +623,15 @@ tr:last-child td { border-bottom: 0; }
   gap: 10px;
 }
 
+.event-switch-group {
+  display: grid;
+  gap: 8px;
+}
+
+.event-switch-group h3 {
+  margin: 4px 0 0;
+}
+
 .event-switch-card {
   width: 100%;
   min-height: 64px;
