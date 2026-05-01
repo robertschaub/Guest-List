@@ -304,7 +304,22 @@ input:focus, select:focus, textarea:focus {
 }
 
 .mobile-admin-tabs {
-  display: none;
+  display: block;
+  width: auto;
+  min-width: 138px;
+  min-height: var(--tap);
+  border-radius: 999px;
+  padding: 0 38px 0 18px;
+  font-weight: 900;
+  color: var(--muted);
+  background-color: var(--surface);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+
+.mobile-admin-tabs.active {
+  background-color: var(--primary);
+  color: var(--primary-contrast);
+  border-color: var(--primary);
 }
 
 .shell-auth-btn {
@@ -724,29 +739,6 @@ tr:last-child td { border-bottom: 0; }
 @media (max-width: 820px) {
   .grid.two, .grid.three, .grid.four, .summary-grid {
     grid-template-columns: 1fr 1fr;
-  }
-
-  .desktop-admin-tab {
-    display: none;
-  }
-
-  .mobile-admin-tabs {
-    display: block;
-    width: auto;
-    min-width: 138px;
-    min-height: var(--tap);
-    border-radius: 999px;
-    padding: 0 38px 0 18px;
-    font-weight: 900;
-    color: var(--muted);
-    background-color: var(--surface);
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
-  }
-
-  .mobile-admin-tabs.active {
-    background-color: var(--primary);
-    color: var(--primary-contrast);
-    border-color: var(--primary);
   }
 
   .guest-actions {

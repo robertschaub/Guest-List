@@ -1003,7 +1003,9 @@ function renderShell() {
   ensureCurrentTabVisible();
   const tabClass = (tab) => appState.currentTab === tab ? "active" : "";
   const tabs = visibleTabs();
-  const mobileAdminTabs = adminMobileTabs(tabs);
+  const compactAdminTabs = isCompactAdminNav() ? adminMobileTabs(tabs) : [];
+  const compactAdminTabIds = new Set(compactAdminTabs.map((tab) => tab.id));
+  const navTabs = compactAdminTabs.length ? tabs.filter((tab) => !compactAdminTabIds.has(tab.id)) : tabs;
   els.eventTitle.textContent = appState.event?.name || "Gästeliste";
   setEventMeta();
   els.footerText.textContent = `${role} · ${appState.member?.displayName || ""} · ${appState.member?.deviceLabel || ""} · Event: ${appState.eventId || "-"}`;
@@ -1012,11 +1014,11 @@ function renderShell() {
     <div id="flash"></div>
     <div class="nav-row">
       <nav class="nav-tabs" id="navTabs">
-        ${tabs.map((tab) => `<button data-tab="${tab.id}" class="${[tabClass(tab.id), mobileAdminTabs.some((item) => item.id === tab.id) ? "desktop-admin-tab" : ""].filter(Boolean).join(" ")}" type="button">${tab.label}</button>`).join("")}
-        ${mobileAdminTabs.length ? `
-          <select id="mobileAdminTabs" class="mobile-admin-tabs ${mobileAdminTabs.some((tab) => tab.id === appState.currentTab) ? "active" : ""}" aria-label="Admin-Bereich wechseln">
+        ${navTabs.map((tab) => `<button data-tab="${tab.id}" class="${tabClass(tab.id)}" type="button">${tab.label}</button>`).join("")}
+        ${compactAdminTabs.length ? `
+          <select id="mobileAdminTabs" class="mobile-admin-tabs ${compactAdminTabs.some((tab) => tab.id === appState.currentTab) ? "active" : ""}" aria-label="Admin-Bereich wechseln">
             <option value="">Admin…</option>
-            ${mobileAdminTabs.map((tab) => option(tab.id, tab.label, appState.currentTab)).join("")}
+            ${compactAdminTabs.map((tab) => option(tab.id, tab.label, appState.currentTab)).join("")}
           </select>
         ` : ""}
       </nav>
@@ -1028,7 +1030,7 @@ function renderShell() {
   document.querySelectorAll("#navTabs button[data-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       appState.currentTab = button.dataset.tab;
-      document.querySelectorAll("#navTabs button[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === appState.currentTab));
+      renderShell();
       renderActiveTab();
     });
   });
@@ -1046,6 +1048,10 @@ function adminMobileTabs(tabs) {
   if (!isAdmin()) return [];
   const primaryTabIds = new Set(["checkin", "overview", "role"]);
   return tabs.filter((tab) => !primaryTabIds.has(tab.id));
+}
+
+function isCompactAdminNav() {
+  return Boolean(window.matchMedia?.("(max-width: 820px)").matches);
 }
 
 function renderActiveTab() {
