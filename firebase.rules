@@ -22,6 +22,14 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/events/$(eventId)/private/security).data;
     }
 
+    function adminSecurityExists() {
+      return exists(/databases/$(database)/documents/appSecurity/admin);
+    }
+
+    function adminSecurityData() {
+      return get(/databases/$(database)/documents/appSecurity/admin).data;
+    }
+
     function isMember(eventId) {
       return signedIn()
         && exists(/databases/$(database)/documents/events/$(eventId)/members/$(request.auth.uid));
@@ -35,40 +43,77 @@ service cloud.firestore {
       return role == 'admin' || role == 'checkin';
     }
 
-    function validPin(eventId, role, pinHash, pinNameHash) {
+    function validAdminPinForData(data, pinHash, pinNameHash) {
+      return data.adminPinHash == pinHash
+        || (
+          data.keys().hasAny(['adminPinHashes'])
+          && pinHash in data.adminPinHashes
+        )
+        || (
+          pinNameHash is string
+          && data.keys().hasAny(['adminNamedPinHashes'])
+          && pinNameHash in data.adminNamedPinHashes
+        );
+    }
+
+    function validLegacyAdminPin(eventId, pinHash, pinNameHash) {
       return securityExists(eventId)
         && (
-          (
-            role == 'admin'
-            && (
-              securityData(eventId).adminPinHash == pinHash
-              || (
-                securityData(eventId).keys().hasAny(['adminPinHashes'])
-                && pinHash in securityData(eventId).adminPinHashes
-              )
-              || (
-                pinNameHash is string
-                && securityData(eventId).keys().hasAny(['adminNamedPinHashes'])
-                && pinNameHash in securityData(eventId).adminNamedPinHashes
-              )
-            )
+          securityData(eventId).adminPinHash == pinHash
+          || (
+            securityData(eventId).keys().hasAny(['adminPinHashes'])
+            && pinHash in securityData(eventId).adminPinHashes
           )
-          ||
-          (
-            role == 'checkin'
-            && (
-              securityData(eventId).checkinPinHash == pinHash
-              || (
-                securityData(eventId).keys().hasAny(['checkinPinHashes'])
-                && pinHash in securityData(eventId).checkinPinHashes
-              )
-              || (
-                pinNameHash is string
-                && securityData(eventId).keys().hasAny(['checkinNamedPinHashes'])
-                && pinNameHash in securityData(eventId).checkinNamedPinHashes
-              )
-            )
+          || (
+            pinNameHash is string
+            && securityData(eventId).keys().hasAny(['adminNamedPinHashes'])
+            && pinNameHash in securityData(eventId).adminNamedPinHashes
           )
+        );
+    }
+
+    function validLegacyMasterAdminForData(data) {
+      return data.authorizingEventId is string
+        && isMember(data.authorizingEventId)
+        && memberData(data.authorizingEventId).role == 'admin'
+        && validLegacyAdminPin(data.authorizingEventId, memberData(data.authorizingEventId).pinHash, '');
+    }
+
+    function validAdminPin(eventId, pinHash, pinNameHash) {
+      return (
+          adminSecurityExists()
+          && validAdminPinForData(adminSecurityData(), pinHash, pinNameHash)
+        )
+        || (
+          !adminSecurityExists()
+          && validLegacyAdminPin(eventId, pinHash, pinNameHash)
+        );
+    }
+
+    function validCheckinPin(eventId, pinHash, pinNameHash) {
+      return securityExists(eventId)
+        && (
+          securityData(eventId).checkinPinHash == pinHash
+          || (
+            securityData(eventId).keys().hasAny(['checkinPinHashes'])
+            && pinHash in securityData(eventId).checkinPinHashes
+          )
+          || (
+            pinNameHash is string
+            && securityData(eventId).keys().hasAny(['checkinNamedPinHashes'])
+            && pinNameHash in securityData(eventId).checkinNamedPinHashes
+          )
+        );
+    }
+
+    function validPin(eventId, role, pinHash, pinNameHash) {
+      return (
+          role == 'admin'
+          && validAdminPin(eventId, pinHash, pinNameHash)
+        )
+        || (
+          role == 'checkin'
+          && validCheckinPin(eventId, pinHash, pinNameHash)
         );
     }
 
@@ -87,9 +132,30 @@ service cloud.firestore {
       return hasCurrentPin(eventId) && memberData(eventId).role == 'admin';
     }
 
+    function checkinAccessWindowOpen(eventId) {
+      return eventExists(eventId)
+        && eventData(eventId).keys().hasAll(['checkinAccessStartsAt', 'checkinAccessEndsAt'])
+        && eventData(eventId).checkinAccessStartsAt is timestamp
+        && eventData(eventId).checkinAccessEndsAt is timestamp
+        && request.time >= eventData(eventId).checkinAccessStartsAt
+        && request.time < eventData(eventId).checkinAccessEndsAt;
+    }
+
     function isCheckin(eventId) {
-      return hasCurrentPin(eventId)
-        && (memberData(eventId).role == 'checkin' || memberData(eventId).role == 'admin');
+      return isAdmin(eventId)
+        || (
+          hasCurrentPin(eventId)
+          && memberData(eventId).role == 'checkin'
+          && checkinAccessWindowOpen(eventId)
+        );
+    }
+
+    function memberWriteAllowedForRole(eventId, role) {
+      return role == 'admin'
+        || (
+          role == 'checkin'
+          && checkinAccessWindowOpen(eventId)
+        );
     }
 
     function validMemberWrite(eventId, uid) {
@@ -103,6 +169,7 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.deviceLabel is string
         && validPin(eventId, request.resource.data.role, request.resource.data.pinHash, request.resource.data.pinNameHash)
+        && memberWriteAllowedForRole(eventId, request.resource.data.role)
         && request.resource.data.keys().hasOnly([
           'uid', 'role', 'pinHash', 'pinNameHash', 'displayNameKey',
           'displayName', 'deviceLabel', 'createdAt', 'updatedAt'
@@ -114,20 +181,69 @@ service cloud.firestore {
     }
 
     function validSecurityData(data) {
-      return data.adminPinHash is string
-        && data.checkinPinHash is string
+      return data.checkinPinHash is string
+        && (!data.keys().hasAny(['adminPinHash']) || data.adminPinHash is string)
         && (!data.keys().hasAny(['adminPinHashes']) || (data.adminPinHashes is list && data.adminPinHashes.size() <= 1))
         && (!data.keys().hasAny(['checkinPinHashes']) || (data.checkinPinHashes is list && data.checkinPinHashes.size() <= 1))
+        && (!data.keys().hasAny(['checkinPinValue']) || data.checkinPinValue is string)
         && (!data.keys().hasAny(['adminNamedPinHashes']) || (data.adminNamedPinHashes is list && data.adminNamedPinHashes.size() <= 50))
         && (!data.keys().hasAny(['checkinNamedPinHashes']) || (data.checkinNamedPinHashes is list && data.checkinNamedPinHashes.size() <= 50))
         && (!data.keys().hasAny(['adminNamedPins']) || (data.adminNamedPins is list && data.adminNamedPins.size() <= 50))
         && (!data.keys().hasAny(['checkinNamedPins']) || (data.checkinNamedPins is list && data.checkinNamedPins.size() <= 50))
         && data.keys().hasOnly([
           'adminPinHash', 'checkinPinHash',
-          'adminPinHashes', 'checkinPinHashes',
+          'adminPinHashes', 'checkinPinHashes', 'checkinPinValue',
           'adminNamedPinHashes', 'checkinNamedPinHashes',
           'adminNamedPins', 'checkinNamedPins',
           'createdAt', 'updatedAt'
+        ]);
+    }
+
+    function checkinSecurityUpdateOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'checkinPinHash', 'checkinPinHashes', 'checkinPinValue',
+        'checkinNamedPinHashes', 'checkinNamedPins', 'updatedAt'
+      ]);
+    }
+
+    function newEventSecurityHasNoAdminPins(data) {
+      return !data.keys().hasAny([
+        'adminPinHash', 'adminPinHashes', 'adminNamedPinHashes', 'adminNamedPins'
+      ]);
+    }
+
+    function validAdminSecurityData(data) {
+      return data.authorizingEventId is string
+        && data.createdByUid is string
+        && data.adminPinHash is string
+        && (!data.keys().hasAny(['adminPinHashes']) || (data.adminPinHashes is list && data.adminPinHashes.size() <= 1))
+        && (!data.keys().hasAny(['adminNamedPinHashes']) || (data.adminNamedPinHashes is list && data.adminNamedPinHashes.size() <= 50))
+        && (!data.keys().hasAny(['adminNamedPins']) || (data.adminNamedPins is list && data.adminNamedPins.size() <= 50))
+        && data.keys().hasOnly([
+          'authorizingEventId', 'createdByUid',
+          'adminPinHash', 'adminPinHashes',
+          'adminNamedPinHashes', 'adminNamedPins',
+          'createdAt', 'updatedAt'
+        ]);
+    }
+
+    function validMasterAdminForData(data) {
+      return data.authorizingEventId is string
+        && isMember(data.authorizingEventId)
+        && memberData(data.authorizingEventId).role == 'admin'
+        && validAdminPinForData(data, memberData(data.authorizingEventId).pinHash, '');
+    }
+
+    function validEventCreateData(data) {
+      return data.name is string
+        && data.date is string
+        && data.checkinAccessStartsAt is timestamp
+        && data.checkinAccessEndsAt is timestamp
+        && data.checkinAccessStartsAt < data.checkinAccessEndsAt
+        && data.categories is list
+        && data.keys().hasOnly([
+          'name', 'date', 'checkinAccessStartsAt', 'checkinAccessEndsAt',
+          'categories', 'statuses', 'createdAt', 'updatedAt', 'createdByUid'
         ]);
     }
 
@@ -182,18 +298,38 @@ service cloud.firestore {
       );
     }
 
+    match /appSecurity/{docId} {
+      allow get: if docId == 'admin'
+        && signedIn()
+        && (
+          !adminSecurityExists()
+          || validMasterAdminForData(resource.data)
+        );
+      allow list: if false;
+      allow create: if docId == 'admin'
+        && signedIn()
+        && !adminSecurityExists()
+        && request.resource.data.createdByUid == request.auth.uid
+        && validAdminSecurityData(request.resource.data)
+        && validLegacyMasterAdminForData(request.resource.data);
+      allow update: if docId == 'admin'
+        && adminSecurityExists()
+        && validMasterAdminForData(resource.data)
+        && request.resource.data.authorizingEventId == resource.data.authorizingEventId
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && validAdminSecurityData(request.resource.data);
+      allow delete: if false;
+    }
+
     match /events/{eventId} {
       // The event document intentionally contains only public event metadata.
       allow get: if true;
       allow list: if false;
 
       allow create: if signedIn()
+        && isAdmin(eventId)
         && request.resource.data.createdByUid == request.auth.uid
-        && request.resource.data.name is string
-        && request.resource.data.categories is list
-        && request.resource.data.keys().hasOnly([
-          'name', 'date', 'categories', 'statuses', 'createdAt', 'updatedAt', 'createdByUid'
-        ]);
+        && validEventCreateData(request.resource.data);
 
       allow update, delete: if isAdmin(eventId);
 
@@ -201,7 +337,8 @@ service cloud.firestore {
         allow get: if isAdmin(eventId);
         allow update: if isAdmin(eventId)
           && docId == 'security'
-          && validSecurityData(request.resource.data);
+          && validSecurityData(request.resource.data)
+          && checkinSecurityUpdateOnly();
         allow delete: if false;
         allow list: if false;
 
@@ -211,7 +348,8 @@ service cloud.firestore {
           && eventExists(eventId)
           && eventData(eventId).createdByUid == request.auth.uid
           && !securityExists(eventId)
-          && validSecurityData(request.resource.data);
+          && validSecurityData(request.resource.data)
+          && newEventSecurityHasNoAdminPins(request.resource.data);
       }
 
       match /members/{uid} {
@@ -222,7 +360,7 @@ service cloud.firestore {
       }
 
       match /guests/{guestId} {
-        allow read: if isMember(eventId);
+        allow read: if isCheckin(eventId);
         allow create: if isAdmin(eventId)
           && validGuestData(request.resource.data);
 
@@ -239,8 +377,8 @@ service cloud.firestore {
       }
 
       match /auditLog/{logId} {
-        allow read: if isMember(eventId);
-        allow create: if isMember(eventId)
+        allow read: if isCheckin(eventId);
+        allow create: if isCheckin(eventId)
           && request.resource.data.actorUid == request.auth.uid
           && request.resource.data.action is string
           && request.resource.data.keys().hasOnly([

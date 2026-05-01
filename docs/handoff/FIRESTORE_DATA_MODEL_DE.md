@@ -5,12 +5,28 @@ Dieses Datenmodell beschreibt die aktuelle Zielstruktur. `app.js` und `firebase.
 ## Collections
 
 ```text
+appSecurity/admin
 events/{eventId}
 events/{eventId}/private/security
 events/{eventId}/members/{uid}
 events/{eventId}/guests/{guestDocId}
 events/{eventId}/auditLog/{logId}
 ```
+
+## appSecurity/admin
+
+Globales Security-Dokument für Admin-Zugänge. Es ist nicht event-spezifisch.
+
+Erwartete Felder:
+
+- `authorizingEventId`: Event-ID, über die Master-Admin-Schreibrechte für dieses globale Dokument geprüft werden
+- `createdByUid`
+- `adminPinHash`: Hash des namenlosen Master Admin-PIN
+- `adminPinHashes`: Liste der namenlosen Master Admin-PIN-Hashes, maximal ein Eintrag
+- `adminNamedPinHashes`: Liste der benannten Admin-PIN+Name-Hashes
+- `adminNamedPins`: Liste benannter Admin-PIN-Einträge zur Master-Admin-Anzeige und Löschung
+- `createdAt`
+- `updatedAt` optional nach PIN-Änderungen
 
 ## events/{eventId}
 
@@ -20,6 +36,8 @@ Erwartete Felder:
 
 - `name`
 - `date`
+- `checkinAccessStartsAt`: Beginn des Check-in-Staff-Zugriffs als Firestore Timestamp
+- `checkinAccessEndsAt`: Ende des Check-in-Staff-Zugriffs als Firestore Timestamp, Eventtag plus Folgetag 02:00 Uhr
 - `categories`
 - `statuses`
 - `createdAt`
@@ -28,18 +46,15 @@ Erwartete Felder:
 
 ## events/{eventId}/private/security
 
-Privates Security-Dokument. Nur Admins dürfen es lesen oder aktualisieren.
+Privates Security-Dokument pro Event. Nur Admins dürfen es lesen oder aktualisieren. Es enthält Check-in-PINs für genau diesen Event. Ältere Dokumente können noch Admin-PIN-Felder enthalten; diese gelten nur als Legacy-Daten.
 
 Erwartete Felder:
 
-- `adminPinHash`
 - `checkinPinHash`
-- `adminPinHashes`: Liste der namenlosen Admin-PIN-Hashes, maximal ein Eintrag
 - `checkinPinHashes`: Liste der namenlosen Check-in-PIN-Hashes, maximal ein Eintrag
-- `adminNamedPinHashes`: Liste der Admin-PIN+Name-Hashes
+- `checkinPinValue`: admin-lesbarer Check-in-PIN ohne Namen für Anzeige/Verbergen im Adminbereich
 - `checkinNamedPinHashes`: Liste der Check-in-PIN+Name-Hashes
-- `adminNamedPins`: Liste benannter Admin-PIN-Einträge zur Admin-Anzeige und Löschung
-- `checkinNamedPins`: Liste benannter Check-in-PIN-Einträge zur Admin-Anzeige und Löschung
+- `checkinNamedPins`: Liste benannter Check-in-PIN-Einträge zur Admin-Anzeige, Anzeige/Verbergen und Löschung
 - `createdAt`
 - `updatedAt` optional nach PIN-Reset
 
@@ -113,10 +128,13 @@ Erwartete Felder:
 - `status` darf nur `open`, `checked_in`, `no_show` sein.
 - Doppel-Check-in-Schutz muss per Firestore Transaction geschehen.
 - Check-in Staff darf Status auf `checked_in` setzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen.
+- Check-in Staff darf nur innerhalb des Firestore-geprüften Zeitfensters `checkinAccessStartsAt` bis `checkinAccessEndsAt` lesen und schreiben.
 - Admin darf Import, Export, Massen-No-Show, PIN-Reset und Korrekturen durchführen.
 - Admin darf angemeldete Geräte über deren `members/{uid}` Dokument abmelden; Benutzer dürfen ihr eigenes Member-Dokument zum Abmelden löschen.
 - Admin-only Infos liegen unter `guestAdminNotes` und dürfen nur von Admins gelesen und geschrieben werden.
-- Pro Rolle darf es mehrere benannte PINs geben. Zusätzlich gibt es pro Rolle maximal einen namenlosen PIN; bei benannten PINs muss beim Anmelden der Name case-insensitive passen, der PIN bleibt case-sensitive.
+- Admin-PINs sind global. Der namenlose Admin-PIN ist der Master Admin-PIN; nur Master Admins dürfen benannte Admin-PINs erstellen, ändern oder löschen.
+- Check-in-PINs sind event-spezifisch. Pro Event darf es mehrere benannte Check-in-PINs geben und maximal einen namenlosen Check-in-PIN.
+- Bei benannten PINs muss beim Anmelden der Name case-insensitive passen, der PIN bleibt case-sensitive.
 
 ## Zu prüfen
 
