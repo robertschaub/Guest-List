@@ -490,9 +490,9 @@ function renderRolePinSections() {
 
   return `
     <section class="card">
-      <h2>${linked ? "Zugang verwalten" : "Anmelden"}</h2>
+      <h2>Anmelden</h2>
       ${eventContext}
-      ${linked ? `<p class="notice success">Angemeldet als <strong>${escapeHtml(roleLabel)}</strong>: ${escapeHtml(appState.member?.displayName || "")}${appState.member?.deviceLabel ? ` · ${escapeHtml(appState.member.deviceLabel)}` : ""}</p>` : `<p class="notice info">Melde dich an, um Gäste zu suchen und einzuchecken. Admins sehen zusätzlich Import, Backup, PINs und Geräte.</p>`}
+      ${linked ? `<p class="notice success">Angemeldet als <strong>${escapeHtml(roleLabel)}</strong>: ${escapeHtml(appState.member?.displayName || "")}${appState.member?.deviceLabel ? ` · ${escapeHtml(appState.member.deviceLabel)}` : ""}</p>` : `<p class="notice info">Melde dich an, um Gäste zu suchen und einzuchecken. Admins sehen zusätzlich Import, Backup, PINs und aktive Zugänge.</p>`}
       ${accessNotice}
       <form id="joinForm" class="grid two">
         <div class="form-row">
@@ -601,8 +601,8 @@ function renderAdminPinSection() {
 function renderLoggedInMembersSection() {
   return `
     <section class="card">
-      <h2>Geräte verwalten</h2>
-      <p class="small">Angemeldete Geräte prüfen, Gerätenamen korrigieren oder fremde Geräte vom Event abmelden.</p>
+      <h2>Aktive Anmeldungen</h2>
+      <p class="small">Angemeldete Personen und Geräte prüfen, Gerätenamen korrigieren oder andere Anmeldungen vom Event abmelden.</p>
       <div id="loggedInMembersList" class="pin-list"><p class="small">Lädt…</p></div>
     </section>
   `;
@@ -971,8 +971,8 @@ function visibleTabs() {
       { id: "overview", label: "Übersicht" },
       { id: "admin", label: "Event verwalten" },
       { id: "setup", label: "Events" },
-      { id: "role", label: "Zugang" },
-      { id: "adminSettings", label: "Geräte" },
+      { id: "role", label: "Anmeldung" },
+      { id: "adminSettings", label: "Admin" },
       { id: "log", label: "Audit" }
     ];
   }
@@ -981,7 +981,7 @@ function visibleTabs() {
     return [
       ...baseTabs,
       { id: "overview", label: "Übersicht" },
-      { id: "role", label: "Zugang" }
+      { id: "role", label: "Anmeldung" }
     ];
   }
 
@@ -2044,7 +2044,7 @@ async function renderEventDeleteSection() {
   target.innerHTML = `
     <section class="card danger-section event-delete-card">
       <h2>Event löschen</h2>
-      <p class="notice error"><strong>Nur Haupt-Admin:</strong> Löscht dieses Event inklusive Gäste, Admin-Notizen, angemeldeter Geräte, Event-PINs und Audit Log.</p>
+      <p class="notice error"><strong>Nur Haupt-Admin:</strong> Löscht dieses Event inklusive Gäste, Admin-Notizen, aktiver Anmeldungen, Event-PINs und Audit Log.</p>
       ${isAuthorizingEvent ? `<p class="notice warning">Dieses Event ist aktuell das Haupt-Admin-Anker-Event.${replacement ? ` Vor dem Löschen wird der Anker auf <strong>${escapeHtml(replacement.name || replacement.id)}</strong> umgestellt.` : " Lege zuerst ein anderes Event an, bevor dieses Event gelöscht werden kann."}</p>` : ""}
       <div class="actions">
         <button class="btn-danger" id="deleteEventBtn" type="button" ${cannotDeleteAuthorizingEvent ? "disabled" : ""}>Event endgültig löschen</button>
@@ -2071,7 +2071,7 @@ async function deleteCurrentEvent() {
   const eventName = appState.event?.name || eventId;
   if (!eventId) return;
 
-  if (!confirmByTypingEventId(`Du löschst das Event "${eventName}" inklusive Gäste, Admin-Notizen, Geräten, Event-PINs und Audit Log.`)) return;
+  if (!confirmByTypingEventId(`Du löschst das Event "${eventName}" inklusive Gäste, Admin-Notizen, aktiven Anmeldungen, Event-PINs und Audit Log.`)) return;
   const typed = window.prompt(`Letzte Bestätigung für "${eventName}".\nBitte exakt eingeben:\nEVENT LÖSCHEN`);
   if (typed === null) return;
   if (typed.trim() !== "EVENT LÖSCHEN") {
@@ -2093,7 +2093,7 @@ async function deleteCurrentEvent() {
     const updateStatus = (label, count) => {
       counts[label] = count;
       if (result) {
-        result.innerHTML = `<p class="notice info">Löscht… Gäste: ${counts.guests || 0}, Admin-Notizen: ${counts.guestAdminNotes || 0}, Geräte: ${counts.members || 0}, Audit: ${counts.auditLog || 0}</p>`;
+        result.innerHTML = `<p class="notice info">Löscht… Gäste: ${counts.guests || 0}, Admin-Notizen: ${counts.guestAdminNotes || 0}, Anmeldungen: ${counts.members || 0}, Audit: ${counts.auditLog || 0}</p>`;
       }
     };
 
@@ -3008,12 +3008,12 @@ async function renderLoggedInMembersList() {
           </span>
           <span class="pin-list-actions member-device-actions">
             <input class="compact-input" data-device-label-for="${escapeHtml(member.id)}" value="${escapeHtml(member.deviceLabel || "")}" aria-label="Gerätename" />
-            <button class="btn-secondary" type="button" data-save-device-label="${escapeHtml(member.id)}" disabled>Gerät speichern</button>
-            <button class="btn-danger" type="button" data-force-logout="${escapeHtml(member.id)}" ${isSelf ? "disabled" : ""}>Gerät abmelden</button>
+            <button class="btn-secondary" type="button" data-save-device-label="${escapeHtml(member.id)}" disabled>Name speichern</button>
+            <button class="btn-danger" type="button" data-force-logout="${escapeHtml(member.id)}" ${isSelf ? "disabled" : ""}>Abmelden</button>
           </span>
         </div>
       `;
-    }).join("") : `<p class="small">Keine angemeldeten Geräte.</p>`;
+    }).join("") : `<p class="small">Keine aktiven Anmeldungen.</p>`;
 
     target.querySelectorAll("[data-device-label-for]").forEach((input) => {
       const member = members.find((item) => item.id === input.dataset.deviceLabelFor);
@@ -3037,7 +3037,7 @@ async function renderLoggedInMembersList() {
     });
   } catch (error) {
     console.error(error);
-    target.innerHTML = `<p class="notice error">Angemeldete Geräte konnten nicht geladen werden.</p>`;
+    target.innerHTML = `<p class="notice error">Aktive Anmeldungen konnten nicht geladen werden.</p>`;
   }
 }
 
