@@ -180,6 +180,26 @@ async function startApp() {
   }
 
   if (!eventParam) {
+    const defaultEvent = await findFirstAvailableEventFromDate();
+    if (defaultEvent) {
+      appState.eventId = defaultEvent.id;
+      appState.event = defaultEvent;
+      localStorage.setItem("guestlist:lastEventId", appState.eventId);
+      saveKnownEvent(appState.event);
+      window.history.replaceState(null, "", urlWithEvent(appState.eventId));
+      els.eventTitle.textContent = appState.event.name || "Gästeliste";
+      setEventMeta();
+
+      const memberSnap = await getCurrentMemberSnap();
+      if (memberSnap.exists()) {
+        appState.member = { id: memberSnap.id, ...memberSnap.data() };
+        loadMainApp();
+      } else {
+        renderJoin();
+      }
+      return;
+    }
+
     appState.eventId = "";
     appState.event = null;
     renderJoin();
@@ -743,7 +763,23 @@ async function joinEventFromForm(event) {
   }
 
   if (!appState.eventId) {
-    result.innerHTML = `<p class="notice error">Admin-Anmeldung braucht einen konkreten Event-Link.</p>`;
+    const defaultEvent = await findFirstAvailableEventFromDate();
+    if (defaultEvent) {
+      appState.eventId = defaultEvent.id;
+      appState.event = defaultEvent;
+      localStorage.setItem("guestlist:lastEventId", appState.eventId);
+      saveKnownEvent(appState.event);
+      window.history.replaceState(null, "", urlWithEvent(appState.eventId));
+      els.eventTitle.textContent = appState.event.name || "Gästeliste";
+      setEventMeta();
+    } else {
+      result.innerHTML = `<p class="notice error">Kein Event ab heute gefunden. Bitte Event-Link öffnen oder neues Event erstellen.</p>`;
+      return;
+    }
+  }
+
+  if (!appState.eventId) {
+    result.innerHTML = `<p class="notice error">Kein Event aktiv.</p>`;
     return;
   }
 
@@ -3777,6 +3813,20 @@ function getKnownEvents() {
     if (dateCompare) return dateCompare;
     return String(a.name || a.id).localeCompare(String(b.name || b.id), "de");
   });
+}
+
+async function findFirstAvailableEventFromDate(now = new Date()) {
+  const today = localDateKey(now);
+  const candidates = getKnownEvents().filter((event) => event.date && event.date >= today);
+
+  for (const candidate of candidates) {
+    const eventSnap = await getDoc(doc(appState.db, "events", candidate.id));
+    if (eventSnap.exists()) {
+      return { id: eventSnap.id, ...eventSnap.data() };
+    }
+  }
+
+  return null;
 }
 
 function getAdminPinTargetEvents() {
