@@ -114,6 +114,7 @@ Erwartete Felder:
 - Doppel-Check-in-Schutz muss per Firestore Transaction geschehen.
 - Check-in Staff darf Status auf `checked_in` setzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen.
 - Admin darf Import, Export, Massen-No-Show, PIN-Reset und Korrekturen durchführen.
+- Admin darf angemeldete Geräte über deren `members/{uid}` Dokument abmelden; Benutzer dürfen ihr eigenes Member-Dokument zum Abmelden löschen.
 - Admin-only Infos liegen unter `guestAdminNotes` und dürfen nur von Admins gelesen und geschrieben werden.
 - Pro Rolle darf es mehrere benannte PINs geben. Zusätzlich gibt es pro Rolle maximal einen namenlosen PIN; bei benannten PINs muss beim Anmelden der Name case-insensitive passen, der PIN bleibt case-sensitive.
 

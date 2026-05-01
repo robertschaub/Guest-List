@@ -218,7 +218,7 @@ service cloud.firestore {
         allow get: if (signedIn() && uid == request.auth.uid) || isAdmin(eventId);
         allow list: if isAdmin(eventId);
         allow create, update: if validMemberWrite(eventId, uid);
-        allow delete: if isAdmin(eventId);
+        allow delete: if isAdmin(eventId) || (signedIn() && uid == request.auth.uid);
       }
 
       match /guests/{guestId} {

@@ -14,6 +14,7 @@ import {
   setDoc,
   addDoc,
   updateDoc,
+  deleteDoc,
   arrayUnion,
   deleteField,
   writeBatch,
@@ -89,6 +90,7 @@ const appState = {
   adminNotes: {},
   adminNotesLoaded: false,
   auditEntries: [],
+  memberUnsubscribe: null,
   guestUnsubscribe: null,
   adminNotesUnsubscribe: null,
   auditUnsubscribe: null,
@@ -501,10 +503,14 @@ function renderAdminSettings() {
     tabContent().innerHTML = `<section class="card"><h2>Kein Zugriff</h2><p>Admin-Rechte erforderlich.</p></section>`;
     return;
   }
-  tabContent().innerHTML = renderAdminPinSection();
+  tabContent().innerHTML = `
+    ${renderAdminPinSection()}
+    ${renderLoggedInMembersSection()}
+  `;
   bindAdminPinForm();
   bindNamedAdminPinForm();
   void renderNamedPinList("admin");
+  void renderLoggedInMembersList();
 }
 
 function renderAdminPinSection() {
@@ -564,6 +570,15 @@ function renderAdminPinSection() {
   `;
 }
 
+function renderLoggedInMembersSection() {
+  return `
+    <section class="card">
+      <h2>Angemeldete Geräte</h2>
+      <div id="loggedInMembersList" class="pin-list"><p class="small">Lädt…</p></div>
+    </section>
+  `;
+}
+
 function renderCheckinPinSection() {
   return `
     <section class="card">
@@ -616,7 +631,9 @@ function renderCheckinPinSection() {
 
 function bindRolePinHandlers() {
   bindJoinForm();
-  document.getElementById("logoutBtn")?.addEventListener("click", logoutCurrentMember);
+  document.getElementById("logoutBtn")?.addEventListener("click", () => {
+    void logoutCurrentMember();
+  });
 }
 
 function bindJoinForm() {
@@ -872,6 +889,7 @@ function loadMainApp() {
   appState.adminNotes = {};
   appState.adminNotesLoaded = false;
   renderShell();
+  subscribeCurrentMember();
   if (hasActiveEventAccess()) {
     subscribeGuests();
     subscribeAdminNotes();
@@ -965,6 +983,27 @@ function subscribeGuests() {
     console.error(error);
     appState.guestsLoaded = true;
     notify("Gästeliste konnte nicht geladen werden. Prüfe Berechtigungen und Firestore-Regeln.", "error");
+  });
+}
+
+function subscribeCurrentMember() {
+  if (!appState.eventId || !appState.user?.uid || !hasLinkedRole()) return;
+  if (appState.memberUnsubscribe) {
+    appState.memberUnsubscribe();
+    appState.memberUnsubscribe = null;
+  }
+
+  appState.memberUnsubscribe = onSnapshot(memberRef(appState.user.uid), (snapshot) => {
+    if (!snapshot.exists()) {
+      if (hasLinkedRole()) finishLocalLogout("role", "Du wurdest abgemeldet.");
+      return;
+    }
+
+    appState.member = { id: snapshot.id, ...snapshot.data() };
+    renderShell();
+    renderActiveTab();
+  }, (error) => {
+    console.error(error);
   });
 }
 
@@ -1086,7 +1125,7 @@ function renderEmptyEventWarning() {
 
 function handleCheckinAuthButton() {
   if (isEventMember()) {
-    logoutCurrentMember("checkin");
+    void logoutCurrentMember("checkin");
     return;
   }
 
@@ -1095,19 +1134,42 @@ function handleCheckinAuthButton() {
   renderActiveTab();
 }
 
-function logoutCurrentMember(nextTab = "role") {
-  clearAdminSession();
-  if (appState.adminNotesUnsubscribe) {
-    appState.adminNotesUnsubscribe();
-    appState.adminNotesUnsubscribe = null;
+async function logoutCurrentMember(nextTab = "role") {
+  const targetTab = typeof nextTab === "string" ? nextTab : "role";
+  const memberDocRef = appState.eventId && appState.user?.uid ? memberRef(appState.user.uid) : null;
+  const wasLinked = hasLinkedRole();
+
+  if (memberDocRef && wasLinked && isOffline()) {
+    notify("Abmelden nicht möglich: Gerät ist offline.", "error");
+    return;
   }
+
+  if (memberDocRef && wasLinked) {
+    try {
+      await deleteDoc(memberDocRef);
+    } catch (error) {
+      console.error(error);
+      notify(`Abmelden fehlgeschlagen: ${error.message || error}`, "error");
+      return;
+    }
+  }
+
+  finishLocalLogout(targetTab);
+}
+
+function finishLocalLogout(nextTab = "role", message = "") {
+  clearAdminSession();
+  unsubscribeAll();
   appState.adminNotes = {};
   appState.adminNotesLoaded = false;
+  appState.guests = [];
+  appState.guestsLoaded = false;
   appState.member = null;
   appState.ui.editingGuestId = "";
   appState.currentTab = nextTab;
   renderShell();
   renderActiveTab();
+  if (message) notify(message, "warning");
 }
 
 function renderAddGuestPanel(categories) {
@@ -2499,6 +2561,75 @@ function sameNamedPin(left, right) {
   return Boolean(left.displayNameKey && right.displayNameKey && left.displayNameKey === right.displayNameKey);
 }
 
+async function renderLoggedInMembersList() {
+  if (!isAdmin()) return;
+  const target = document.getElementById("loggedInMembersList");
+  if (!target) return;
+
+  try {
+    const snapshot = await getDocs(collection(appState.db, "events", appState.eventId, "members"));
+    const members = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+      .sort((a, b) => {
+        const roleCompare = String(a.role || "").localeCompare(String(b.role || ""), "de");
+        if (roleCompare) return roleCompare;
+        return String(a.displayName || a.id).localeCompare(String(b.displayName || b.id), "de");
+      });
+
+    target.innerHTML = members.length ? members.map((member) => {
+      const isSelf = member.id === appState.user?.uid;
+      const roleLabel = ROLE_META[member.role] || member.role || "User";
+      const updated = formatTimestamp(member.updatedAt || member.createdAt);
+      const details = [
+        roleLabel,
+        member.deviceLabel || "",
+        updated ? `seit ${updated}` : "",
+        isSelf ? "dieses Gerät" : ""
+      ].filter(Boolean).join(" · ");
+      return `
+        <div class="pin-list-row">
+          <span>
+            <strong>${escapeHtml(member.displayName || "Ohne Name")}</strong>
+            <span class="small">${escapeHtml(details)}</span>
+          </span>
+          <button class="btn-danger" type="button" data-force-logout="${escapeHtml(member.id)}" ${isSelf ? "disabled" : ""}>Abmelden</button>
+        </div>
+      `;
+    }).join("") : `<p class="small">Keine angemeldeten Geräte.</p>`;
+
+    target.querySelectorAll("[data-force-logout]").forEach((button) => {
+      const member = members.find((item) => item.id === button.dataset.forceLogout);
+      button.addEventListener("click", () => {
+        void forceLogoutMember(member);
+      });
+    });
+  } catch (error) {
+    console.error(error);
+    target.innerHTML = `<p class="notice error">Angemeldete Geräte konnten nicht geladen werden.</p>`;
+  }
+}
+
+async function forceLogoutMember(member) {
+  if (!member?.id || member.id === appState.user?.uid) return;
+  const name = member.displayName || member.id.slice(0, 8);
+  const confirmed = window.confirm(`${name} abmelden?`);
+  if (!confirmed) return;
+
+  try {
+    await deleteDoc(doc(appState.db, "events", appState.eventId, "members", member.id));
+    await addAudit("member_force_logout", { name }, {
+      uid: member.id,
+      role: member.role || "",
+      displayName: member.displayName || "",
+      deviceLabel: member.deviceLabel || ""
+    });
+    await renderLoggedInMembersList();
+    notify(`${name} wurde abgemeldet.`, "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Abmelden fehlgeschlagen: ${error.message || error}`, "error");
+  }
+}
+
 function renderAuditLog() {
   if (!isAdmin()) {
     tabContent().innerHTML = `<section class="card"><h2>Kein Zugriff</h2><p>Admin-Rechte erforderlich.</p></section>`;
@@ -2558,7 +2689,8 @@ function labelForAction(action) {
     duplicate_check_in_attempt: "Doppel-Check-in verhindert",
     bulk_no_show: "Bulk No Show",
     pins_reset: "Check-in-PIN neu gesetzt",
-    admin_pin_reset: "Admin-PIN neu gesetzt"
+    admin_pin_reset: "Admin-PIN neu gesetzt",
+    member_force_logout: "Gerät abgemeldet"
   };
   return labels[action] || action || "Aktion";
 }
@@ -3434,6 +3566,10 @@ function debounce(fn, delay) {
 }
 
 function unsubscribeAll() {
+  if (appState.memberUnsubscribe) {
+    appState.memberUnsubscribe();
+    appState.memberUnsubscribe = null;
+  }
   if (appState.guestUnsubscribe) {
     appState.guestUnsubscribe();
     appState.guestUnsubscribe = null;
