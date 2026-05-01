@@ -21,8 +21,11 @@ import {
   runTransaction,
   onSnapshot,
   query,
+  where,
   orderBy,
+  startAfter,
   limit,
+  Timestamp,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -32,6 +35,7 @@ const DEFAULT_STATUSES = ["open", "checked_in", "no_show"];
 const CONFIGURED_EVENTS = Array.isArray(CONFIG.app?.knownEvents) ? CONFIG.app.knownEvents : [];
 const KNOWN_EVENTS_STORAGE_KEY = "guestlist:knownEvents";
 const ADMIN_SESSION_STORAGE_KEY = "guestlist:adminSession";
+const DEVICE_LABEL_STORAGE_KEY = "guestlist:deviceLabel";
 const EVENT_ALIASES = CONFIG.app?.eventAliases || {};
 const GLOBAL_ADMIN_EVENT_ID = CONFIG.app?.globalAdminEventId || CONFIGURED_EVENTS[0]?.id || "";
 const ADMIN_SECURITY_COLLECTION = "appSecurity";
@@ -79,6 +83,8 @@ const AUDIT_EXPORT_HEADERS = [
   "Gerät",
   "Details"
 ];
+const AUDIT_EXPORT_PAGE_SIZE = 500;
+const AUDIT_EXPORT_MAX_ENTRIES = 50000;
 
 const appState = {
   firebaseApp: null,
@@ -338,7 +344,7 @@ async function createEventFromForm(event) {
   const adminPin = val("adminPin") || (isAdmin() ? getAdminSession()?.pin || "" : "");
   const checkinPin = val("checkinPin");
   const displayName = val("setupName").trim() || "Admin";
-  const deviceLabel = appState.member?.deviceLabel || "";
+  const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
   const categories = val("categoryList").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 
   if (!name || !date) {
@@ -405,6 +411,7 @@ async function createEventFromForm(event) {
       updatedAt: serverTimestamp()
     });
 
+    await addAuditForEvent(eventId, "event_create", { name }, { eventId, date }, { displayName, deviceLabel });
     saveKnownEvent({ id: eventId, name, date });
 
     result.innerHTML = `
@@ -452,7 +459,6 @@ function renderRolePinTab() {
 function renderRolePinSections() {
   const currentRole = appState.member?.role || "checkin";
   const displayName = appState.member?.displayName || localStorage.getItem("guestlist:memberName") || "";
-  const deviceLabel = appState.member?.deviceLabel || "";
   const accessNotice = appState.member?.role === "checkin" && !isActiveCheckinStaff()
     ? `<p class="notice warning">${escapeHtml(checkinStaffAccessMessage())}</p>`
     : "";
@@ -481,10 +487,6 @@ function renderRolePinSections() {
         <div class="form-row">
           <label for="memberName">Name Mitarbeiter:in</label>
           <input id="memberName" value="${escapeHtml(displayName)}" required placeholder="z.B. Eingang 1 / Max" />
-        </div>
-        <div class="form-row">
-          <label for="deviceLabel">Gerät <span class="optional-label">optional</span></label>
-          <input id="deviceLabel" value="${escapeHtml(deviceLabel)}" placeholder="z.B. iPad Eingang links" />
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" id="joinSubmitBtn" type="submit" disabled>Anmelden</button>
@@ -647,26 +649,23 @@ function bindJoinForm() {
   const roleInput = document.getElementById("memberRole");
   const pinInput = document.getElementById("memberPin");
   const nameInput = document.getElementById("memberName");
-  const deviceInput = document.getElementById("deviceLabel");
   const button = document.getElementById("joinSubmitBtn");
-  if (!form || !roleInput || !pinInput || !nameInput || !deviceInput || !button) return;
+  if (!form || !roleInput || !pinInput || !nameInput || !button) return;
 
   const original = {
     role: appState.member?.role || "checkin",
-    displayName: appState.member?.displayName || localStorage.getItem("guestlist:memberName") || "",
-    deviceLabel: appState.member?.deviceLabel || ""
+    displayName: appState.member?.displayName || localStorage.getItem("guestlist:memberName") || ""
   };
   const updateButtonState = () => {
     const hasPin = pinInput.value.length >= PIN_MIN_LENGTH;
     const hasName = Boolean(nameInput.value.trim());
     const changed = roleInput.value !== original.role
-      || nameInput.value.trim() !== original.displayName
-      || deviceInput.value.trim() !== original.deviceLabel;
+      || nameInput.value.trim() !== original.displayName;
     button.disabled = !hasPin || !hasName || (appState.member && !changed);
   };
 
   updateButtonState();
-  [roleInput, pinInput, nameInput, deviceInput].forEach((input) => {
+  [roleInput, pinInput, nameInput].forEach((input) => {
     input.addEventListener("input", updateButtonState);
     input.addEventListener("change", updateButtonState);
   });
@@ -723,7 +722,7 @@ async function joinEventFromForm(event) {
   const role = val("memberRole");
   const pin = val("memberPin");
   const displayName = val("memberName").trim() || "Check-in";
-  const deviceLabel = val("deviceLabel").trim();
+  const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
 
   if (pin.length < PIN_MIN_LENGTH) {
     result.innerHTML = `<p class="notice warning">PIN ist zu kurz. Bitte den vollständigen PIN mit mindestens ${PIN_MIN_LENGTH} Zeichen eingeben.</p>`;
@@ -753,11 +752,12 @@ async function joinEventFromForm(event) {
     await connectAdminToEvent(appState.eventId, pin, displayName, deviceLabel);
 
     localStorage.setItem("guestlist:memberName", displayName);
-    localStorage.removeItem("guestlist:deviceLabel");
     saveAdminSession(pin, displayName);
 
     const memberSnap = await getDoc(memberRef(appState.user.uid));
     appState.member = { id: memberSnap.id, ...memberSnap.data() };
+    await addAudit("member_login", { name: displayName }, { role: "admin", deviceLabel });
+    await promptForDuplicateNamedMemberLogout(appState.eventId, appState.member);
     result.innerHTML = `<p class="notice success">Verbunden.</p>`;
     loadMainApp();
   } catch (error) {
@@ -806,11 +806,12 @@ async function joinCheckinStaffFromAllowedEvents(pin, displayName, deviceLabel) 
     appState.auditEntries = [];
     appState.currentTab = "checkin";
     localStorage.setItem("guestlist:memberName", displayName);
-    localStorage.removeItem("guestlist:deviceLabel");
     localStorage.setItem("guestlist:lastEventId", eventData.id);
     clearAdminSession();
     saveKnownEvent(eventData);
     window.history.replaceState(null, "", urlWithEvent(eventData.id));
+    await addAudit("member_login", { name: displayName }, { role: "checkin", deviceLabel });
+    await promptForDuplicateNamedMemberLogout(eventData.id, appState.member);
     loadMainApp();
     return true;
   }
@@ -1168,6 +1169,10 @@ async function logoutCurrentMember(nextTab = "role") {
 
   if (memberDocRef && wasLinked) {
     try {
+      await addAudit("member_logout", { name: appState.member?.displayName || "" }, {
+        role: appState.member?.role || "",
+        deviceLabel: appState.member?.deviceLabel || ""
+      });
       await deleteDoc(memberDocRef);
     } catch (error) {
       console.error(error);
@@ -1513,7 +1518,10 @@ async function saveEditedGuest(event, guestDocId) {
       oldName: guest.name || "",
       newName: trimmedName,
       oldCategory: guest.category || "",
-      newCategory: normalizedCategory
+      newCategory: normalizedCategory,
+      staffInfoChanged: supportComment !== staffInfoForGuest(guest),
+      adminStaffInfoChanged: adminStaffInfo !== adminStaffInfoForGuest(guest),
+      adminOnlyInfoChanged: internalNote !== adminOnlyInfoForGuest(guest)
     });
     appState.ui.editingGuestId = "";
     notify("Gast aktualisiert.", "success");
@@ -2142,22 +2150,20 @@ async function exportAuditLog() {
   if (!isAdmin()) return;
 
   try {
-    const q = query(collection(appState.db, "events", appState.eventId, "auditLog"), orderBy("createdAt", "desc"), limit(5000));
-    const snapshot = await getDocs(q);
-    const entries = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-    const csvRows = entries.map((entry) => ({
-      "Zeit": formatTimestamp(entry.createdAt),
-      "Aktion": labelForAction(entry.action),
-      "Guest ID": entry.guestId || "",
-      "Gast": entry.guestName || "",
-      "Kategorie": entry.category || "",
-      "Mitarbeiter": entry.actorName || "",
-      "Gerät": entry.deviceLabel || "",
-      "Details": entry.details ? JSON.stringify(entry.details) : ""
-    }));
+    const filters = auditExportFilters();
+    if (filters.from && filters.to && localDateStart(filters.from) > localDateEnd(filters.to)) {
+      notify("Audit-Export nicht möglich: Zeitraum ist ungültig.", "warning");
+      return;
+    }
+    const entries = await fetchAuditEntriesForExport(filters);
+    const csvRows = entries.map(auditEntryToCsvRow);
     const fileName = `${eventFileStem()}-audit-log-${todayStamp()}.csv`;
     downloadCsv(fileName, toCsv(csvRows, ";", AUDIT_EXPORT_HEADERS));
-    await addAudit("audit_export", { name: "Audit Log Export" }, { count: csvRows.length, limit: 5000 });
+    await addAudit("audit_export", { name: "Audit Log Export" }, {
+      count: csvRows.length,
+      filters: auditExportFilterSummary(filters),
+      pageSize: AUDIT_EXPORT_PAGE_SIZE
+    });
     const message = `Audit-Log exportiert: ${fileName} · ${csvRows.length} Einträge · ${formatTimestamp(new Date())}`;
     showBackupStatus(message, "success");
     notify(message, "success");
@@ -2165,6 +2171,78 @@ async function exportAuditLog() {
     console.error(error);
     notify(`Audit-Log konnte nicht exportiert werden: ${error.message || error}`, "error");
   }
+}
+
+function auditExportFilters() {
+  return {
+    from: val("auditExportFrom").trim(),
+    to: val("auditExportTo").trim(),
+    action: val("auditExportAction").trim() || "all",
+    actor: val("auditExportActor").trim()
+  };
+}
+
+async function fetchAuditEntriesForExport(filters) {
+  const entries = [];
+  let cursor = null;
+  while (entries.length < AUDIT_EXPORT_MAX_ENTRIES) {
+    const constraints = auditExportQueryConstraints(filters, cursor);
+    const snapshot = await getDocs(query(
+      collection(appState.db, "events", appState.eventId, "auditLog"),
+      ...constraints
+    ));
+    if (snapshot.empty) break;
+
+    snapshot.docs
+      .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+      .filter((entry) => auditEntryMatchesClientFilters(entry, filters))
+      .forEach((entry) => entries.push(entry));
+
+    cursor = snapshot.docs[snapshot.docs.length - 1];
+    if (snapshot.docs.length < AUDIT_EXPORT_PAGE_SIZE) break;
+  }
+  return entries.slice(0, AUDIT_EXPORT_MAX_ENTRIES);
+}
+
+function auditExportQueryConstraints(filters, cursor) {
+  const constraints = [];
+  const fromDate = localDateStart(filters.from);
+  const toDate = localDateEnd(filters.to);
+  if (fromDate) constraints.push(where("createdAt", ">=", Timestamp.fromDate(fromDate)));
+  if (toDate) constraints.push(where("createdAt", "<=", Timestamp.fromDate(toDate)));
+  constraints.push(orderBy("createdAt", "desc"));
+  if (cursor) constraints.push(startAfter(cursor));
+  constraints.push(limit(AUDIT_EXPORT_PAGE_SIZE));
+  return constraints;
+}
+
+function auditEntryMatchesClientFilters(entry, filters) {
+  const actionMatches = !filters.action || filters.action === "all" || entry.action === filters.action;
+  const actorFilter = normalizeForSearch(filters.actor || "");
+  const actorMatches = !actorFilter || normalizeForSearch(`${entry.actorName || ""} ${entry.deviceLabel || ""}`).includes(actorFilter);
+  return actionMatches && actorMatches;
+}
+
+function auditEntryToCsvRow(entry) {
+  return {
+    "Zeit": formatTimestamp(entry.createdAt),
+    "Aktion": labelForAction(entry.action),
+    "Guest ID": entry.guestId || "",
+    "Gast": entry.guestName || "",
+    "Kategorie": entry.category || "",
+    "Mitarbeiter": entry.actorName || "",
+    "Gerät": entry.deviceLabel || "",
+    "Details": entry.details ? JSON.stringify(entry.details) : ""
+  };
+}
+
+function auditExportFilterSummary(filters) {
+  return {
+    from: filters.from || "",
+    to: filters.to || "",
+    action: filters.action || "all",
+    actor: filters.actor || ""
+  };
 }
 
 function confirmByTypingEventId(actionText) {
@@ -2673,11 +2751,29 @@ async function renderLoggedInMembersList() {
             <strong>${escapeHtml(member.displayName || "Ohne Name")}</strong>
             <span class="small">${escapeHtml(details)}</span>
           </span>
-          <button class="btn-danger" type="button" data-force-logout="${escapeHtml(member.id)}" ${isSelf ? "disabled" : ""}>Abmelden</button>
+          <span class="pin-list-actions member-device-actions">
+            <input class="compact-input" data-device-label-for="${escapeHtml(member.id)}" value="${escapeHtml(member.deviceLabel || "")}" aria-label="Gerätename" />
+            <button class="btn-secondary" type="button" data-save-device-label="${escapeHtml(member.id)}" disabled>Gerät speichern</button>
+            <button class="btn-danger" type="button" data-force-logout="${escapeHtml(member.id)}" ${isSelf ? "disabled" : ""}>Abmelden</button>
+          </span>
         </div>
       `;
     }).join("") : `<p class="small">Keine angemeldeten Geräte.</p>`;
 
+    target.querySelectorAll("[data-device-label-for]").forEach((input) => {
+      const member = members.find((item) => item.id === input.dataset.deviceLabelFor);
+      const button = target.querySelector(`[data-save-device-label="${cssEscape(input.dataset.deviceLabelFor)}"]`);
+      input.addEventListener("input", () => {
+        if (button) button.disabled = input.value.trim() === String(member?.deviceLabel || "");
+      });
+    });
+    target.querySelectorAll("[data-save-device-label]").forEach((button) => {
+      const member = members.find((item) => item.id === button.dataset.saveDeviceLabel);
+      button.addEventListener("click", () => {
+        const input = target.querySelector(`[data-device-label-for="${cssEscape(button.dataset.saveDeviceLabel)}"]`);
+        void updateMemberDeviceLabel(member, input?.value || "");
+      });
+    });
     target.querySelectorAll("[data-force-logout]").forEach((button) => {
       const member = members.find((item) => item.id === button.dataset.forceLogout);
       button.addEventListener("click", () => {
@@ -2687,6 +2783,36 @@ async function renderLoggedInMembersList() {
   } catch (error) {
     console.error(error);
     target.innerHTML = `<p class="notice error">Angemeldete Geräte konnten nicht geladen werden.</p>`;
+  }
+}
+
+async function updateMemberDeviceLabel(member, rawLabel) {
+  if (!member?.id || !isAdmin()) return;
+  const deviceLabel = String(rawLabel || "").trim();
+  if (!deviceLabel) {
+    notify("Gerätename darf nicht leer sein.", "warning");
+    return;
+  }
+  if (deviceLabel === String(member.deviceLabel || "")) return;
+
+  try {
+    await updateDoc(doc(appState.db, "events", appState.eventId, "members", member.id), {
+      deviceLabel,
+      updatedAt: serverTimestamp()
+    });
+    await addAudit("member_device_update", { name: member.displayName || member.id.slice(0, 8) }, {
+      role: member.role || "",
+      oldDeviceLabel: member.deviceLabel || "",
+      newDeviceLabel: deviceLabel
+    });
+    if (member.id === appState.user?.uid) {
+      appState.member = { ...appState.member, deviceLabel };
+    }
+    await renderLoggedInMembersList();
+    notify("Gerätename gespeichert.", "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Gerätename konnte nicht gespeichert werden: ${error.message || error}`, "error");
   }
 }
 
@@ -2712,6 +2838,68 @@ async function forceLogoutMember(member) {
   }
 }
 
+async function promptForDuplicateNamedMemberLogout(eventId, member) {
+  if (!eventId || !member?.role || !member?.displayNameKey) return;
+
+  let duplicates = [];
+  try {
+    duplicates = await findDuplicateNamedMemberSessions(eventId, member);
+  } catch (error) {
+    console.error(error);
+    notify("Andere Geräte konnten nicht geprüft werden.", "warning");
+    return;
+  }
+  if (!duplicates.length) return;
+
+  const name = member.displayName || member.displayNameKey;
+  const deviceText = `${duplicates.length} ${duplicates.length === 1 ? "anderes Gerät" : "andere Geräte"}`;
+  let shouldLogout = window.confirm(`${name} ist bereits auf ${deviceText} angemeldet.\n\nAndere Geräte jetzt abmelden?\n\nOK = abmelden`);
+
+  if (!shouldLogout) {
+    const keepConfirmed = window.confirm(`Andere Geräte angemeldet lassen?\n\nBitte nochmals bestätigen.`);
+    shouldLogout = !keepConfirmed;
+  }
+
+  if (!shouldLogout) return;
+
+  try {
+    await logoutDuplicateNamedMemberSessions(eventId, member, duplicates);
+    notify(`${deviceText} abgemeldet.`, "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Andere Geräte konnten nicht abgemeldet werden: ${error.message || error}`, "error");
+  }
+}
+
+async function findDuplicateNamedMemberSessions(eventId, member) {
+  const q = query(
+    collection(appState.db, "events", eventId, "members"),
+    where("role", "==", member.role),
+    where("displayNameKey", "==", member.displayNameKey)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs
+    .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+    .filter((item) => item.id !== appState.user?.uid);
+}
+
+async function logoutDuplicateNamedMemberSessions(eventId, member, duplicates) {
+  for (const duplicate of duplicates) {
+    await deleteDoc(doc(appState.db, "events", eventId, "members", duplicate.id));
+  }
+  await addAudit("member_duplicate_logout", { name: member.displayName || member.displayNameKey }, {
+    role: member.role || "",
+    displayName: member.displayName || "",
+    deviceLabel: member.deviceLabel || "",
+    count: duplicates.length,
+    loggedOut: duplicates.map((duplicate) => ({
+      displayName: duplicate.displayName || "",
+      deviceLabel: duplicate.deviceLabel || "",
+      role: duplicate.role || ""
+    }))
+  });
+}
+
 function renderAuditLog() {
   if (!isAdmin()) {
     tabContent().innerHTML = `<section class="card"><h2>Kein Zugriff</h2><p>Admin-Rechte erforderlich.</p></section>`;
@@ -2721,7 +2909,28 @@ function renderAuditLog() {
   content.innerHTML = `
     <section class="card audit-card">
       <h2>Audit Log</h2>
-      <p class="small">Zeigt die letzten 100 Einträge. Der CSV-Export lädt bis zu 5000 Einträge für dieses Event.</p>
+      <p class="small">Zeigt die letzten 100 Einträge. Der CSV-Export wird beim Download aus Firestore erzeugt.</p>
+      <div class="grid three">
+        <div class="form-row">
+          <label for="auditExportFrom">Von</label>
+          <input id="auditExportFrom" type="date" />
+        </div>
+        <div class="form-row">
+          <label for="auditExportTo">Bis</label>
+          <input id="auditExportTo" type="date" />
+        </div>
+        <div class="form-row">
+          <label for="auditExportAction">Aktion</label>
+          <select id="auditExportAction">
+            <option value="all">Alle Aktionen</option>
+            ${auditActionOptions()}
+          </select>
+        </div>
+        <div class="form-row" style="grid-column:1/-1">
+          <label for="auditExportActor">Mitarbeiter:in</label>
+          <input id="auditExportActor" placeholder="optional filtern" />
+        </div>
+      </div>
       <div class="actions">
         <button class="btn-secondary" id="exportAuditLogTabBtn" type="button">Audit Log CSV exportieren</button>
       </div>
@@ -2746,18 +2955,127 @@ function renderAuditLog() {
 }
 
 function renderAuditLine(entry) {
+  const summary = auditSummary(entry);
   return `
     <div class="log-line">
       <strong>${escapeHtml(labelForAction(entry.action))}</strong>
       <div class="small">${formatTimestamp(entry.createdAt)} · ${escapeHtml(entry.actorName || "")} · ${escapeHtml(entry.deviceLabel || "")}</div>
-      <div>${escapeHtml(entry.guestName || "")}</div>
-      ${entry.details ? `<div class="small log-details">${escapeHtml(JSON.stringify(entry.details))}</div>` : ""}
+      ${summary.subject ? `<div>${escapeHtml(summary.subject)}</div>` : ""}
+      ${summary.detail ? `<div class="small log-details">${escapeHtml(summary.detail)}</div>` : ""}
     </div>
   `;
 }
 
+function auditSummary(entry) {
+  const details = entry.details && typeof entry.details === "object" ? entry.details : {};
+  const subject = entry.guestName || details.displayName || details.name || "";
+  const statusLabel = (value) => STATUS_META[value]?.label || value || "";
+  const filterLabel = (value) => value === "all" ? "Alle" : (STATUS_META[value]?.label || value || "");
+  const changed = (...items) => items.filter(Boolean).join(", ");
+
+  switch (entry.action) {
+    case "event_create":
+      return { subject: entry.guestName || "Event", detail: `${details.date ? formatEventDate(details.date) : ""}${details.eventId ? ` · ${details.eventId}` : ""}`.trim() };
+    case "event_update":
+      return { subject: entry.guestName || "Event", detail: "Eventname geändert" };
+    case "member_login":
+      return { subject, detail: `${ROLE_META[details.role] || details.role || "Rolle"} angemeldet${details.deviceLabel ? ` · ${details.deviceLabel}` : ""}` };
+    case "member_logout":
+      return { subject, detail: `${ROLE_META[details.role] || details.role || "Rolle"} abgemeldet${details.deviceLabel ? ` · ${details.deviceLabel}` : ""}` };
+    case "member_device_update":
+      return { subject, detail: `${details.oldDeviceLabel || "Gerät"} → ${details.newDeviceLabel || "Gerät"}` };
+    case "member_force_logout":
+      return { subject, detail: `${ROLE_META[details.role] || details.role || "Rolle"} abgemeldet${details.deviceLabel ? ` · ${details.deviceLabel}` : ""}` };
+    case "member_duplicate_logout":
+      return { subject, detail: duplicateLogoutDetail(details) };
+    case "check_in":
+      return { subject, detail: details.force ? "Check-in überschrieben" : "Eingecheckt" };
+    case "duplicate_check_in_attempt":
+      return { subject, detail: "Bereits eingecheckt" };
+    case "support_comment_update":
+      return { subject, detail: `${INFO_LABELS.staffToAll} geändert` };
+    case "status_update":
+      return { subject, detail: `Status: ${statusLabel(details.oldStatus)} → ${statusLabel(details.newStatus)}` };
+    case "guest_create":
+      return { subject, detail: details.source === "manual" ? "Manuell erstellt" : "Erstellt" };
+    case "guest_update": {
+      const fields = changed(
+        details.oldName !== details.newName ? "Name" : "",
+        details.oldCategory !== details.newCategory ? "Kategorie" : "",
+        details.staffInfoChanged ? INFO_LABELS.staffToAll : "",
+        details.adminStaffInfoChanged ? INFO_LABELS.adminToStaff : "",
+        details.adminOnlyInfoChanged ? INFO_LABELS.adminOnly : ""
+      );
+      return { subject, detail: fields ? `Geändert: ${fields}` : "Gastdaten geändert" };
+    }
+    case "guest_delete":
+      return { subject, detail: `Gelöscht · Status: ${statusLabel(details.oldStatus)}` };
+    case "guest_import":
+      return { subject: "CSV Import", detail: `${details.count || 0} Gäste${details.replace ? " · bestehende Gäste ersetzt" : ""}` };
+    case "guest_export":
+      return { subject: "CSV Export", detail: `${details.count || 0} Gäste · ${filterLabel(details.filter)}` };
+    case "audit_export":
+      return { subject: "Audit Log Export", detail: `${details.count || 0} Einträge` };
+    case "bulk_no_show":
+      return { subject: "Tagesabschluss", detail: `${details.count || 0} offene Gäste auf No Show gesetzt` };
+    case "pins_reset":
+      return { subject: "Check-in-PIN", detail: pinAuditDetail(details) };
+    case "admin_pin_reset":
+      return { subject: "Admin-PIN", detail: pinAuditDetail(details) };
+    default:
+      return { subject, detail: "" };
+  }
+}
+
+function pinAuditDetail(details) {
+  if (details.mode === "named") return `Benannter PIN gespeichert${details.displayName ? `: ${details.displayName}` : ""}`;
+  if (details.mode === "delete_named") return `Benannter PIN gelöscht${details.displayName ? `: ${details.displayName}` : ""}`;
+  return "PIN geändert";
+}
+
+function duplicateLogoutDetail(details) {
+  const count = Number(details.count || 0);
+  const devices = Array.isArray(details.loggedOut)
+    ? details.loggedOut.map((item) => item?.deviceLabel).filter(Boolean)
+    : [];
+  const deviceText = devices.length ? ` · ${devices.join(", ")}` : "";
+  return `${count} ${count === 1 ? "anderes Gerät" : "andere Geräte"} abgemeldet${deviceText}`;
+}
+
+function auditActionOptions() {
+  return auditActionValues()
+    .map((action) => option(action, labelForAction(action), ""))
+    .join("");
+}
+
+function auditActionValues() {
+  return [
+    "event_create",
+    "event_update",
+    "member_login",
+    "member_logout",
+    "member_device_update",
+    "member_force_logout",
+    "member_duplicate_logout",
+    "check_in",
+    "duplicate_check_in_attempt",
+    "support_comment_update",
+    "status_update",
+    "guest_create",
+    "guest_update",
+    "guest_delete",
+    "guest_import",
+    "guest_export",
+    "audit_export",
+    "bulk_no_show",
+    "pins_reset",
+    "admin_pin_reset"
+  ];
+}
+
 function labelForAction(action) {
   const labels = {
+    event_create: "Event erstellt",
     check_in: "Check-in",
     support_comment_update: "Kommentar geändert",
     status_update: "Status geändert",
@@ -2772,14 +3090,23 @@ function labelForAction(action) {
     bulk_no_show: "Bulk No Show",
     pins_reset: "Check-in-PIN neu gesetzt",
     admin_pin_reset: "Admin-PIN neu gesetzt",
-    member_force_logout: "Gerät abgemeldet"
+    member_login: "Anmeldung",
+    member_logout: "Abmeldung",
+    member_device_update: "Gerät umbenannt",
+    member_force_logout: "Gerät abgemeldet",
+    member_duplicate_logout: "Doppelte Anmeldung bereinigt"
   };
   return labels[action] || action || "Aktion";
 }
 
 async function addAudit(action, guest, details = {}) {
+  return addAuditForEvent(appState.eventId, action, guest, details);
+}
+
+async function addAuditForEvent(eventId, action, guest, details = {}, actor = {}) {
+  if (!eventId) return;
   try {
-    await addDoc(collection(appState.db, "events", appState.eventId, "auditLog"), {
+    await addDoc(collection(appState.db, "events", eventId, "auditLog"), {
       action,
       guestDocId: guest.id || "",
       guestId: guest.guestId || "",
@@ -2787,8 +3114,8 @@ async function addAudit(action, guest, details = {}) {
       category: guest.category || "",
       details,
       actorUid: appState.user.uid,
-      actorName: appState.member?.displayName || "",
-      deviceLabel: appState.member?.deviceLabel || "",
+      actorName: actor.displayName ?? appState.member?.displayName ?? "",
+      deviceLabel: actor.deviceLabel ?? appState.member?.deviceLabel ?? "",
       createdAt: serverTimestamp()
     });
   } catch (error) {
@@ -3219,6 +3546,25 @@ function normalizeDisplayNameKey(value) {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+function getLocalDeviceLabel() {
+  try {
+    const existing = localStorage.getItem(DEVICE_LABEL_STORAGE_KEY);
+    if (existing) return existing;
+    const generated = `Gerät ${randomDeviceSuffix()}`;
+    localStorage.setItem(DEVICE_LABEL_STORAGE_KEY, generated);
+    return generated;
+  } catch {
+    return `Gerät ${randomDeviceSuffix()}`;
+  }
+}
+
+function randomDeviceSuffix() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint8Array(4);
+  globalThis.crypto?.getRandomValues?.(bytes);
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+}
+
 async function hashNamedPin(eventId, role, pin, displayName) {
   const displayNameKey = normalizeDisplayNameKey(displayName);
   const input = `${eventId}:${role}:${pin}:${displayNameKey}`;
@@ -3341,6 +3687,19 @@ function localDateKey(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function localDateStart(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0, 0);
+}
+
+function localDateEnd(value) {
+  const start = localDateStart(value);
+  if (!start) return null;
+  start.setHours(23, 59, 59, 999);
+  return start;
 }
 
 function addDays(date, days) {
@@ -3619,6 +3978,7 @@ async function getMemberSnapForEvent(eventId) {
 }
 
 async function connectAdminToEvent(eventId, pin, displayName, deviceLabel = "") {
+  const resolvedDeviceLabel = deviceLabel || getLocalDeviceLabel();
   const authFields = await adminMemberAuthFields(pin, displayName || "Admin");
   await setDoc(doc(appState.db, "events", eventId, "members", appState.user.uid), {
     uid: appState.user.uid,
@@ -3627,13 +3987,14 @@ async function connectAdminToEvent(eventId, pin, displayName, deviceLabel = "") 
     pinNameHash: authFields.pinNameHash,
     displayNameKey: authFields.displayNameKey,
     displayName: displayName || "Admin",
-    deviceLabel,
+    deviceLabel: resolvedDeviceLabel,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   }, { merge: true });
 }
 
 async function connectLegacyAdminToEvent(eventId, pin, displayName, deviceLabel = "") {
+  const resolvedDeviceLabel = deviceLabel || getLocalDeviceLabel();
   const authFields = await memberAuthFields(eventId, "admin", pin, displayName || "Admin");
   await setDoc(doc(appState.db, "events", eventId, "members", appState.user.uid), {
     uid: appState.user.uid,
@@ -3642,7 +4003,7 @@ async function connectLegacyAdminToEvent(eventId, pin, displayName, deviceLabel 
     pinNameHash: authFields.pinNameHash,
     displayNameKey: authFields.displayNameKey,
     displayName: displayName || "Admin",
-    deviceLabel,
+    deviceLabel: resolvedDeviceLabel,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   }, { merge: true });

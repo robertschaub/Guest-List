@@ -70,7 +70,7 @@ Erwartete Felder:
 - `pinNameHash`
 - `displayNameKey`: normalisierter Name für case-insensitive PIN+Name-Prüfung
 - `displayName`
-- `deviceLabel`
+- `deviceLabel`: automatisch lokal erzeugte Geräte-ID bzw. Admin-gepflegter Gerätename
 - `createdAt`
 - `updatedAt`
 
@@ -131,6 +131,8 @@ Erwartete Felder:
 - Check-in Staff darf nur innerhalb des Firestore-geprüften Zeitfensters `checkinAccessStartsAt` bis `checkinAccessEndsAt` lesen und schreiben.
 - Admin darf Import, Export, Massen-No-Show, PIN-Reset und Korrekturen durchführen.
 - Admin darf angemeldete Geräte über deren `members/{uid}` Dokument abmelden; Benutzer dürfen ihr eigenes Member-Dokument zum Abmelden löschen.
+- Benutzer geben beim Anmelden keinen Gerätenamen ein. Die App erzeugt lokal eine Geräte-ID; Admins dürfen den Gerätenamen im Admin-Tab ändern.
+- Bei Anmeldung mit gleichem Rollennamen auf mehreren Geräten fragt die App, ob andere Geräte mit gleicher Rolle und gleichem `displayNameKey` abgemeldet werden sollen. Check-in Staff darf dafür nur solche eigenen Namens-Sessions lesen und löschen.
 - Admin-only Infos liegen unter `guestAdminNotes` und dürfen nur von Admins gelesen und geschrieben werden.
 - Admin-PINs sind global. Der namenlose Admin-PIN ist der Master Admin-PIN; nur Master Admins dürfen benannte Admin-PINs erstellen, ändern oder löschen.
 - Check-in-PINs sind event-spezifisch. Pro Event darf es mehrere benannte Check-in-PINs geben und maximal einen namenlosen Check-in-PIN.

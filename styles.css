@@ -595,6 +595,15 @@ tr:last-child td { border-bottom: 0; }
   gap: 8px;
 }
 
+.member-device-actions {
+  align-items: center;
+}
+
+.compact-input {
+  width: min(260px, 100%);
+  min-height: 44px;
+}
+
 .pin-value {
   display: block;
   margin-top: 3px;
