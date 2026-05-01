@@ -303,10 +303,6 @@ function renderEventSetupSections(options = {}) {
           <label for="setupName">Dein Name</label>
           <input id="setupName" value="${escapeHtml(setupName)}" required />
         </div>
-        <div class="form-row">
-          <label for="setupDevice">Gerät</label>
-          <input id="setupDevice" value="" placeholder="optional" />
-        </div>
         <div class="form-row" style="grid-column:1/-1">
           <label for="categoryList">Kategorien, eine pro Zeile</label>
           <textarea id="categoryList">${DEFAULT_CATEGORIES.map(escapeHtml).join("\n")}</textarea>
@@ -342,7 +338,7 @@ async function createEventFromForm(event) {
   const adminPin = val("adminPin") || (isAdmin() ? getAdminSession()?.pin || "" : "");
   const checkinPin = val("checkinPin");
   const displayName = val("setupName").trim() || "Admin";
-  const deviceLabel = val("setupDevice").trim();
+  const deviceLabel = appState.member?.deviceLabel || "";
   const categories = val("categoryList").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 
   if (!name || !date) {
