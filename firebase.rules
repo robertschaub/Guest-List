@@ -204,8 +204,7 @@ service cloud.firestore {
     }
 
     function validMemberSelfUpdate(eventId, uid) {
-      return validMemberWrite(eventId, uid)
-        && request.resource.data.deviceLabel == resource.data.deviceLabel;
+      return validMemberWrite(eventId, uid);
     }
 
     function validStatus(status) {
