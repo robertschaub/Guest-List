@@ -34,6 +34,12 @@ Erwartete Felder:
 
 - `adminPinHash`
 - `checkinPinHash`
+- `adminPinHashes`: Liste der namenlosen Admin-PIN-Hashes, maximal ein Eintrag
+- `checkinPinHashes`: Liste der namenlosen Check-in-PIN-Hashes, maximal ein Eintrag
+- `adminNamedPinHashes`: Liste der Admin-PIN+Name-Hashes
+- `checkinNamedPinHashes`: Liste der Check-in-PIN+Name-Hashes
+- `adminNamedPins`: Liste benannter Admin-PIN-Einträge zur Admin-Anzeige und Löschung
+- `checkinNamedPins`: Liste benannter Check-in-PIN-Einträge zur Admin-Anzeige und Löschung
 - `createdAt`
 - `updatedAt` optional nach PIN-Reset
 
@@ -46,6 +52,8 @@ Erwartete Felder:
 - `uid`
 - `role`: `admin` oder `checkin`
 - `pinHash`
+- `pinNameHash`
+- `displayNameKey`: normalisierter Name für case-insensitive PIN+Name-Prüfung
 - `displayName`
 - `deviceLabel`
 - `createdAt`
@@ -107,6 +115,7 @@ Erwartete Felder:
 - Check-in Staff darf Status auf `checked_in` setzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen.
 - Admin darf Import, Export, Massen-No-Show, PIN-Reset und Korrekturen durchführen.
 - Admin-only Infos liegen unter `guestAdminNotes` und dürfen nur von Admins gelesen und geschrieben werden.
+- Pro Rolle darf es mehrere benannte PINs geben. Zusätzlich gibt es pro Rolle maximal einen namenlosen PIN; bei benannten PINs muss beim Anmelden der Name case-insensitive passen, der PIN bleibt case-sensitive.
 
 ## Zu prüfen
 

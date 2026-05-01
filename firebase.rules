@@ -35,17 +35,52 @@ service cloud.firestore {
       return role == 'admin' || role == 'checkin';
     }
 
-    function validPin(eventId, role, pinHash) {
+    function validPin(eventId, role, pinHash, pinNameHash) {
       return securityExists(eventId)
         && (
-          (role == 'admin' && securityData(eventId).adminPinHash == pinHash) ||
-          (role == 'checkin' && securityData(eventId).checkinPinHash == pinHash)
+          (
+            role == 'admin'
+            && (
+              securityData(eventId).adminPinHash == pinHash
+              || (
+                securityData(eventId).keys().hasAny(['adminPinHashes'])
+                && pinHash in securityData(eventId).adminPinHashes
+              )
+              || (
+                pinNameHash is string
+                && securityData(eventId).keys().hasAny(['adminNamedPinHashes'])
+                && pinNameHash in securityData(eventId).adminNamedPinHashes
+              )
+            )
+          )
+          ||
+          (
+            role == 'checkin'
+            && (
+              securityData(eventId).checkinPinHash == pinHash
+              || (
+                securityData(eventId).keys().hasAny(['checkinPinHashes'])
+                && pinHash in securityData(eventId).checkinPinHashes
+              )
+              || (
+                pinNameHash is string
+                && securityData(eventId).keys().hasAny(['checkinNamedPinHashes'])
+                && pinNameHash in securityData(eventId).checkinNamedPinHashes
+              )
+            )
+          )
         );
     }
 
     function hasCurrentPin(eventId) {
       return isMember(eventId)
-        && validPin(eventId, memberData(eventId).role, memberData(eventId).pinHash);
+        && (
+          validPin(eventId, memberData(eventId).role, memberData(eventId).pinHash, '')
+          || (
+            memberData(eventId).keys().hasAny(['pinNameHash'])
+            && validPin(eventId, memberData(eventId).role, memberData(eventId).pinHash, memberData(eventId).pinNameHash)
+          )
+        );
     }
 
     function isAdmin(eventId) {
@@ -63,11 +98,14 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && validRole(request.resource.data.role)
         && request.resource.data.pinHash is string
+        && request.resource.data.pinNameHash is string
+        && request.resource.data.displayNameKey is string
         && request.resource.data.displayName is string
         && request.resource.data.deviceLabel is string
-        && validPin(eventId, request.resource.data.role, request.resource.data.pinHash)
+        && validPin(eventId, request.resource.data.role, request.resource.data.pinHash, request.resource.data.pinNameHash)
         && request.resource.data.keys().hasOnly([
-          'uid', 'role', 'pinHash', 'displayName', 'deviceLabel', 'createdAt', 'updatedAt'
+          'uid', 'role', 'pinHash', 'pinNameHash', 'displayNameKey',
+          'displayName', 'deviceLabel', 'createdAt', 'updatedAt'
         ]);
     }
 
@@ -78,8 +116,18 @@ service cloud.firestore {
     function validSecurityData(data) {
       return data.adminPinHash is string
         && data.checkinPinHash is string
+        && (!data.keys().hasAny(['adminPinHashes']) || (data.adminPinHashes is list && data.adminPinHashes.size() <= 1))
+        && (!data.keys().hasAny(['checkinPinHashes']) || (data.checkinPinHashes is list && data.checkinPinHashes.size() <= 1))
+        && (!data.keys().hasAny(['adminNamedPinHashes']) || (data.adminNamedPinHashes is list && data.adminNamedPinHashes.size() <= 50))
+        && (!data.keys().hasAny(['checkinNamedPinHashes']) || (data.checkinNamedPinHashes is list && data.checkinNamedPinHashes.size() <= 50))
+        && (!data.keys().hasAny(['adminNamedPins']) || (data.adminNamedPins is list && data.adminNamedPins.size() <= 50))
+        && (!data.keys().hasAny(['checkinNamedPins']) || (data.checkinNamedPins is list && data.checkinNamedPins.size() <= 50))
         && data.keys().hasOnly([
-          'adminPinHash', 'checkinPinHash', 'createdAt', 'updatedAt'
+          'adminPinHash', 'checkinPinHash',
+          'adminPinHashes', 'checkinPinHashes',
+          'adminNamedPinHashes', 'checkinNamedPinHashes',
+          'adminNamedPins', 'checkinNamedPins',
+          'createdAt', 'updatedAt'
         ]);
     }
 
