@@ -161,8 +161,15 @@ async function startApp() {
   const eventParam = resolveEventId(rawEventParam);
   const setupParam = params.get("setup");
 
-  if (setupParam === "1" || !eventParam) {
+  if (setupParam === "1") {
     renderWelcome();
+    return;
+  }
+
+  if (!eventParam) {
+    appState.eventId = "";
+    appState.event = null;
+    renderJoin();
     return;
   }
 
@@ -418,7 +425,7 @@ function renderEventNotFound(eventId) {
 }
 
 function renderJoin() {
-  const eventName = appState.event?.name || "Event";
+  const eventName = appState.event?.name || "Gästeliste Check-in";
   els.eventTitle.textContent = eventName;
   setEventMeta();
   render(renderRolePinSections());
@@ -438,11 +445,14 @@ function renderRolePinSections() {
   const accessNotice = appState.member?.role === "checkin" && !isActiveCheckinStaff()
     ? `<p class="notice warning">${escapeHtml(checkinStaffAccessMessage())}</p>`
     : "";
+  const eventContext = appState.eventId
+    ? `<p class="small">Event-ID: <code>${escapeHtml(appState.eventId)}</code></p>`
+    : `<p class="small">Check-in Staff wird automatisch mit dem Event verbunden, dessen PIN zum heutigen Event passt. Bis 02:00 Uhr wird zusätzlich das Event vom Vortag geprüft.</p>`;
 
   return `
     <section class="card">
       <h2>Anmelden</h2>
-      <p class="small">Event-ID: <code>${escapeHtml(appState.eventId)}</code></p>
+      ${eventContext}
       ${accessNotice}
       <form id="joinForm" class="grid two">
         <div class="form-row">
@@ -604,14 +614,26 @@ async function joinEventFromForm(event) {
     return;
   }
 
-  if (role === "checkin" && !isCheckinStaffAccessOpen()) {
-    result.innerHTML = `<p class="notice error">${escapeHtml(checkinStaffAccessMessage())}</p>`;
+  if (role === "checkin") {
+    try {
+      const joined = await joinCheckinStaffFromAllowedEvents(pin, displayName, deviceLabel);
+      if (!joined) {
+        result.innerHTML = `<p class="notice error">${escapeHtml(checkinStaffLoginErrorMessage())}</p>`;
+      }
+    } catch (error) {
+      console.error(error);
+      result.innerHTML = `<p class="notice error">${escapeHtml(joinErrorMessage(error))}</p>`;
+    }
     return;
   }
 
-  const pinHash = await hashPin(appState.eventId, role, pin);
+  if (!appState.eventId) {
+    result.innerHTML = `<p class="notice error">Admin-Anmeldung braucht einen konkreten Event-Link.</p>`;
+    return;
+  }
 
   try {
+    const pinHash = await hashPin(appState.eventId, role, pin);
     await setDoc(memberRef(appState.user.uid), {
       uid: appState.user.uid,
       role,
@@ -635,6 +657,56 @@ async function joinEventFromForm(event) {
     console.error(error);
     result.innerHTML = `<p class="notice error">${escapeHtml(joinErrorMessage(error))}</p>`;
   }
+}
+
+async function joinCheckinStaffFromAllowedEvents(pin, displayName, deviceLabel) {
+  const candidates = getCheckinStaffLoginCandidates();
+  if (!candidates.length) return false;
+
+  for (const candidate of candidates) {
+    const eventSnap = await getDoc(doc(appState.db, "events", candidate.id));
+    if (!eventSnap.exists()) continue;
+
+    const eventData = { id: eventSnap.id, ...eventSnap.data() };
+    if (!isEventDateAllowedForCheckinStaff(eventData.date)) continue;
+
+    const pinHash = await hashPin(eventData.id, "checkin", pin);
+    try {
+      await setDoc(doc(appState.db, "events", eventData.id, "members", appState.user.uid), {
+        uid: appState.user.uid,
+        role: "checkin",
+        pinHash,
+        displayName,
+        deviceLabel,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (error) {
+      if (isPermissionError(error)) continue;
+      throw error;
+    }
+
+    const memberSnap = await getDoc(doc(appState.db, "events", eventData.id, "members", appState.user.uid));
+    unsubscribeAll();
+    appState.eventId = eventData.id;
+    appState.event = eventData;
+    appState.member = memberSnap.exists() ? { id: memberSnap.id, ...memberSnap.data() } : null;
+    appState.guests = [];
+    appState.adminNotes = {};
+    appState.adminNotesLoaded = false;
+    appState.auditEntries = [];
+    appState.currentTab = "checkin";
+    localStorage.setItem("guestlist:memberName", displayName);
+    localStorage.removeItem("guestlist:deviceLabel");
+    localStorage.setItem("guestlist:lastEventId", eventData.id);
+    clearAdminSession();
+    saveKnownEvent(eventData);
+    window.history.replaceState(null, "", urlWithEvent(eventData.id));
+    loadMainApp();
+    return true;
+  }
+
+  return false;
 }
 
 function joinErrorMessage(error) {
@@ -2539,15 +2611,57 @@ function checkinStaffAccessWindow() {
 }
 
 function isCheckinStaffAccessOpen(now = new Date()) {
-  const accessWindow = checkinStaffAccessWindow();
-  if (!accessWindow) return false;
-  return now >= accessWindow.start && now < accessWindow.end;
+  return isEventDateAllowedForCheckinStaff(appState.event?.date, now);
 }
 
 function checkinStaffAccessMessage() {
   const accessWindow = checkinStaffAccessWindow();
   if (!accessWindow) return "Check-in Staff Zugriff ist nicht aktiv, weil kein Eventdatum gesetzt ist.";
   return `Check-in Staff Zugriff ist nur am Eventtag ${formatEventDate(appState.event.date)} bis 02:00 Uhr am Folgetag möglich.`;
+}
+
+function getCheckinStaffLoginCandidates(now = new Date()) {
+  const candidates = [];
+  const todayEvent = findKnownEventByDate(localDateKey(now));
+  if (todayEvent) candidates.push(todayEvent);
+
+  if (now.getHours() < 2) {
+    const previousEvent = findKnownEventByDate(localDateKey(addDays(now, -1)));
+    if (previousEvent && previousEvent.id !== todayEvent?.id) candidates.push(previousEvent);
+  }
+
+  return candidates;
+}
+
+function findKnownEventByDate(date) {
+  return getKnownEvents().find((event) => event.date === date) || null;
+}
+
+function isEventDateAllowedForCheckinStaff(eventDate, now = new Date()) {
+  if (!eventDate) return false;
+  if (eventDate === localDateKey(now)) return true;
+  return now.getHours() < 2 && eventDate === localDateKey(addDays(now, -1));
+}
+
+function checkinStaffLoginErrorMessage() {
+  const candidates = getCheckinStaffLoginCandidates();
+  if (!candidates.length) {
+    return "Kein Check-in Event für heute gefunden. Bis 02:00 Uhr wird zusätzlich das Event vom Vortag berücksichtigt.";
+  }
+  return "Check-in-PIN passt zu keinem aktuell erlaubten Event.";
+}
+
+function localDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
 function nextGuestCode(num) {
