@@ -435,11 +435,15 @@ function renderRolePinSections() {
   const currentRole = appState.member?.role || "checkin";
   const displayName = appState.member?.displayName || localStorage.getItem("guestlist:memberName") || "";
   const deviceLabel = appState.member?.deviceLabel || "";
+  const accessNotice = appState.member?.role === "checkin" && !isActiveCheckinStaff()
+    ? `<p class="notice warning">${escapeHtml(checkinStaffAccessMessage())}</p>`
+    : "";
 
   return `
     <section class="card">
       <h2>Anmelden</h2>
       <p class="small">Event-ID: <code>${escapeHtml(appState.eventId)}</code></p>
+      ${accessNotice}
       <form id="joinForm" class="grid two">
         <div class="form-row">
           <label for="memberRole">Rolle</label>
@@ -463,7 +467,7 @@ function renderRolePinSections() {
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" id="joinSubmitBtn" type="submit" disabled>Anmelden</button>
-          <button class="btn-secondary" id="logoutBtn" type="button" ${isEventMember() ? "" : "disabled"}>Abmelden</button>
+          <button class="btn-secondary" id="logoutBtn" type="button" ${hasLinkedRole() ? "" : "disabled"}>Abmelden</button>
         </div>
       </form>
       <div id="joinResult"></div>
@@ -600,6 +604,11 @@ async function joinEventFromForm(event) {
     return;
   }
 
+  if (role === "checkin" && !isCheckinStaffAccessOpen()) {
+    result.innerHTML = `<p class="notice error">${escapeHtml(checkinStaffAccessMessage())}</p>`;
+    return;
+  }
+
   const pinHash = await hashPin(appState.eventId, role, pin);
 
   try {
@@ -692,8 +701,10 @@ function loadMainApp() {
   appState.adminNotes = {};
   appState.adminNotesLoaded = false;
   renderShell();
-  subscribeGuests();
-  subscribeAdminNotes();
+  if (hasActiveEventAccess()) {
+    subscribeGuests();
+    subscribeAdminNotes();
+  }
   renderActiveTab();
 }
 
@@ -714,7 +725,7 @@ function visibleTabs() {
     ];
   }
 
-  if (isCheckinStaff()) {
+  if (isActiveCheckinStaff()) {
     return [
       ...baseTabs,
       { id: "overview", label: "Übersicht" },
@@ -723,8 +734,6 @@ function visibleTabs() {
   }
 
   return [
-    ...baseTabs,
-    { id: "setup", label: "Events Erstellen" },
     { id: "role", label: "Anmelden" }
   ];
 }
@@ -2446,6 +2455,18 @@ function isCheckinStaff() {
   return appState.member?.role === "checkin";
 }
 
+function isActiveCheckinStaff() {
+  return isCheckinStaff() && isCheckinStaffAccessOpen();
+}
+
+function hasLinkedRole() {
+  return Boolean(appState.member?.role);
+}
+
+function hasActiveEventAccess() {
+  return isAdmin() || isActiveCheckinStaff();
+}
+
 function val(id) {
   return document.getElementById(id)?.value || "";
 }
@@ -2506,6 +2527,29 @@ function shortDateForEventId(date) {
   return `${match[1].slice(2)}${match[2]}${match[3]}`;
 }
 
+function checkinStaffAccessWindow() {
+  const match = String(appState.event?.date || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const start = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  end.setHours(2, 0, 0, 0);
+  return { start, end };
+}
+
+function isCheckinStaffAccessOpen(now = new Date()) {
+  const accessWindow = checkinStaffAccessWindow();
+  if (!accessWindow) return false;
+  return now >= accessWindow.start && now < accessWindow.end;
+}
+
+function checkinStaffAccessMessage() {
+  const accessWindow = checkinStaffAccessWindow();
+  if (!accessWindow) return "Check-in Staff Zugriff ist nicht aktiv, weil kein Eventdatum gesetzt ist.";
+  return `Check-in Staff Zugriff ist nur am Eventtag ${formatEventDate(appState.event.date)} bis 02:00 Uhr am Folgetag möglich.`;
+}
+
 function nextGuestCode(num) {
   return `G-${String(num).padStart(4, "0")}`;
 }
@@ -2530,7 +2574,7 @@ function requireOnline(action) {
 }
 
 function isEventMember() {
-  return Boolean(appState.member?.role);
+  return hasActiveEventAccess();
 }
 
 function requireEventMember(action) {
