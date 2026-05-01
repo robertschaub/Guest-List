@@ -10,6 +10,7 @@ events/{eventId}
 events/{eventId}/private/security
 events/{eventId}/members/{uid}
 events/{eventId}/guests/{guestDocId}
+events/{eventId}/guestAdminNotes/{guestDocId}
 events/{eventId}/auditLog/{logId}
 ```
 
@@ -130,6 +131,7 @@ Erwartete Felder:
 - Check-in Staff darf Status auf `checked_in` setzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen.
 - Check-in Staff darf nur innerhalb des Firestore-geprüften Zeitfensters `checkinAccessStartsAt` bis `checkinAccessEndsAt` lesen und schreiben.
 - Admin darf Import, Export, Massen-No-Show, PIN-Reset und Korrekturen durchführen.
+- Nur der namenlose Master Admin-PIN darf ein komplettes Event löschen. Dabei müssen Gäste, Admin-Notizen, Geräte/Sessions, Event-PINs und Audit Log vor bzw. mit dem Event entfernt werden.
 - Admin darf angemeldete Geräte über deren `members/{uid}` Dokument abmelden; Benutzer dürfen ihr eigenes Member-Dokument zum Abmelden löschen.
 - Benutzer geben beim Anmelden keinen Gerätenamen ein. Die App erzeugt lokal eine Geräte-ID; Admins dürfen den Gerätenamen im Admin-Tab ändern.
 - Bei Anmeldung mit gleichem Rollennamen auf mehreren Geräten fragt die App, ob andere Geräte mit gleicher Rolle und gleichem `displayNameKey` abgemeldet werden sollen. Check-in Staff darf dafür nur solche eigenen Namens-Sessions lesen und löschen.

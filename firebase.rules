@@ -266,6 +266,26 @@ service cloud.firestore {
         && validAdminPinForData(data, memberData(data.authorizingEventId).pinHash, '');
     }
 
+    function isMasterAdmin(eventId) {
+      return isAdmin(eventId)
+        && adminSecurityExists()
+        && validAdminPinForData(adminSecurityData(), memberData(eventId).pinHash, '');
+    }
+
+    function requestedAdminAuthorizingMember(data) {
+      return get(/databases/$(database)/documents/events/$(data.authorizingEventId)/members/$(request.auth.uid)).data;
+    }
+
+    function validAdminAuthorizingEventForUpdate(data) {
+      return data.authorizingEventId == resource.data.authorizingEventId
+        || (
+          eventExists(data.authorizingEventId)
+          && exists(/databases/$(database)/documents/events/$(data.authorizingEventId)/members/$(request.auth.uid))
+          && requestedAdminAuthorizingMember(data).role == 'admin'
+          && validAdminPinForData(resource.data, requestedAdminAuthorizingMember(data).pinHash, '')
+        );
+    }
+
     function validEventCreateData(data) {
       return data.name is string
         && data.date is string
@@ -347,9 +367,9 @@ service cloud.firestore {
       allow update: if docId == 'admin'
         && adminSecurityExists()
         && validMasterAdminForData(resource.data)
-        && request.resource.data.authorizingEventId == resource.data.authorizingEventId
         && request.resource.data.createdByUid == resource.data.createdByUid
-        && validAdminSecurityData(request.resource.data);
+        && validAdminSecurityData(request.resource.data)
+        && validAdminAuthorizingEventForUpdate(request.resource.data);
       allow delete: if false;
     }
 
@@ -363,7 +383,8 @@ service cloud.firestore {
         && request.resource.data.createdByUid == request.auth.uid
         && validEventCreateData(request.resource.data);
 
-      allow update, delete: if isAdmin(eventId);
+      allow update: if isAdmin(eventId);
+      allow delete: if isMasterAdmin(eventId);
 
       match /private/{docId} {
         allow get: if isAdmin(eventId);
@@ -371,7 +392,8 @@ service cloud.firestore {
           && docId == 'security'
           && validSecurityData(request.resource.data)
           && checkinSecurityUpdateOnly();
-        allow delete: if false;
+        allow delete: if isMasterAdmin(eventId)
+          && docId == 'security';
         allow list: if false;
 
         // Initial security document can only be created by the anonymous user that created the event.
@@ -419,7 +441,8 @@ service cloud.firestore {
             'action', 'guestDocId', 'guestId', 'guestName', 'category', 'details',
             'actorUid', 'actorName', 'deviceLabel', 'createdAt'
           ]);
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if isMasterAdmin(eventId);
       }
     }
   }

@@ -55,9 +55,9 @@ const ROLE_META = {
 };
 
 const INFO_LABELS = {
-  adminOnly: "Info nur für Administratoren",
-  adminToStaff: "Info von Administratoren an Check-in Staff",
-  staffToAll: "Info von Check-in Staff für alle"
+  adminOnly: "Admin-Notiz",
+  adminToStaff: "Hinweis an Check-in",
+  staffToAll: "Check-in-Notiz"
 };
 
 const GUEST_EXPORT_HEADERS = [
@@ -305,7 +305,7 @@ function renderEventSetupSections(options = {}) {
       </section>
     ` : ""}
     <section class="card">
-      <h2>Neues Event initialisieren</h2>
+      <h2>Neues Event erstellen</h2>
       <form id="createEventForm" class="grid two">
         <div class="form-row">
           <label for="newEventName">Eventname</label>
@@ -479,6 +479,8 @@ function renderRolePinTab() {
 function renderRolePinSections() {
   const currentRole = appState.member?.role || "checkin";
   const displayName = appState.member?.displayName || localStorage.getItem("guestlist:memberName") || "";
+  const linked = hasLinkedRole();
+  const roleLabel = ROLE_META[appState.member?.role] || appState.member?.role || "";
   const accessNotice = appState.member?.role === "checkin" && !isActiveCheckinStaff()
     ? `<p class="notice warning">${escapeHtml(checkinStaffAccessMessage())}</p>`
     : "";
@@ -488,8 +490,9 @@ function renderRolePinSections() {
 
   return `
     <section class="card">
-      <h2>Anmelden</h2>
+      <h2>${linked ? "Zugang verwalten" : "Anmelden"}</h2>
       ${eventContext}
+      ${linked ? `<p class="notice success">Angemeldet als <strong>${escapeHtml(roleLabel)}</strong>: ${escapeHtml(appState.member?.displayName || "")}${appState.member?.deviceLabel ? ` · ${escapeHtml(appState.member.deviceLabel)}` : ""}</p>` : `<p class="notice info">Melde dich an, um Gäste zu suchen und einzuchecken. Admins sehen zusätzlich Import, Backup, PINs und Geräte.</p>`}
       ${accessNotice}
       <form id="joinForm" class="grid two">
         <div class="form-row">
@@ -510,7 +513,7 @@ function renderRolePinSections() {
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" id="joinSubmitBtn" type="submit" disabled>Anmelden</button>
-          <button class="btn-secondary" id="logoutBtn" type="button" ${hasLinkedRole() ? "" : "disabled"}>Abmelden</button>
+          <button class="btn-secondary" id="logoutBtn" type="button" ${linked ? "" : "disabled"}>${linked ? "Dieses Gerät abmelden" : "Abmelden"}</button>
         </div>
       </form>
       <div id="joinResult"></div>
@@ -541,10 +544,10 @@ async function renderAdminSettings() {
 function renderAdminPinSection() {
   return `
     <section class="card">
-      <h2>Master Admin-PINs</h2>
+      <h2>Haupt-Admin-PINs</h2>
       <form id="adminPinForm" class="grid">
         <div style="grid-column:1/-1">
-          <h3>Master Admin-PIN ändern</h3>
+          <h3>Haupt-Admin-PIN ändern</h3>
         </div>
         <div class="form-row">
           <label for="currentAdminPin">Aktueller Admin-PIN</label>
@@ -598,7 +601,8 @@ function renderAdminPinSection() {
 function renderLoggedInMembersSection() {
   return `
     <section class="card">
-      <h2>Angemeldete Geräte</h2>
+      <h2>Geräte verwalten</h2>
+      <p class="small">Angemeldete Geräte prüfen, Gerätenamen korrigieren oder fremde Geräte vom Event abmelden.</p>
       <div id="loggedInMembersList" class="pin-list"><p class="small">Lädt…</p></div>
     </section>
   `;
@@ -607,11 +611,11 @@ function renderLoggedInMembersSection() {
 function renderCheckinPinSection() {
   return `
     <section class="card">
-      <h2>Check-in-PINs aktueller Event</h2>
+      <h2>Check-in-PINs</h2>
       <p class="small">Gilt nur für <strong>${escapeHtml(appState.event?.name || appState.eventId || "aktueller Event")}</strong>. Andere Events behalten ihren eigenen Check-in-PIN.</p>
       <form id="checkinPinForm" class="grid two">
         <div style="grid-column:1/-1">
-          <h3>PIN ohne Namen ändern</h3>
+          <h3>Allgemeinen Check-in-PIN ändern</h3>
         </div>
         <div class="form-row">
           <label for="eventCheckinPin">Neuer Check-in-PIN</label>
@@ -965,11 +969,11 @@ function visibleTabs() {
     return [
       ...baseTabs,
       { id: "overview", label: "Übersicht" },
-      { id: "admin", label: "Event Gäste & Betrieb" },
-      { id: "setup", label: "Events Erstellen" },
-      { id: "role", label: "Anmelden" },
-      { id: "adminSettings", label: "Admin" },
-      { id: "log", label: "Log" }
+      { id: "admin", label: "Event verwalten" },
+      { id: "setup", label: "Events" },
+      { id: "role", label: "Zugang" },
+      { id: "adminSettings", label: "Geräte" },
+      { id: "log", label: "Audit" }
     ];
   }
 
@@ -977,7 +981,7 @@ function visibleTabs() {
     return [
       ...baseTabs,
       { id: "overview", label: "Übersicht" },
-      { id: "role", label: "Anmelden" }
+      { id: "role", label: "Zugang" }
     ];
   }
 
@@ -1005,9 +1009,12 @@ function renderShell() {
 
   render(`
     <div id="flash"></div>
-    <nav class="nav-tabs" id="navTabs">
-      ${tabs.map((tab) => `<button data-tab="${tab.id}" class="${tabClass(tab.id)}" type="button">${tab.label}</button>`).join("")}
-    </nav>
+    <div class="nav-row">
+      <nav class="nav-tabs" id="navTabs">
+        ${tabs.map((tab) => `<button data-tab="${tab.id}" class="${tabClass(tab.id)}" type="button">${tab.label}</button>`).join("")}
+      </nav>
+      <button class="btn-secondary shell-auth-btn" id="shellAuthBtn" type="button">${hasLinkedRole() ? "Abmelden" : "Anmelden"}</button>
+    </div>
     <section id="tabContent"></section>
   `);
 
@@ -1018,6 +1025,7 @@ function renderShell() {
       renderActiveTab();
     });
   });
+  document.getElementById("shellAuthBtn")?.addEventListener("click", handleCheckinAuthButton);
 }
 
 function renderActiveTab() {
@@ -1130,11 +1138,6 @@ function renderCheckin() {
       </div>
       <p class="small">${filteredCount} Treffer · maximal 60 sichtbar. Für schnellen Eingang: mindestens 2–3 Buchstaben suchen.</p>
     </section>
-    <section class="card compact">
-      <div class="actions">
-        <button class="btn-secondary" id="checkinAuthBtn" type="button">${isEventMember() ? "Abmelden" : "Anmelden"}</button>
-      </div>
-    </section>
     ${renderAddGuestPanel(categories)}
     <section class="guest-list">
       ${results.length ? results.map(renderGuestCard).join("") : `<div class="card compact"><strong>Keine Treffer</strong><p class="small">Prüfe Schreibweise, Kategorie oder Statusfilter.</p></div>`}
@@ -1157,7 +1160,6 @@ function renderCheckin() {
     appState.ui.statusFilter = e.target.value;
     renderCheckin();
   });
-  document.getElementById("checkinAuthBtn")?.addEventListener("click", handleCheckinAuthButton);
   document.getElementById("addGuestForm")?.addEventListener("submit", addGuestFromForm);
 
   attachGuestCardHandlers(content);
@@ -1284,6 +1286,11 @@ function renderGuestCard(guest) {
   const staffInfo = memberInfoVisible ? staffInfoForGuest(guest) : "";
   const adminStaffInfo = memberInfoVisible ? adminStaffInfoForGuest(guest) : "";
   const internalNote = isAdmin() ? adminOnlyInfoForGuest(guest) : "";
+  const primaryCheckinClass = `${alreadyChecked ? "btn-secondary" : "btn-success"} btn-checkin-primary`;
+  const primaryCheckinLabel = alreadyChecked ? "Bereits eingecheckt" : "Einchecken";
+  const overrideCheckinButton = alreadyChecked && canOverride
+    ? `<button class="btn-warning" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="1" ${disabled}>Check-in überschreiben</button>`
+    : "";
 
   return `
     <article class="guest-card" data-guest-id="${escapeHtml(guest.id)}">
@@ -1300,21 +1307,31 @@ function renderGuestCard(guest) {
       </div>
       ${internalNote ? `<p class="notice info"><strong>${INFO_LABELS.adminOnly}:</strong> ${escapeHtml(internalNote)}</p>` : ""}
       ${adminStaffInfo ? `<p class="notice info"><strong>${INFO_LABELS.adminToStaff}:</strong> ${escapeHtml(adminStaffInfo)}</p>` : ""}
-      <div class="guest-actions">
-        <div class="comment-box form-row">
-          <label for="${commentId}">${INFO_LABELS.staffToAll}</label>
-          <textarea id="${commentId}" data-comment-for="${escapeHtml(guest.id)}" placeholder="z.B. VIP-Band abgegeben, kommt mit Künstler…" ${disabled}>${escapeHtml(staffInfo)}</textarea>
-          <button class="btn-secondary" data-action="save-comment" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Info speichern</button>
-        </div>
-        <div class="actions" style="margin-top:22px">
-          ${alreadyChecked && !canOverride ? `<button class="btn-secondary" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="0" ${disabled}>Bereits eingecheckt</button>` : `<button class="btn-success" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="${alreadyChecked && canOverride ? "1" : "0"}" ${disabled}>${alreadyChecked ? "Check-in überschreiben" : "Einchecken"}</button>`}
-          ${isAdmin() ? `
-            <button class="btn-secondary" data-action="edit-guest" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Bearbeiten</button>
-            <button class="btn-warning" data-action="no-show" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>No Show</button>
-            <button class="btn-secondary" data-action="reset-open" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Auf Offen</button>
-            <button class="btn-danger" data-action="delete-guest" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Löschen</button>
-          ` : ""}
-        </div>
+      <div class="guest-primary-action">
+        <button class="${primaryCheckinClass}" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="0" ${disabled}>${primaryCheckinLabel}</button>
+      </div>
+      <div class="guest-secondary-panels">
+        <details class="guest-note-panel" ${staffInfo ? "open" : ""}>
+          <summary>${staffInfo ? `${INFO_LABELS.staffToAll} bearbeiten` : `${INFO_LABELS.staffToAll} hinzufügen`}</summary>
+          <div class="comment-box form-row">
+            <label for="${commentId}">${INFO_LABELS.staffToAll}</label>
+            <textarea id="${commentId}" data-comment-for="${escapeHtml(guest.id)}" placeholder="z.B. VIP-Band abgegeben, kommt mit Künstler…" ${disabled}>${escapeHtml(staffInfo)}</textarea>
+            <button class="btn-secondary" data-action="save-comment" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Notiz speichern</button>
+          </div>
+        </details>
+        ${isAdmin() ? `
+          <details class="guest-admin-panel">
+            <summary>Admin-Aktionen</summary>
+            <p class="small">Korrekturen und gefährliche Aktionen. Nur verwenden, wenn der Status bewusst geändert werden soll.</p>
+            <div class="actions guest-admin-actions">
+              ${overrideCheckinButton}
+              <button class="btn-secondary" data-action="edit-guest" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Gast bearbeiten</button>
+              <button class="btn-warning" data-action="no-show" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Auf No Show setzen</button>
+              <button class="btn-secondary" data-action="reset-open" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Auf Offen setzen</button>
+              <button class="btn-danger" data-action="delete-guest" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Gast löschen</button>
+            </div>
+          </details>
+        ` : ""}
       </div>
     </article>
   `;
@@ -1467,8 +1484,8 @@ async function checkInGuest(guestDocId, force = false) {
 }
 
 async function saveGuestComment(guestDocId) {
-  if (!requireEventMember("Info speichern")) return;
-  if (!requireOnline("Info speichern")) return;
+  if (!requireEventMember("Notiz speichern")) return;
+  if (!requireOnline("Notiz speichern")) return;
   const guest = findGuest(guestDocId);
   const textarea = document.querySelector(`[data-comment-for="${cssEscape(guestDocId)}"]`);
   if (!guest || !textarea) return;
@@ -1486,10 +1503,10 @@ async function saveGuestComment(guestDocId) {
       oldComment: staffInfoForGuest(guest),
       newComment
     });
-    notify("Info gespeichert.", "success");
+    notify("Notiz gespeichert.", "success");
   } catch (error) {
     console.error(error);
-    notify(`Info konnte nicht gespeichert werden: ${error.message || error}`, "error");
+    notify(`Notiz konnte nicht gespeichert werden: ${error.message || error}`, "error");
   }
 }
 
@@ -1575,6 +1592,13 @@ async function updateGuestStatus(guestDocId, status) {
   }
   const guest = findGuest(guestDocId);
   if (!guest) return;
+  const currentStatus = guest.status || "open";
+  if (currentStatus === status) {
+    notify(`${guest.name} ist bereits ${STATUS_META[status]?.label || status}.`, "info");
+    return;
+  }
+  if (status === "no_show" && !confirm(`${guest.name} auf No Show setzen?`)) return;
+  if (status === "open" && !confirm(`${guest.name} wieder auf Offen setzen? Check-in-Daten werden dabei entfernt.`)) return;
 
   try {
     const update = {
@@ -1592,7 +1616,7 @@ async function updateGuestStatus(guestDocId, status) {
     }
     await updateDoc(guestRef(guestDocId), update);
     await addAudit("status_update", guest, {
-      oldStatus: guest.status || "open",
+      oldStatus: currentStatus,
       newStatus: status
     });
     notify(`Status geändert: ${guest.name} → ${STATUS_META[status]?.label || status}.`, "success");
@@ -1793,7 +1817,7 @@ function renderAdmin() {
   content.innerHTML = `
     <section class="card">
       <h2>Event wechseln</h2>
-      <p class="small">Aktiviert ein anderes vorbereitetes Event in diesem Browser. Gäste, Import und Export bleiben pro Event getrennt.</p>
+      <p class="small">Öffnet ein anderes vorbereitetes Event in diesem Browser. Gäste, Import und Export bleiben pro Event getrennt.</p>
       ${renderKnownEventList(appState.eventId)}
     </section>
 
@@ -1815,7 +1839,7 @@ function renderAdmin() {
     </section>
 
     <section class="card">
-      <h2>Event-Links für Door-Leads</h2>
+      <h2>Event-Link für Check-in-Geräte</h2>
       <p class="small">Diese Links an Check-in-Geräte geben. Mitarbeiter:innen benötigen zusätzlich den Check-in-PIN. Nicht die Basis-URL verwenden.</p>
       ${renderCurrentEventLink()}
     </section>
@@ -1823,7 +1847,7 @@ function renderAdmin() {
     ${renderCheckinPinSection()}
 
     <section class="card">
-      <h2>CSV Import</h2>
+      <h2>Gäste importieren</h2>
       <p class="small">Erwartete Spalten: <code>Name</code>, <code>Kategorie</code>, optional <code>Guest ID</code> und Info-Spalten. Excel vorher als CSV speichern.</p>
       <div class="grid two">
         <div class="form-row">
@@ -1846,7 +1870,7 @@ function renderAdmin() {
     </section>
 
     <section class="card">
-      <h2>Export / Backup</h2>
+      <h2>Backup & Export</h2>
       <p class="small">Backup für dieses Event: ${escapeHtml(appState.event?.name || "")} · ${escapeHtml(appState.event?.date || "")} · ${escapeHtml(appState.eventId || "")} · aktuell ${appState.guests.length} Gäste.</p>
       <div class="actions">
         <button class="btn-secondary" data-export="all" ${exportDisabled}>Alle Gäste CSV</button>
@@ -1858,12 +1882,15 @@ function renderAdmin() {
       <div id="backupStatus">${appState.ui.lastBackupMessage ? `<p class="notice success">${escapeHtml(appState.ui.lastBackupMessage)}</p>` : ""}</div>
     </section>
 
-    <section class="card">
+    <section class="card danger-section">
       <h2>Tagesabschluss</h2>
+      <p class="notice warning"><strong>Gefährliche Massenaktion:</strong> Diese Aktion setzt alle noch offenen Gäste auf No Show und muss mit der Event-ID bestätigt werden.</p>
       <div class="actions">
-        <button class="btn-secondary" id="markOpenNoShowBtn">Offene Gäste auf No Show setzen</button>
+        <button class="btn-danger" id="markOpenNoShowBtn">Offene Gäste auf No Show setzen</button>
       </div>
     </section>
+
+    <div id="eventDeleteSection"></div>
   `;
 
   bindKnownLinkCopyButtons();
@@ -1878,6 +1905,7 @@ function renderAdmin() {
   document.querySelectorAll("[data-export]").forEach((btn) => btn.addEventListener("click", () => exportGuests(btn.dataset.export)));
   document.getElementById("exportAuditBtn")?.addEventListener("click", exportAuditLog);
   document.getElementById("markOpenNoShowBtn")?.addEventListener("click", markOpenGuestsNoShow);
+  void renderEventDeleteSection();
 }
 
 function bindEventNameForm() {
@@ -1983,6 +2011,197 @@ async function updateEventNameFromForm(event) {
     console.error(error);
     notify(`Eventname konnte nicht gespeichert werden: ${error.message || error}`, "error");
   }
+}
+
+async function renderEventDeleteSection() {
+  const target = document.getElementById("eventDeleteSection");
+  if (!target || !isAdmin()) return;
+
+  let isMaster = false;
+  let adminSecurityData = null;
+  try {
+    isMaster = await currentAdminIsMasterAdmin();
+    if (isMaster) {
+      const securitySnap = await getDoc(adminSecurityRef());
+      adminSecurityData = securitySnap.exists() ? securitySnap.data() : null;
+    }
+  } catch (error) {
+    console.error(error);
+    target.innerHTML = `<section class="card danger-section"><p class="notice error">Event-Löschrechte konnten nicht geprüft werden.</p></section>`;
+    return;
+  }
+
+  if (!document.body.contains(target)) return;
+  if (!isMaster) {
+    target.innerHTML = "";
+    return;
+  }
+
+  const isAuthorizingEvent = adminSecurityData?.authorizingEventId === appState.eventId;
+  const replacement = isAuthorizingEvent ? await findReplacementAuthorizingEvent(appState.eventId) : null;
+  const cannotDeleteAuthorizingEvent = isAuthorizingEvent && !replacement;
+
+  target.innerHTML = `
+    <section class="card danger-section event-delete-card">
+      <h2>Event löschen</h2>
+      <p class="notice error"><strong>Nur Haupt-Admin:</strong> Löscht dieses Event inklusive Gäste, Admin-Notizen, angemeldeter Geräte, Event-PINs und Audit Log.</p>
+      ${isAuthorizingEvent ? `<p class="notice warning">Dieses Event ist aktuell das Haupt-Admin-Anker-Event.${replacement ? ` Vor dem Löschen wird der Anker auf <strong>${escapeHtml(replacement.name || replacement.id)}</strong> umgestellt.` : " Lege zuerst ein anderes Event an, bevor dieses Event gelöscht werden kann."}</p>` : ""}
+      <div class="actions">
+        <button class="btn-danger" id="deleteEventBtn" type="button" ${cannotDeleteAuthorizingEvent ? "disabled" : ""}>Event endgültig löschen</button>
+      </div>
+      <div id="deleteEventResult"></div>
+    </section>
+  `;
+
+  document.getElementById("deleteEventBtn")?.addEventListener("click", deleteCurrentEvent);
+}
+
+async function deleteCurrentEvent() {
+  if (!requireOnline("Event löschen")) return;
+  if (!isAdmin()) {
+    notify("Nur Admins dürfen Events verwalten.", "warning");
+    return;
+  }
+  if (!(await currentAdminIsMasterAdmin())) {
+    notify("Nur Haupt-Admins dürfen Events löschen.", "warning");
+    return;
+  }
+
+  const eventId = appState.eventId;
+  const eventName = appState.event?.name || eventId;
+  if (!eventId) return;
+
+  if (!confirmByTypingEventId(`Du löschst das Event "${eventName}" inklusive Gäste, Admin-Notizen, Geräten, Event-PINs und Audit Log.`)) return;
+  const typed = window.prompt(`Letzte Bestätigung für "${eventName}".\nBitte exakt eingeben:\nEVENT LÖSCHEN`);
+  if (typed === null) return;
+  if (typed.trim() !== "EVENT LÖSCHEN") {
+    notify("Abgebrochen: Bestätigungstext stimmte nicht. Es wurde nichts gelöscht.", "warning");
+    return;
+  }
+
+  const button = document.getElementById("deleteEventBtn");
+  const result = document.getElementById("deleteEventResult");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Event wird gelöscht…";
+  }
+  if (result) result.innerHTML = `<p class="notice info">Event-Löschung wird vorbereitet…</p>`;
+
+  try {
+    const replacement = await prepareAdminSecurityForEventDelete(eventId);
+    const counts = {};
+    const updateStatus = (label, count) => {
+      counts[label] = count;
+      if (result) {
+        result.innerHTML = `<p class="notice info">Löscht… Gäste: ${counts.guests || 0}, Admin-Notizen: ${counts.guestAdminNotes || 0}, Geräte: ${counts.members || 0}, Audit: ${counts.auditLog || 0}</p>`;
+      }
+    };
+
+    counts.auditLog = await deleteEventCollectionInChunks(eventId, "auditLog", (count) => updateStatus("auditLog", count));
+    counts.guestAdminNotes = await deleteEventCollectionInChunks(eventId, "guestAdminNotes", (count) => updateStatus("guestAdminNotes", count));
+    counts.guests = await deleteEventCollectionInChunks(eventId, "guests", (count) => updateStatus("guests", count));
+    await deleteDoc(doc(appState.db, "events", eventId, "private", "security"));
+    counts.members = await deleteEventMembersInChunks(eventId, (count) => updateStatus("members", count));
+    await deleteDoc(doc(appState.db, "events", eventId));
+    await deleteDoc(doc(appState.db, "events", eventId, "members", appState.user.uid)).catch((error) => {
+      if (!isPermissionError(error)) throw error;
+    });
+
+    removeStoredKnownEvent(eventId);
+    if (localStorage.getItem("guestlist:lastEventId") === eventId) {
+      localStorage.removeItem("guestlist:lastEventId");
+    }
+
+    notify(`Event gelöscht: ${eventName}.`, "success");
+    if (result) result.innerHTML = `<p class="notice success">Event gelöscht. Du wirst weitergeleitet…</p>`;
+    window.location.href = replacement ? urlWithEvent(replacement.id) : `${urlWithoutParams()}?setup=1`;
+  } catch (error) {
+    console.error(error);
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Event endgültig löschen";
+    }
+    const message = error.message || String(error);
+    if (result) result.innerHTML = `<p class="notice error">Event konnte nicht gelöscht werden: ${escapeHtml(message)}</p>`;
+    notify(`Event konnte nicht gelöscht werden: ${message}`, "error");
+  }
+}
+
+async function prepareAdminSecurityForEventDelete(eventId) {
+  const securitySnap = await getDoc(adminSecurityRef());
+  const data = securitySnap.exists() ? securitySnap.data() : null;
+  if (!data || data.authorizingEventId !== eventId) return null;
+
+  const replacement = await findReplacementAuthorizingEvent(eventId);
+  if (!replacement) {
+    throw new Error("Dieses Event ist das Haupt-Admin-Anker-Event. Lege oder öffne zuerst ein anderes Event, bevor du dieses Event löschst.");
+  }
+
+  const session = getAdminSession();
+  let memberSnap = await getMemberSnapForEvent(replacement.id);
+  if (!memberSnap.exists()) {
+    if (!session?.pin) {
+      throw new Error("Für das Ersatz-Event ist eine erneute Haupt-Admin-Anmeldung nötig.");
+    }
+    await connectAdminToEvent(replacement.id, session.pin, session.displayName || appState.member?.displayName || "Admin", appState.member?.deviceLabel || "");
+    memberSnap = await getMemberSnapForEvent(replacement.id);
+  }
+  if (!memberSnap.exists() || !adminMasterHashMatches(data, memberSnap.data()?.pinHash)) {
+    throw new Error("Das Ersatz-Event hat keine gültige Haupt-Admin-Sitzung.");
+  }
+
+  await updateDoc(adminSecurityRef(), {
+    authorizingEventId: replacement.id,
+    updatedAt: serverTimestamp()
+  });
+  return replacement;
+}
+
+async function findReplacementAuthorizingEvent(excludedEventId) {
+  const candidates = getKnownEvents().filter((event) => event.id && event.id !== excludedEventId);
+  for (const candidate of candidates) {
+    try {
+      const eventSnap = await getDoc(doc(appState.db, "events", candidate.id));
+      if (eventSnap.exists()) return { id: eventSnap.id, ...eventSnap.data() };
+    } catch (error) {
+      if (!isPermissionError(error)) console.error(error);
+    }
+  }
+  return null;
+}
+
+async function deleteEventCollectionInChunks(eventId, collectionName, onProgress) {
+  const chunkSize = 225;
+  let deleted = 0;
+  while (true) {
+    const snapshot = await getDocs(query(collection(appState.db, "events", eventId, collectionName), limit(chunkSize)));
+    if (snapshot.empty) break;
+    const batch = writeBatch(appState.db);
+    snapshot.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+    await batch.commit();
+    deleted += snapshot.docs.length;
+    onProgress?.(deleted);
+    if (snapshot.docs.length < chunkSize) break;
+  }
+  return deleted;
+}
+
+async function deleteEventMembersInChunks(eventId, onProgress) {
+  const chunkSize = 225;
+  let deleted = 0;
+  while (true) {
+    const snapshot = await getDocs(query(collection(appState.db, "events", eventId, "members"), limit(chunkSize)));
+    const docs = snapshot.docs.filter((docSnap) => docSnap.id !== appState.user.uid);
+    if (!snapshot.empty && docs.length) {
+      const batch = writeBatch(appState.db);
+      docs.forEach((docSnap) => batch.delete(docSnap.ref));
+      await batch.commit();
+      deleted += docs.length;
+      onProgress?.(deleted);
+    }
+    if (snapshot.empty || snapshot.docs.length < chunkSize || docs.length === 0) break;
+  }
+  return deleted;
 }
 
 async function addGuestFromForm(event) {
@@ -2418,7 +2637,7 @@ async function updateGlobalAdminPinFromForm(event) {
     return;
   }
   if (!(await currentAdminIsMasterAdmin())) {
-    notify("Nur Master Admins dürfen den Master Admin-PIN ändern.", "warning");
+    notify("Nur Haupt-Admins dürfen den Haupt-Admin-PIN ändern.", "warning");
     return;
   }
 
@@ -2437,7 +2656,7 @@ async function updateGlobalAdminPinFromForm(event) {
 
   const displayName = appState.member?.displayName || "Admin";
   const deviceLabel = appState.member?.deviceLabel || "";
-  if (result) result.innerHTML = `<p class="notice info">Master Admin-PIN wird geprüft…</p>`;
+  if (result) result.innerHTML = `<p class="notice info">Haupt-Admin-PIN wird geprüft…</p>`;
 
   const securitySnap = await getDoc(adminSecurityRef());
   if (!securitySnap.exists()) {
@@ -2446,7 +2665,7 @@ async function updateGlobalAdminPinFromForm(event) {
   }
   const currentPinHash = await hashAdminPin(currentPin);
   if (!adminMasterHashMatches(securitySnap.data(), currentPinHash)) {
-    notify("Aktueller Master Admin-PIN ist falsch.", "warning");
+    notify("Aktueller Haupt-Admin-PIN ist falsch.", "warning");
     return;
   }
 
@@ -2469,8 +2688,8 @@ async function updateGlobalAdminPinFromForm(event) {
     document.getElementById("adminPinForm")?.reset();
     const saveButton = document.getElementById("adminPinSaveBtn");
     if (saveButton) saveButton.disabled = true;
-    if (result) result.innerHTML = `<p class="notice success">Master Admin-PIN gespeichert.</p>`;
-    notify("Master Admin-PIN gespeichert.", "success");
+    if (result) result.innerHTML = `<p class="notice success">Haupt-Admin-PIN gespeichert.</p>`;
+    notify("Haupt-Admin-PIN gespeichert.", "success");
   } catch (error) {
     console.error(error);
     notify(`Admin-PIN konnte nicht gesetzt werden: ${error.message || error}`, "error");
@@ -2486,7 +2705,7 @@ async function addNamedGlobalAdminPinFromForm(event) {
     return;
   }
   if (!(await currentAdminIsMasterAdmin())) {
-    notify("Nur Master Admins dürfen benannte Admin-PINs verwalten.", "warning");
+    notify("Nur Haupt-Admins dürfen benannte Admin-PINs verwalten.", "warning");
     return;
   }
 
@@ -2508,7 +2727,7 @@ async function addNamedGlobalAdminPinFromForm(event) {
     return;
   }
 
-  if (result) result.innerHTML = `<p class="notice info">Master Admin-PIN wird geprüft…</p>`;
+  if (result) result.innerHTML = `<p class="notice info">Haupt-Admin-PIN wird geprüft…</p>`;
 
   const securitySnap = await getDoc(adminSecurityRef());
   if (!securitySnap.exists()) {
@@ -2517,7 +2736,7 @@ async function addNamedGlobalAdminPinFromForm(event) {
   }
   const currentPinHash = await hashAdminPin(currentPin);
   if (!adminMasterHashMatches(securitySnap.data(), currentPinHash)) {
-    notify("Aktueller Master Admin-PIN ist falsch.", "warning");
+    notify("Aktueller Haupt-Admin-PIN ist falsch.", "warning");
     return;
   }
 
@@ -2618,7 +2837,7 @@ async function renderNamedPinList(role) {
         </span>
         <span class="pin-list-actions">
           ${role === "checkin" ? `<button class="btn-secondary" type="button" data-copy-checkin-pin="${listIndex}" ${pin.pinValue ? "" : "disabled"}>Kopieren</button>` : ""}
-          ${pin.kind === "generic" ? "" : `<button class="btn-danger" type="button" data-delete-named-pin="${escapeHtml(role)}" data-pin-index="${listIndex}">Löschen</button>`}
+          ${pin.kind === "generic" ? "" : `<button class="btn-danger" type="button" data-delete-named-pin="${escapeHtml(role)}" data-pin-index="${listIndex}">PIN löschen</button>`}
         </span>
       </div>
     `).join("") : `<p class="small">${config.empty}</p>`;
@@ -2660,7 +2879,7 @@ function checkinPinsFromSecurity(data) {
   pins.push({
     kind: "generic",
     id: "generic",
-    displayName: "PIN ohne Namen",
+    displayName: "Allgemeiner Check-in-PIN",
     displayNameKey: "",
     pinNameHash: "",
     pinValue: typeof data?.checkinPinValue === "string" ? data.checkinPinValue : "",
@@ -2703,7 +2922,7 @@ async function deleteNamedPin(role, pin) {
 
   const result = document.getElementById(config.resultId);
   if (role === "admin" && !(await currentAdminIsMasterAdmin())) {
-    notify("Nur Master Admins dürfen benannte Admin-PINs löschen.", "warning");
+    notify("Nur Haupt-Admins dürfen benannte Admin-PINs löschen.", "warning");
     return;
   }
 
@@ -2790,7 +3009,7 @@ async function renderLoggedInMembersList() {
           <span class="pin-list-actions member-device-actions">
             <input class="compact-input" data-device-label-for="${escapeHtml(member.id)}" value="${escapeHtml(member.deviceLabel || "")}" aria-label="Gerätename" />
             <button class="btn-secondary" type="button" data-save-device-label="${escapeHtml(member.id)}" disabled>Gerät speichern</button>
-            <button class="btn-danger" type="button" data-force-logout="${escapeHtml(member.id)}" ${isSelf ? "disabled" : ""}>Abmelden</button>
+            <button class="btn-danger" type="button" data-force-logout="${escapeHtml(member.id)}" ${isSelf ? "disabled" : ""}>Gerät abmelden</button>
           </span>
         </div>
       `;
@@ -2855,7 +3074,7 @@ async function updateMemberDeviceLabel(member, rawLabel) {
 async function forceLogoutMember(member) {
   if (!member?.id || member.id === appState.user?.uid) return;
   const name = member.displayName || member.id.slice(0, 8);
-  const confirmed = window.confirm(`${name} abmelden?`);
+  const confirmed = window.confirm(`Gerät von ${name} abmelden?`);
   if (!confirmed) return;
 
   try {
@@ -3214,9 +3433,9 @@ function mapCsvRowToGuest(row, index, defaultCategory) {
     || defaultCategory;
   const guestId = pick(row, ["Guest ID", "GuestID", "ID", "Code", "Nummer", "Nr"])
     || nextGuestCode(appState.guests.length + index + 1);
-  const supportComment = pick(row, [INFO_LABELS.staffToAll, "Support Kommentar", "Support Comment", "Kommentar", "Comment", "Bemerkung"]);
-  const adminStaffInfo = pick(row, [INFO_LABELS.adminToStaff, "Info für Check-in Staff", "Check-in Info"]);
-  const internalNote = pick(row, [INFO_LABELS.adminOnly, "Interne Notiz", "Internal Note", "Admin-Info", "Admin Notiz", "Private Admin Info", "Notiz", "Note"]);
+  const supportComment = pick(row, [INFO_LABELS.staffToAll, "Info von Check-in Staff für alle", "Support Kommentar", "Support Comment", "Kommentar", "Comment", "Bemerkung"]);
+  const adminStaffInfo = pick(row, [INFO_LABELS.adminToStaff, "Info von Administratoren an Check-in Staff", "Info für Check-in Staff", "Check-in Info"]);
+  const internalNote = pick(row, [INFO_LABELS.adminOnly, "Info nur für Administratoren", "Interne Notiz", "Internal Note", "Admin-Info", "Admin Notiz", "Private Admin Info", "Notiz", "Note"]);
   const statusRaw = pick(row, ["Status", "Check-in Status"]);
   const status = parseStatus(statusRaw);
 
@@ -3865,6 +4084,12 @@ function saveKnownEvent(event) {
   localStorage.setItem(KNOWN_EVENTS_STORAGE_KEY, JSON.stringify(events.slice(0, 12)));
 }
 
+function removeStoredKnownEvent(eventId) {
+  const resolved = resolveEventId(eventId);
+  const events = getStoredKnownEvents().filter((item) => normalizeKnownEvent(item)?.id !== resolved);
+  localStorage.setItem(KNOWN_EVENTS_STORAGE_KEY, JSON.stringify(events));
+}
+
 function normalizeKnownEvent(event) {
   const id = resolveEventId(String(event?.id || "").trim());
   if (!id) return null;
@@ -3897,7 +4122,7 @@ function renderKnownEventList(currentEventId = "") {
             </span>
             <span class="event-switch-actions">
               <button class="btn-secondary" type="button" data-copy-known-link="${escapeHtml(link)}">Link kopieren</button>
-              <button class="${isCurrent ? "btn-secondary" : "btn-primary"}" type="button" data-activate-event="${escapeHtml(event.id)}">${isCurrent ? "Aktuell" : "Aktivieren"}</button>
+              <button class="${isCurrent ? "btn-secondary" : "btn-primary"}" type="button" data-activate-event="${escapeHtml(event.id)}">${isCurrent ? "Aktuell" : "Zu Event wechseln"}</button>
             </span>
           </div>
         `;
@@ -3958,7 +4183,7 @@ function bindKnownEventButtons() {
         await activateKnownEvent(eventId);
       } catch (error) {
         console.error(error);
-        notify(`Event konnte nicht aktiviert werden: ${error?.message || error}`, "error");
+        notify(`Event konnte nicht geöffnet werden: ${error?.message || error}`, "error");
         if (document.body.contains(button)) {
           button.disabled = false;
           button.textContent = originalText;
@@ -4014,7 +4239,7 @@ async function activateKnownEvent(eventId) {
   renderJoin();
   const result = document.getElementById("joinResult");
   if (result) {
-    result.innerHTML = `<p class="notice info">Event aktiviert. Bitte mit dem passenden PIN verbinden.</p>`;
+    result.innerHTML = `<p class="notice info">Event geöffnet. Bitte mit dem passenden PIN verbinden.</p>`;
   }
 }
 
