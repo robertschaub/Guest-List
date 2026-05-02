@@ -4618,9 +4618,9 @@ function renderEventGroups(events, currentEventId = "", options = {}) {
   const upcoming = activeEvents.filter((event) => !event.date || event.date >= today);
   const past = activeEvents.filter((event) => event.date && event.date < today);
   const groups = [
-    { title: "Inaktive / versteckte Events", events: inactive, emptyText: options.showEmptyInactive ? "Keine inaktiven Events." : "" },
     { title: "Aktuelle und kommende Events", events: upcoming },
-    { title: "Vergangene Events", events: past }
+    { title: "Vergangene Events", events: past },
+    { title: "Inaktive / versteckte Events", events: inactive, emptyText: options.showEmptyInactive ? "Keine inaktiven Events." : "" }
   ].filter((group) => group.events.length || group.emptyText);
 
   return `
