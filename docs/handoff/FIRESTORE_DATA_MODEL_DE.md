@@ -134,6 +134,7 @@ Erwartete Felder:
 - Check-in Staff darf nur innerhalb des Firestore-geprüften Zeitfensters `checkinAccessStartsAt` bis `checkinAccessEndsAt` lesen und schreiben. Admins können dieses Zeitfenster pro Event ändern, um Test- oder Demo-Events kontrolliert weiterzuverwenden.
 - Admin darf Import, Export, Massen-No-Show, PIN-Reset und Korrekturen durchführen.
 - Admin darf auch vergangene und versteckte Events per Event-ID oder Event-Link öffnen und bearbeiten.
+- Admin darf Event-Metadaten auflisten, damit aktive, vergangene und inaktive/versteckte Events im Adminbereich zum Bearbeiten auswählbar sind.
 - Nur Haupt-Admins dürfen Events verstecken oder wieder sichtbar machen. Versteckte Events sind für Check-in Staff gesperrt, bleiben für Admins aber sichtbar und bearbeitbar.
 - Nur der namenlose Master Admin-PIN darf ein komplettes Event löschen. Dabei müssen Gäste, Admin-Notizen, Geräte/Sessions, Event-PINs und Audit Log vor bzw. mit dem Event entfernt werden.
 - Admin darf angemeldete Geräte über deren `members/{uid}` Dokument abmelden; Benutzer dürfen ihr eigenes Member-Dokument zum Abmelden löschen.

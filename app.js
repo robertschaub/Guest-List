@@ -1926,6 +1926,11 @@ function renderAdmin() {
       <p class="small">Öffnet ein anderes bekanntes Event, auch vergangene Events. Gäste, Import und Export bleiben pro Event getrennt.</p>
       ${renderKnownEventList(appState.eventId)}
       <div class="admin-section">
+        <h3>Alle Events aus Firebase</h3>
+        <p class="small">Admins sehen hier auch inaktive/versteckte Events und können sie zum Bearbeiten öffnen.</p>
+        <div id="adminEventDirectory"><p class="small">Events werden geladen…</p></div>
+      </div>
+      <div class="admin-section">
         <h3>Event per ID oder Link öffnen</h3>
         <p class="small">Für alte Events, die in dieser Liste noch fehlen: Event-ID oder vollständigen Event-Link einfügen.</p>
         ${renderOpenEventForm()}
@@ -2021,6 +2026,7 @@ function renderAdmin() {
   document.querySelectorAll("[data-export]").forEach((btn) => btn.addEventListener("click", () => exportGuests(btn.dataset.export)));
   document.getElementById("exportAuditBtn")?.addEventListener("click", exportAuditLog);
   document.getElementById("markOpenNoShowBtn")?.addEventListener("click", markOpenGuestsNoShow);
+  void renderAdminEventDirectory();
   void renderEventDeleteSection();
   void renderEventVisibilitySection();
 }
@@ -2039,6 +2045,25 @@ function bindEventNameForm() {
   updateButtonState();
   input.addEventListener("input", updateButtonState);
   form.addEventListener("submit", updateEventNameFromForm);
+}
+
+async function renderAdminEventDirectory() {
+  const target = document.getElementById("adminEventDirectory");
+  if (!target || !isAdmin()) return;
+
+  try {
+    const snapshot = await getDocs(collection(appState.db, "events"));
+    const events = snapshot.docs
+      .map((docSnap) => normalizeKnownEvent({ id: docSnap.id, ...docSnap.data() }))
+      .filter(Boolean);
+
+    target.innerHTML = renderEventGroups(events, appState.eventId, { showEmptyInactive: true });
+    bindKnownLinkCopyButtons(target);
+    bindKnownEventButtons(target);
+  } catch (error) {
+    console.error(error);
+    target.innerHTML = `<p class="notice error">Eventliste konnte nicht geladen werden. Bitte Berechtigungen und Firestore-Regeln prüfen.</p>`;
+  }
 }
 
 function renderCheckinAccessSection() {
@@ -4563,21 +4588,29 @@ function resolveEventId(id) {
 function renderKnownEventList(currentEventId = "") {
   const events = getKnownEvents().filter((event) => isAdmin() || !isEventHidden(event));
   if (!events.length) return `<p class="notice warning">Noch keine bekannten Events in dieser Installation.</p>`;
+  return renderEventGroups(events, currentEventId);
+}
 
+function renderEventGroups(events, currentEventId = "", options = {}) {
   const today = localDateKey(new Date());
-  const upcoming = events.filter((event) => !event.date || event.date >= today);
-  const past = events.filter((event) => event.date && event.date < today);
+  const inactive = events.filter((event) => isEventHidden(event));
+  const activeEvents = events.filter((event) => !isEventHidden(event));
+  const upcoming = activeEvents.filter((event) => !event.date || event.date >= today);
+  const past = activeEvents.filter((event) => event.date && event.date < today);
   const groups = [
+    { title: "Inaktive / versteckte Events", events: inactive, emptyText: options.showEmptyInactive ? "Keine inaktiven Events." : "" },
     { title: "Aktuelle und kommende Events", events: upcoming },
     { title: "Vergangene Events", events: past }
-  ].filter((group) => group.events.length);
+  ].filter((group) => group.events.length || group.emptyText);
 
   return `
     <div class="event-switch-list">
       ${groups.map((group) => `
         <div class="event-switch-group">
           <h3>${escapeHtml(group.title)}</h3>
-          ${group.events.map((event) => renderKnownEventCard(event, currentEventId)).join("")}
+          ${group.events.length
+            ? group.events.map((event) => renderKnownEventCard(event, currentEventId)).join("")
+            : `<p class="small">${escapeHtml(group.emptyText)}</p>`}
         </div>
       `).join("")}
     </div>

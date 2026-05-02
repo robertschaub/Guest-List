@@ -280,6 +280,19 @@ service cloud.firestore {
         && validAdminPinForData(data, memberData(data.authorizingEventId).pinHash, '');
     }
 
+    function validGlobalAdminForData(data) {
+      return data.authorizingEventId is string
+        && isMember(data.authorizingEventId)
+        && memberData(data.authorizingEventId).role == 'admin'
+        && (
+          validAdminPinForData(data, memberData(data.authorizingEventId).pinHash, '')
+          || (
+            memberData(data.authorizingEventId).keys().hasAny(['pinNameHash'])
+            && validAdminPinForData(data, memberData(data.authorizingEventId).pinHash, memberData(data.authorizingEventId).pinNameHash)
+          )
+        );
+    }
+
     function isMasterAdmin(eventId) {
       return hasMasterAdminPin(eventId);
     }
@@ -395,7 +408,9 @@ service cloud.firestore {
     match /events/{eventId} {
       // The event document intentionally contains only public event metadata.
       allow get: if true;
-      allow list: if false;
+      allow list: if signedIn()
+        && adminSecurityExists()
+        && validGlobalAdminForData(adminSecurityData());
 
       allow create: if signedIn()
         && isAdmin(eventId)
