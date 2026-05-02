@@ -228,6 +228,10 @@ details .grid {
   line-height: 1.3;
 }
 
+.role-pin-form .form-row {
+  align-content: start;
+}
+
 input, select, textarea {
   width: 100%;
   min-height: var(--tap);

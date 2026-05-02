@@ -304,7 +304,9 @@ function renderEventSetupSections(options = {}) {
     ${visibleKnownEvents.length ? `
       <section class="card">
         <h2>Bestehende Events</h2>
-        ${renderKnownEventList(appState.eventId)}
+        <div id="setupEventDirectory">
+          ${isAdmin() ? `<p class="small">Events werden geladen…</p>` : renderKnownEventList(appState.eventId)}
+        </div>
       </section>
     ` : ""}
     <section class="card">
@@ -351,8 +353,12 @@ function renderEventSetupSections(options = {}) {
 }
 
 function bindEventSetupHandlers() {
-  bindKnownLinkCopyButtons();
-  bindKnownEventButtons();
+  if (isAdmin()) {
+    void renderSetupEventDirectory();
+  } else {
+    bindKnownLinkCopyButtons();
+    bindKnownEventButtons();
+  }
   bindOpenEventForm();
 
   document.getElementById("createEventForm")?.addEventListener("submit", createEventFromForm);
@@ -361,6 +367,12 @@ function bindEventSetupHandlers() {
 function renderEventSetup() {
   tabContent().innerHTML = renderEventSetupSections({ omitAdminPin: isAdmin() && Boolean(getAdminSession()?.pin) });
   bindEventSetupHandlers();
+}
+
+async function renderSetupEventDirectory() {
+  const target = document.getElementById("setupEventDirectory");
+  if (!target || !isAdmin()) return;
+  await renderFirebaseEventDirectory(target, { fallbackToKnownEvents: true });
 }
 
 async function createEventFromForm(event) {
@@ -503,7 +515,7 @@ function renderRolePinSections() {
       ${eventContext}
       ${linked ? `<p class="notice success">Angemeldet als <strong>${escapeHtml(roleLabel)}</strong>: ${escapeHtml(appState.member?.displayName || "")}${appState.member?.deviceLabel ? ` · ${escapeHtml(appState.member.deviceLabel)}` : ""}</p>` : `<p class="notice info">Melde dich an, um Gäste zu suchen und einzuchecken. Admins sehen zusätzlich Import, Backup, PINs und aktive Zugänge.</p>`}
       ${accessNotice}
-      <form id="joinForm" class="grid two">
+      <form id="joinForm" class="grid two role-pin-form">
         <div class="form-row">
           <label for="memberRole">Rolle</label>
           <select id="memberRole">
@@ -2044,22 +2056,30 @@ async function renderAdminEventDirectory() {
   const target = document.getElementById("adminEventDirectory");
   if (!target || !isAdmin()) return;
 
+  await renderFirebaseEventDirectory(target, { fallbackToKnownEvents: true, showEmptyInactive: true });
+}
+
+async function renderFirebaseEventDirectory(target, options = {}) {
   try {
     const snapshot = await getDocs(collection(appState.db, "events"));
     const events = snapshot.docs
       .map((docSnap) => normalizeKnownEvent({ id: docSnap.id, ...docSnap.data() }))
       .filter(Boolean);
 
-    target.innerHTML = renderEventGroups(events, appState.eventId, { showEmptyInactive: true });
+    target.innerHTML = renderEventGroups(events, appState.eventId, { showEmptyInactive: Boolean(options.showEmptyInactive) });
     bindKnownLinkCopyButtons(target);
     bindKnownEventButtons(target);
   } catch (error) {
     console.error(error);
-    const fallbackEvents = getKnownEvents().filter((event) => isAdmin() || !isEventHidden(event));
-    target.innerHTML = `
-      <p class="notice warning">Firebase-Eventliste konnte nicht geladen werden. Zeige nur lokal bekannte Events.</p>
-      ${fallbackEvents.length ? renderEventGroups(fallbackEvents, appState.eventId) : `<p class="notice error">Keine lokal bekannten Events gefunden.</p>`}
-    `;
+    const fallbackEvents = options.fallbackToKnownEvents
+      ? getKnownEvents().filter((event) => isAdmin() || !isEventHidden(event))
+      : [];
+    target.innerHTML = fallbackEvents.length
+      ? `
+        <p class="notice warning">Firebase-Eventliste konnte nicht geladen werden. Zeige nur lokal bekannte Events.</p>
+        ${renderEventGroups(fallbackEvents, appState.eventId)}
+      `
+      : `<p class="notice error">Eventliste konnte nicht geladen werden. Bitte Berechtigungen und Firestore-Regeln prüfen.</p>`;
     bindKnownLinkCopyButtons(target);
     bindKnownEventButtons(target);
   }
@@ -4713,6 +4733,7 @@ function bindKnownEventButtons(root = document) {
         await activateKnownEvent(eventId);
       } catch (error) {
         console.error(error);
+        removeMissingKnownEvent(eventId, error);
         notify(`Event konnte nicht geöffnet werden: ${error?.message || error}`, "error");
         if (document.body.contains(button)) {
           button.disabled = false;
@@ -4748,11 +4769,21 @@ async function openEventFromForm(event) {
     await activateKnownEvent(eventId);
   } catch (error) {
     console.error(error);
+    removeMissingKnownEvent(eventId, error);
     if (result) result.innerHTML = `<p class="notice error">Event konnte nicht geöffnet werden: ${escapeHtml(error?.message || error)}</p>`;
     if (submitButton) {
       submitButton.disabled = false;
       submitButton.textContent = "Event öffnen";
     }
+  }
+}
+
+function removeMissingKnownEvent(eventId, error) {
+  const message = String(error?.message || error || "");
+  if (!message.includes("wurde nicht gefunden")) return;
+  removeStoredKnownEvent(eventId);
+  if (appState.currentTab === "setup" || appState.currentTab === "admin") {
+    renderActiveTab();
   }
 }
 
