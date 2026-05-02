@@ -1207,19 +1207,19 @@ function renderCheckin() {
     ${isOffline() ? `<div class="notice error"><strong>Offline:</strong> Check-in und Änderungen sind gesperrt. Bitte Verbindung prüfen und Seite neu laden.</div>` : ""}
     ${renderEmptyEventWarning()}
     <section class="card search-sticky">
-      <div class="grid three">
-        <div class="form-row" style="grid-column: span 2;">
+      <div class="checkin-filter-grid">
+        <div class="form-row checkin-search-field">
           <label for="guestSearch">Suche nach Name oder Guest ID</label>
           <input id="guestSearch" class="input-large" value="${escapeHtml(appState.ui.search)}" placeholder="Name eintippen…" autocomplete="off" autofocus />
         </div>
-        <div class="form-row">
+        <div class="form-row checkin-status-field">
           <label for="statusFilter">Status</label>
           <select id="statusFilter">
             ${option("all", "Alle Status", appState.ui.statusFilter)}
             ${Object.entries(STATUS_META).map(([value, meta]) => option(value, meta.label, appState.ui.statusFilter)).join("")}
           </select>
         </div>
-        <div class="form-row" style="grid-column:1/-1">
+        <div class="form-row checkin-category-field">
           <label for="categoryFilter">Kategorie</label>
           <select id="categoryFilter">
             ${option("all", "Alle Kategorien", appState.ui.categoryFilter)}
@@ -1923,13 +1923,8 @@ function renderAdmin() {
   content.innerHTML = `
     <section class="card">
       <h2>Event wechseln</h2>
-      <p class="small">Öffnet ein anderes bekanntes Event, auch vergangene Events. Gäste, Import und Export bleiben pro Event getrennt.</p>
-      ${renderKnownEventList(appState.eventId)}
-      <div class="admin-section">
-        <h3>Alle Events aus Firebase</h3>
-        <p class="small">Admins sehen hier auch inaktive/versteckte Events und können sie zum Bearbeiten öffnen.</p>
-        <div id="adminEventDirectory"><p class="small">Events werden geladen…</p></div>
-      </div>
+      <p class="small">Zeigt alle Events aus Firebase, inklusive vergangener und versteckter Events. Gäste, Import und Export bleiben pro Event getrennt.</p>
+      <div id="adminEventDirectory"><p class="small">Events werden geladen…</p></div>
       <div class="admin-section">
         <h3>Event per ID oder Link öffnen</h3>
         <p class="small">Für alte Events, die in dieser Liste noch fehlen: Event-ID oder vollständigen Event-Link einfügen.</p>
@@ -2012,8 +2007,6 @@ function renderAdmin() {
     <div id="eventVisibilitySection"></div>
   `;
 
-  bindKnownLinkCopyButtons();
-  bindKnownEventButtons();
   bindOpenEventForm();
   bindEventNameForm();
   bindCheckinAccessForm();
@@ -2062,7 +2055,13 @@ async function renderAdminEventDirectory() {
     bindKnownEventButtons(target);
   } catch (error) {
     console.error(error);
-    target.innerHTML = `<p class="notice error">Eventliste konnte nicht geladen werden. Bitte Berechtigungen und Firestore-Regeln prüfen.</p>`;
+    const fallbackEvents = getKnownEvents().filter((event) => isAdmin() || !isEventHidden(event));
+    target.innerHTML = `
+      <p class="notice warning">Firebase-Eventliste konnte nicht geladen werden. Zeige nur lokal bekannte Events.</p>
+      ${fallbackEvents.length ? renderEventGroups(fallbackEvents, appState.eventId) : `<p class="notice error">Keine lokal bekannten Events gefunden.</p>`}
+    `;
+    bindKnownLinkCopyButtons(target);
+    bindKnownEventButtons(target);
   }
 }
 
@@ -4592,9 +4591,10 @@ function renderKnownEventList(currentEventId = "") {
 }
 
 function renderEventGroups(events, currentEventId = "", options = {}) {
+  const uniqueEvents = uniqueEventsById(events);
   const today = localDateKey(new Date());
-  const inactive = events.filter((event) => isEventHidden(event));
-  const activeEvents = events.filter((event) => !isEventHidden(event));
+  const inactive = uniqueEvents.filter((event) => isEventHidden(event));
+  const activeEvents = uniqueEvents.filter((event) => !isEventHidden(event));
   const upcoming = activeEvents.filter((event) => !event.date || event.date >= today);
   const past = activeEvents.filter((event) => event.date && event.date < today);
   const groups = [
@@ -4617,6 +4617,16 @@ function renderEventGroups(events, currentEventId = "", options = {}) {
   `;
 }
 
+function uniqueEventsById(events) {
+  const byId = new Map();
+  events.filter(Boolean).forEach((event) => {
+    const normalized = normalizeKnownEvent(event);
+    if (!normalized || byId.has(normalized.id)) return;
+    byId.set(normalized.id, normalized);
+  });
+  return Array.from(byId.values());
+}
+
 function renderKnownEventCard(event, currentEventId = "", options = {}) {
   const isCurrent = event.id === currentEventId;
   const link = urlWithEvent(event.id);
@@ -4630,7 +4640,7 @@ function renderKnownEventCard(event, currentEventId = "", options = {}) {
       </span>
       <span class="event-switch-actions">
         <button class="btn-secondary" type="button" data-copy-known-link="${escapeHtml(link)}">Link kopieren</button>
-        <button class="${isCurrent ? "btn-secondary" : "btn-primary"}" type="button" data-activate-event="${escapeHtml(event.id)}">${isCurrent ? "Aktuell" : (options.openLabel || "Öffnen")}</button>
+        <button class="${isCurrent ? "btn-secondary" : "btn-primary"}" type="button" data-activate-event="${escapeHtml(event.id)}">${isCurrent ? "Geöffnet" : (options.openLabel || "Öffnen")}</button>
       </span>
     </div>
   `;

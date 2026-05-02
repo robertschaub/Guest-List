@@ -408,6 +408,18 @@ input:focus, select:focus, textarea:focus {
   background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 82%, rgba(248,250,252,0) 100%);
 }
 
+.checkin-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(150px, 0.65fr) minmax(190px, 0.85fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.checkin-filter-grid .form-row,
+.checkin-filter-grid select {
+  min-width: 0;
+}
+
 .guest-list {
   display: grid;
   gap: 12px;
@@ -775,6 +787,14 @@ tr:last-child td { border-bottom: 0; }
   .status-pill {
     font-size: 0.75rem;
   }
+
+  .checkin-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .checkin-search-field {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 560px) {
@@ -845,6 +865,34 @@ tr:last-child td { border-bottom: 0; }
     margin-left: -4px;
     margin-right: -4px;
     border-radius: var(--radius-sm);
+    padding: 10px;
+  }
+
+  .checkin-filter-grid {
+    gap: 8px;
+  }
+
+  .checkin-filter-grid label {
+    font-size: 0.74rem;
+  }
+
+  .checkin-filter-grid select {
+    min-height: var(--tap);
+    padding: 9px 10px;
+    border-radius: 12px;
+    font-size: 0.94rem;
+  }
+
+  .checkin-filter-grid .input-large {
+    min-height: 52px;
+    border-radius: 14px;
+    font-size: 1rem;
+  }
+
+  .search-sticky .small {
+    margin: 8px 0 0;
+    font-size: 0.76rem;
+    line-height: 1.25;
   }
 
   button { width: 100%; }
