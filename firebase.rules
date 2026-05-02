@@ -143,8 +143,7 @@ service cloud.firestore {
 
     function isAdmin(eventId) {
       return hasCurrentPin(eventId)
-        && memberData(eventId).role == 'admin'
-        && (!eventHidden(eventId) || hasMasterAdminPin(eventId));
+        && memberData(eventId).role == 'admin';
     }
 
     function checkinAccessWindowOpen(eventId) {
@@ -167,16 +166,7 @@ service cloud.firestore {
     }
 
     function memberWriteAllowedForRole(eventId, role) {
-      return (
-          role == 'admin'
-          && (
-            !eventHidden(eventId)
-            || (
-              adminSecurityExists()
-              && validAdminPinForData(adminSecurityData(), request.resource.data.pinHash, '')
-            )
-          )
-        )
+      return role == 'admin'
         || (
           role == 'checkin'
           && checkinAccessWindowOpen(eventId)

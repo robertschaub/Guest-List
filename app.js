@@ -297,7 +297,7 @@ function renderWelcome() {
 
 function renderEventSetupSections(options = {}) {
   const knownEvents = getKnownEvents();
-  const visibleKnownEvents = knownEvents.filter((event) => !isEventHidden(event));
+  const visibleKnownEvents = knownEvents.filter((event) => isAdmin() || !isEventHidden(event));
   const omitAdminPin = Boolean(options.omitAdminPin);
   const setupName = getAdminSession()?.displayName || appState.member?.displayName || "Admin";
   return `
@@ -4561,7 +4561,7 @@ function resolveEventId(id) {
 }
 
 function renderKnownEventList(currentEventId = "") {
-  const events = getKnownEvents().filter((event) => !isEventHidden(event));
+  const events = getKnownEvents().filter((event) => isAdmin() || !isEventHidden(event));
   if (!events.length) return `<p class="notice warning">Noch keine bekannten Events in dieser Installation.</p>`;
 
   const today = localDateKey(new Date());
@@ -4757,7 +4757,7 @@ async function activateKnownEvent(eventId) {
         console.error(error);
         clearAdminSession();
         if (isEventHidden(eventData) && isPermissionError(error)) {
-          throw new Error("Dieses Event ist versteckt. Nur Haupt-Admins können es öffnen und wieder sichtbar machen.");
+          throw new Error("Dieses Event ist versteckt. Bitte mit einem gültigen Admin-PIN öffnen.");
         }
         if (!memberSnap.exists()) {
           throw new Error("Automatischer Admin-Wechsel fehlgeschlagen. Bitte beim Ziel-Event erneut einloggen.");
