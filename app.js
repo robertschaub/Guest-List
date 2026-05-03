@@ -572,10 +572,7 @@ function renderAdminPinSection(isMaster = false) {
     <section class="card">
       <h2>Admin-PINs</h2>
       <form id="adminPinForm" class="grid two">
-        <div style="grid-column:1/-1">
-          <h3 id="adminPinFormTitle">Admin-PIN verwalten</h3>
-          <input id="adminPinEditId" type="hidden" />
-        </div>
+        <input id="adminPinEditId" type="hidden" />
         <div class="form-row">
           <label for="adminPinAuthPin">Bisheriger PIN oder Haupt-Master-PIN</label>
           <input id="adminPinAuthPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="alter PIN oder Haupt-Master-PIN" />
@@ -724,23 +721,14 @@ function updateAdminPinButtonState() {
   const nameInput = document.getElementById("adminPinName");
   const pinInput = document.getElementById("adminPinNew");
   const confirmInput = document.getElementById("adminPinConfirm");
-  const editInput = document.getElementById("adminPinEditId");
-  const title = document.getElementById("adminPinFormTitle");
   const saveButton = document.getElementById("adminPinSaveBtn");
   if (!authInput || !nameInput || !pinInput || !confirmInput || !saveButton) return;
 
-  const hasName = Boolean(nameInput.value.trim());
-  const isEdit = Boolean(editInput?.value);
   const pin = pinInput.value;
   saveButton.disabled = authInput.value.length < PIN_MIN_LENGTH
     || pin.length < PIN_MIN_LENGTH
     || pin !== confirmInput.value;
   saveButton.textContent = "PIN speichern";
-  if (title) {
-    title.textContent = hasName
-      ? (isEdit ? "Benannten Admin-PIN ändern" : "Benannten Admin-PIN hinzufügen")
-      : "Haupt-Master-PIN ändern";
-  }
 }
 
 function resetAdminPinForm() {
