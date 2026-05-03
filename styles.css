@@ -802,10 +802,80 @@ tr:last-child td { border-bottom: 0; }
 }
 
 @media (max-width: 560px) {
+  :root {
+    --tap: 44px;
+  }
+
   .shell { width: min(100% - 16px, 1180px); }
+
+  .main {
+    padding: 8px 0 22px;
+  }
 
   .grid.two, .grid.three, .grid.four {
     grid-template-columns: 1fr;
+  }
+
+  .card {
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+
+  .card.compact {
+    padding: 10px;
+  }
+
+  .card h2 {
+    font-size: 1.28rem;
+    line-height: 1.15;
+    margin-bottom: 10px;
+  }
+
+  .card h3 {
+    font-size: 1.05rem;
+    line-height: 1.2;
+    margin-bottom: 8px;
+  }
+
+  .grid {
+    gap: 10px;
+  }
+
+  details .grid {
+    margin-top: 8px;
+  }
+
+  .form-row {
+    gap: 5px;
+  }
+
+  .form-row label {
+    font-size: 0.78rem;
+  }
+
+  .field-help {
+    font-size: 0.74rem;
+    line-height: 1.25;
+  }
+
+  input, select, textarea {
+    min-height: var(--tap);
+    padding: 9px 10px;
+    border-radius: 10px;
+  }
+
+  textarea {
+    min-height: 68px;
+  }
+
+  .actions {
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .admin-section {
+    padding-top: 10px;
+    margin-top: 10px;
   }
 
   .summary-grid {
@@ -841,62 +911,82 @@ tr:last-child td { border-bottom: 0; }
   }
 
   .app-header {
+    padding-top: calc(8px + env(safe-area-inset-top));
     padding-left: 8px;
     padding-right: 8px;
-  }
-
-  .app-brand {
-    width: calc(100% - 100px);
-    gap: 10px;
-  }
-
-  .app-logo {
-    width: 46px;
-    height: 46px;
-    border-radius: 8px;
-  }
-
-  .event-meta {
-    font-size: 0.72rem;
-  }
-
-  .status-pill {
-    padding: 8px 10px;
-  }
-
-  .search-sticky {
-    top: 86px;
-    margin-left: -4px;
-    margin-right: -4px;
-    border-radius: var(--radius-sm);
-    padding: 10px;
-  }
-
-  .checkin-filter-grid {
+    padding-bottom: 8px;
     gap: 8px;
   }
 
+  .app-brand {
+    width: calc(100% - 82px);
+    gap: 8px;
+  }
+
+  .app-logo {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+  }
+
+  .eyebrow {
+    display: none;
+  }
+
+  .app-header h1 {
+    margin: 0;
+    font-size: 1.16rem;
+    line-height: 1.05;
+  }
+
+  .event-meta {
+    margin-top: 2px;
+    font-size: 0.68rem;
+    line-height: 1.15;
+  }
+
+  .status-pill {
+    padding: 6px 8px;
+    font-size: 0.72rem;
+  }
+
+  .search-sticky {
+    top: calc(58px + env(safe-area-inset-top));
+    margin-left: -4px;
+    margin-right: -4px;
+    border-radius: var(--radius-sm);
+    padding: 8px;
+  }
+
+  .checkin-filter-grid {
+    gap: 6px;
+  }
+
   .checkin-filter-grid label {
-    font-size: 0.74rem;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
   }
 
   .checkin-filter-grid select {
     min-height: var(--tap);
-    padding: 9px 10px;
-    border-radius: 12px;
+    padding: 8px 9px;
+    border-radius: 10px;
     font-size: 0.94rem;
   }
 
   .checkin-filter-grid .input-large {
-    min-height: 52px;
-    border-radius: 14px;
+    min-height: 48px;
+    border-radius: 12px;
     font-size: 1rem;
   }
 
   .search-sticky .small {
-    margin: 8px 0 0;
-    font-size: 0.76rem;
-    line-height: 1.25;
+    display: none;
   }
 
   button { width: 100%; }
@@ -905,14 +995,159 @@ tr:last-child td { border-bottom: 0; }
 
   .nav-row {
     display: block;
+    margin-bottom: 0;
+  }
+
+  .nav-tabs {
+    gap: 6px;
+    padding-bottom: 6px;
+  }
+
+  .nav-tabs button,
+  .mobile-admin-tabs {
+    min-height: var(--tap);
+    padding-left: 14px;
+    padding-right: 14px;
+    box-shadow: none;
   }
 
   .shell-auth-btn {
-    margin-bottom: 12px;
+    display: none;
+  }
+
+  .guest-list {
+    gap: 8px;
+  }
+
+  .guest-card {
+    padding: 10px;
   }
 
   .guest-head {
     display: block;
+  }
+
+  .guest-title {
+    font-size: 1rem;
+  }
+
+  .guest-meta {
+    margin-top: 2px;
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+
+  .badges {
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .badge {
+    padding: 4px 7px;
+    font-size: 0.72rem;
+  }
+
+  .guest-primary-action {
+    margin-top: 8px;
+  }
+
+  .btn-checkin-primary {
+    min-height: 58px;
+    font-size: 1.04rem;
+  }
+
+  .guest-secondary-panels {
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .guest-note-panel,
+  .guest-admin-panel,
+  .guest-danger-panel {
+    padding: 0 10px 10px;
+  }
+
+  .guest-note-panel > summary,
+  .guest-admin-panel > summary,
+  .guest-danger-panel > summary {
+    min-height: var(--tap);
+  }
+
+  .comment-box textarea {
+    min-height: 52px;
+  }
+
+  .notice {
+    padding: 10px;
+    margin: 8px 0;
+  }
+
+  .event-switch-list,
+  .event-switch-group,
+  .pin-list {
+    gap: 8px;
+  }
+
+  .event-switch-group h3 {
+    margin-top: 2px;
+  }
+
+  .event-switch-card {
+    min-height: auto;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .event-switch-card small {
+    margin-top: 2px;
+    line-height: 1.25;
+  }
+
+  .event-switch-actions {
+    gap: 6px;
+  }
+
+  .event-switch-actions button,
+  .pin-list-actions button {
+    width: auto;
+    min-height: 42px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .pin-list-header {
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+
+  .pin-list-row {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .pin-list-actions {
+    gap: 6px;
+  }
+
+  .member-device-actions {
+    align-items: flex-start;
+  }
+
+  .copy-field {
+    gap: 6px;
+  }
+
+  .copy-field input {
+    min-width: 0;
+  }
+
+  .audit-list {
+    max-height: 62vh;
+    padding-right: 0;
+  }
+
+  .log-line {
+    padding: 8px 0;
   }
 
   .guest-admin-actions,
