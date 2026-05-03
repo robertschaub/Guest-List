@@ -119,6 +119,7 @@ const appState = {
     editingGuestId: "",
     checkinUndo: null,
     masterAdmin: null,
+    masterAdminKind: "",
     showCheckinPins: false,
     lastBackupMessage: ""
   }
@@ -1042,6 +1043,7 @@ function loadMainApp() {
   appState.adminNotes = {};
   appState.adminNotesLoaded = false;
   appState.ui.masterAdmin = null;
+  appState.ui.masterAdminKind = "";
   if (isAdmin()) void ensureCurrentEventAccessWindowFields();
   renderShell();
   if (isAdmin()) void refreshMasterAdminState();
@@ -2214,8 +2216,8 @@ function renderAdmin() {
       <div id="backupStatus">${appState.ui.lastBackupMessage ? `<p class="notice success">${escapeHtml(appState.ui.lastBackupMessage)}</p>` : ""}</div>
     </section>
 
-    <div id="eventDeleteSection"></div>
     <div id="eventVisibilitySection"></div>
+    <div id="eventDeleteSection"></div>
   `;
 
   bindEventNameForm();
@@ -2229,8 +2231,8 @@ function renderAdmin() {
   document.querySelectorAll("[data-export]").forEach((btn) => btn.addEventListener("click", () => exportGuests(btn.dataset.export)));
   document.getElementById("exportAuditBtn")?.addEventListener("click", exportAuditLog);
   void renderAdminEventDirectory();
-  void renderEventDeleteSection();
   void renderEventVisibilitySection();
+  void renderEventDeleteSection();
 }
 
 function bindEventNameForm() {
@@ -4530,13 +4532,24 @@ function hasActiveEventAccess() {
 }
 
 async function currentAdminIsMasterAdmin() {
-  if (!isAdmin()) return false;
+  if (!isAdmin()) {
+    appState.ui.masterAdminKind = "";
+    return false;
+  }
   try {
     const securitySnap = await getDoc(adminSecurityRef());
-    if (!securitySnap.exists()) return false;
-    return adminMasterHashMatches(securitySnap.data(), appState.member?.pinHash, appState.member?.pinNameHash);
+    if (!securitySnap.exists()) {
+      appState.ui.masterAdminKind = "";
+      return false;
+    }
+    const kind = adminMasterKind(securitySnap.data(), appState.member?.pinHash, appState.member?.pinNameHash);
+    appState.ui.masterAdminKind = kind;
+    return Boolean(kind);
   } catch (error) {
-    if (isPermissionError(error)) return false;
+    if (isPermissionError(error)) {
+      appState.ui.masterAdminKind = "";
+      return false;
+    }
     throw error;
   }
 }
@@ -4564,10 +4577,17 @@ function uniqueEventIds(eventIds) {
 }
 
 function adminMasterHashMatches(data, pinHash, pinNameHash = "") {
-  if (!pinHash) return false;
-  if (data?.adminPinHash === pinHash) return true;
-  if (Array.isArray(data?.adminPinHashes) && data.adminPinHashes.includes(pinHash)) return true;
-  return Boolean(pinNameHash && Array.isArray(data?.[ADMIN_MASTER_NAMED_HASHES_FIELD]) && data[ADMIN_MASTER_NAMED_HASHES_FIELD].includes(pinNameHash));
+  return Boolean(adminMasterKind(data, pinHash, pinNameHash));
+}
+
+function adminMasterKind(data, pinHash, pinNameHash = "") {
+  if (!pinHash) return "";
+  if (data?.adminPinHash === pinHash) return "unnamed";
+  if (Array.isArray(data?.adminPinHashes) && data.adminPinHashes.includes(pinHash)) return "unnamed";
+  if (pinNameHash && Array.isArray(data?.[ADMIN_MASTER_NAMED_HASHES_FIELD]) && data[ADMIN_MASTER_NAMED_HASHES_FIELD].includes(pinNameHash)) {
+    return "named";
+  }
+  return "";
 }
 
 async function masterPinInputMatchesSecurity(data, pin) {
@@ -4581,13 +4601,16 @@ async function masterPinInputMatchesSecurity(data, pin) {
 }
 
 function roleDisplayLabel(role = appState.member?.role) {
-  if (role === "admin" && appState.ui.masterAdmin === true) return "Master Admin";
+  if (role === "admin" && appState.ui.masterAdmin === true) {
+    return appState.ui.masterAdminKind === "named" ? "Benannter Master Admin" : "Master Admin";
+  }
   return ROLE_META[role] || role || "";
 }
 
 async function refreshMasterAdminState(options = {}) {
   if (!isAdmin()) {
     appState.ui.masterAdmin = false;
+    appState.ui.masterAdminKind = "";
     return false;
   }
 
