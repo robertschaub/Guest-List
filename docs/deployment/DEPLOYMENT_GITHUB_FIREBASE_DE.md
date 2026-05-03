@@ -142,4 +142,4 @@ Dann Eventname, globalen Admin-PIN und event-spezifischen Check-in-PIN setzen un
 - Auf Gerät B prüfen, dass Status und Übersicht aktualisiert werden.
 - Denselben Gast parallel oder erneut einchecken und prüfen, dass Doppel-Check-in verhindert wird.
 - Als Admin `Alle Gäste CSV` und `Audit Log CSV` exportieren und lokal speichern.
-- Bei Import mit Löschen oder Massen-No-Show prüfen, dass die App die Event-ID als Bestätigung verlangt.
+- Bei Import mit Löschen prüfen, dass die App die Event-ID als Bestätigung verlangt.

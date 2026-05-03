@@ -15,11 +15,12 @@ Statische Web-App für Event-Gästeliste, Check-in auf mehreren Mobile-/Tablet-G
 - Namenssuche / Guest-ID-Suche
 - Multi-Device Check-in
 - Doppel-Check-in-Schutz per Firestore-Transaktion
+- Letzten eigenen Check-in direkt rückgängig machen, solange keine andere Aktion folgt
 - Support-Kommentar pro Gast
 - Status: Offen, Eingecheckt, No Show
 - Kategorie-Listen mit Summen
 - CSV-Import und CSV-Export
-- Audit Log für Check-in, Doppel-Check-in-Versuch, Kommentar, Gaständerung, Import, Export, No Show, Audit-Export und PIN-Reset
+- Audit Log für Check-in, Check-in rückgängig, Doppel-Check-in-Versuch, Kommentar, Gaständerung, Import, Export, No Show, Audit-Export und PIN-Reset
 
 ## Technischer Stack
 
@@ -147,7 +148,7 @@ https://robertschaub.github.io/Guest-List/?event=the-garden-w-blondish
 https://robertschaub.github.io/Guest-List/?event=the-garden-w-me
 ```
 
-Auf der Startseite und im Admin-Tab gibt es eine Liste **Bestehende Events**. Dort können Admins den Freitag- oder Samstag-Event bewusst auswählen. Im laufenden UI führt der Button **Event wechseln** ebenfalls zur Event-Auswahl. Eine manuelle Event-ID-Eingabe gibt es nur noch als aufgeklappten Expertenbereich, falls ein Event nicht in der Liste steht.
+Auf der Startseite und im Admin-Tab gibt es eine Liste **Bestehende Events**. Dort können Admins den Freitag- oder Samstag-Event bewusst auswählen. Im laufenden UI führt der Button **Event wechseln** ebenfalls zur Event-Auswahl. Direkte Event-Links mit `?event=...` funktionieren weiterhin, werden aber nicht mehr als separates Eingabefeld in der Oberfläche angeboten.
 
 Wenn ein Admin in derselben Browser-Session den Event wechselt, verbindet die App automatisch mit dem Ziel-Event. Nach Reload, neuem Tab oder neuem Gerät muss der globale Admin-PIN erneut eingegeben werden.
 
@@ -182,8 +183,8 @@ Check-in Staff sieht bewusst nur den Check-in-Modus sowie `Event wechseln` und `
 1. Event-Link öffnen.
 2. Rolle `Admin` wählen.
 3. Globalen Admin-PIN eingeben.
-4. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder No Shows setzen.
-5. Bei riskanten Massenaktionen die aktuelle Event-ID eintippen: Import mit Löschen und `Alle offenen Gäste auf No Show setzen`.
+4. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder einzelne No Shows setzen.
+5. Bei riskanten Massenaktionen die aktuelle Event-ID eintippen, zum Beispiel beim Import mit Löschen.
 6. Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.
 7. Vor Eventstart unter `Export / Backup` Gäste-CSV und Audit-Log-CSV herunterladen.
 8. Event-Link und beide PINs extern sichern; PINs sind später nicht auslesbar.
@@ -243,7 +244,7 @@ Am Event:
 Nach dem Event:
 
 1. Export `Alle Gäste CSV` und `Audit Log CSV` herunterladen.
-2. Optional offene Gäste auf `No Show` setzen; dafür die Event-ID bewusst eintippen.
+2. Optional einzelne Gäste in der Check-in-Liste auf `No Show` setzen.
 3. Audit Log prüfen.
 
 ## Kosten / Limits

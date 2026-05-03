@@ -116,6 +116,7 @@ const appState = {
     importPreview: [],
     importInProgress: false,
     editingGuestId: "",
+    checkinUndo: null,
     masterAdmin: null,
     showCheckinPins: false,
     lastBackupMessage: ""
@@ -151,6 +152,7 @@ async function boot() {
     });
 
     setConnectionStatus(navigator.onLine ? "Online" : "Offline", navigator.onLine ? "ok" : "warn");
+    installCheckinUndoInvalidation();
 
     onAuthStateChanged(appState.auth, async (user) => {
       if (!user) return;
@@ -298,10 +300,11 @@ function renderWelcome() {
 function renderEventSetupSections(options = {}) {
   const knownEvents = getKnownEvents();
   const visibleKnownEvents = knownEvents.filter((event) => isAdmin() || !isEventHidden(event));
+  const showEventDirectory = isAdmin() || visibleKnownEvents.length;
   const omitAdminPin = Boolean(options.omitAdminPin);
   const setupName = getAdminSession()?.displayName || appState.member?.displayName || "Admin";
   return `
-    ${visibleKnownEvents.length ? `
+    ${showEventDirectory ? `
       <section class="card">
         <h2>Bestehende Events</h2>
         <div id="setupEventDirectory">
@@ -1327,6 +1330,7 @@ function finishLocalLogout(nextTab = "role", message = "") {
   appState.guestsLoaded = false;
   appState.member = null;
   appState.ui.editingGuestId = "";
+  appState.ui.checkinUndo = null;
   appState.currentTab = nextTab;
   renderShell();
   renderActiveTab();
@@ -1569,7 +1573,7 @@ async function checkInGuest(guestDocId, force = false) {
       force
     });
     completed = true;
-    notify(`${guest.name} eingecheckt.`, "success");
+    setCheckinUndo(buildCheckinUndoState(guestDocId, before || guest, force));
   } catch (error) {
     if (error.message === "ALREADY_CHECKED_IN") {
       await addAudit("duplicate_check_in_attempt", guest, {
@@ -1592,6 +1596,143 @@ function resetSearchForNextCheckin() {
   if (appState.currentTab !== "checkin") return;
   appState.ui.search = "";
   renderCheckin();
+}
+
+function buildCheckinUndoState(guestDocId, before = {}, force = false) {
+  const actorName = appState.member?.displayName || "Check-in";
+  const actorDevice = appState.member?.deviceLabel || "";
+  const previousStatus = before.status || "open";
+  return {
+    eventId: appState.eventId,
+    guestDocId,
+    guestId: before.guestId || "",
+    guestName: before.name || "Gast",
+    category: before.category || "",
+    supportComment: before.supportComment || "",
+    adminStaffInfo: before.adminStaffInfo || "",
+    previousStatus,
+    previousCheckedInAt: before.checkedInAt || null,
+    previousCheckedInByUid: before.checkedInByUid || null,
+    previousCheckedInByName: before.checkedInByName || null,
+    previousCheckedInDevice: before.checkedInDevice || null,
+    checkedInByUid: appState.user.uid,
+    checkedInByName: actorName,
+    checkedInDevice: actorDevice,
+    force: Boolean(force)
+  };
+}
+
+function setCheckinUndo(undo) {
+  appState.ui.checkinUndo = undo;
+  renderCheckinUndoNotice(undo);
+}
+
+function renderCheckinUndoNotice(undo) {
+  const flash = document.getElementById("flash");
+  if (!flash) return;
+  const statusLabel = STATUS_META[undo.previousStatus]?.label || "Offen";
+  flash.innerHTML = `
+    <div class="notice success flash-message checkin-undo-message" data-checkin-undo-notice>
+      <span><strong>${escapeHtml(undo.guestName)} eingecheckt.</strong> Rückgängig möglich bis zur nächsten Aktion. Vorheriger Status: ${escapeHtml(statusLabel)}.</span>
+      <button class="btn-secondary" type="button" data-undo-checkin="${escapeHtml(undo.guestDocId)}">Rückgängig</button>
+    </div>
+  `;
+  flash.querySelector("[data-undo-checkin]")?.addEventListener("click", () => {
+    void undoLastCheckin();
+  });
+}
+
+function clearCheckinUndo() {
+  appState.ui.checkinUndo = null;
+  const flash = document.getElementById("flash");
+  if (flash?.querySelector("[data-checkin-undo-notice]")) flash.innerHTML = "";
+}
+
+function installCheckinUndoInvalidation() {
+  const clearForAction = (event) => {
+    if (!appState.ui.checkinUndo) return;
+    const target = event.target;
+    if (target?.closest?.("[data-checkin-undo-notice]")) return;
+    clearCheckinUndo();
+  };
+  document.addEventListener("click", clearForAction, true);
+  document.addEventListener("input", clearForAction, true);
+  document.addEventListener("change", clearForAction, true);
+  document.addEventListener("submit", clearForAction, true);
+}
+
+async function undoLastCheckin() {
+  const undo = appState.ui.checkinUndo;
+  if (!undo) return;
+  if (!requireEventMember("Check-in rückgängig machen")) return;
+  if (!requireOnline("Check-in rückgängig machen")) return;
+  if (undo.eventId !== appState.eventId || undo.guestDocId !== findGuest(undo.guestDocId)?.id) {
+    clearCheckinUndo();
+    notify("Rückgängig ist nicht mehr verfügbar.", "warning");
+    return;
+  }
+
+  const guestForAudit = {
+    id: undo.guestDocId,
+    guestId: undo.guestId,
+    name: undo.guestName,
+    category: undo.category
+  };
+  const restoredStatus = normalizeUndoStatus(undo.previousStatus);
+  const restoreCheckedIn = restoredStatus === "checked_in";
+
+  try {
+    await runTransaction(appState.db, async (transaction) => {
+      const ref = guestRef(undo.guestDocId);
+      const snap = await transaction.get(ref);
+      if (!snap.exists()) throw new Error("UNDO_NOT_AVAILABLE");
+      const current = snap.data();
+      if (!checkinUndoStillMatches(current, undo)) throw new Error("UNDO_NOT_AVAILABLE");
+
+      transaction.update(ref, {
+        status: restoredStatus,
+        checkedInAt: restoreCheckedIn ? undo.previousCheckedInAt : null,
+        checkedInByUid: restoreCheckedIn ? undo.previousCheckedInByUid : null,
+        checkedInByName: restoreCheckedIn ? undo.previousCheckedInByName : null,
+        checkedInDevice: restoreCheckedIn ? undo.previousCheckedInDevice : null,
+        updatedAt: serverTimestamp(),
+        lastActionAt: serverTimestamp(),
+        lastActionByName: appState.member.displayName || "Check-in",
+        ...(isAdmin() ? staleGuestFieldDeletes() : {})
+      });
+    });
+
+    await addAudit("check_in_undo", guestForAudit, {
+      oldStatus: "checked_in",
+      newStatus: restoredStatus,
+      force: undo.force
+    });
+    clearCheckinUndo();
+    notify(`Check-in rückgängig gemacht: ${undo.guestName}.`, "success");
+  } catch (error) {
+    if (error.message === "UNDO_NOT_AVAILABLE") {
+      clearCheckinUndo();
+      notify("Rückgängig nicht mehr möglich: Der Gast wurde inzwischen geändert.", "warning");
+      return;
+    }
+    console.error(error);
+    notify(`Rückgängig fehlgeschlagen: ${error.message || error}`, "error");
+  }
+}
+
+function normalizeUndoStatus(status) {
+  return DEFAULT_STATUSES.includes(status) ? status : "open";
+}
+
+function checkinUndoStillMatches(current, undo) {
+  return current.status === "checked_in"
+    && (current.checkedInByUid || "") === (undo.checkedInByUid || "")
+    && (current.checkedInByName || "") === (undo.checkedInByName || "")
+    && (current.checkedInDevice || "") === (undo.checkedInDevice || "")
+    && (current.name || "") === (undo.guestName || "")
+    && (current.category || "") === (undo.category || "")
+    && (current.supportComment || "") === (undo.supportComment || "")
+    && (current.adminStaffInfo || "") === (undo.adminStaffInfo || "");
 }
 
 async function saveGuestComment(guestDocId) {
@@ -3603,6 +3744,8 @@ function auditSummary(entry) {
       return { subject, detail: duplicateLogoutDetail(details) };
     case "check_in":
       return { subject, detail: details.force ? "Check-in überschrieben" : "Eingecheckt" };
+    case "check_in_undo":
+      return { subject, detail: `Check-in rückgängig → ${statusLabel(details.newStatus)}` };
     case "duplicate_check_in_attempt":
       return { subject, detail: "Bereits eingecheckt" };
     case "support_comment_update":
@@ -3671,6 +3814,7 @@ function auditActionValues() {
     "member_force_logout",
     "member_duplicate_logout",
     "check_in",
+    "check_in_undo",
     "duplicate_check_in_attempt",
     "support_comment_update",
     "status_update",
@@ -3689,6 +3833,7 @@ function labelForAction(action) {
   const labels = {
     event_create: "Event erstellt",
     check_in: "Check-in",
+    check_in_undo: "Check-in rückgängig",
     support_comment_update: "Kommentar geändert",
     status_update: "Status geändert",
     guest_create: "Gast erstellt",

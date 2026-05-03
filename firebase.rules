@@ -379,6 +379,23 @@ service cloud.firestore {
             'updatedAt', 'lastActionAt', 'lastActionByName', 'supportComment'
           ])
         )
+        ||
+        (
+          resource.data.status == 'checked_in'
+          && resource.data.checkedInByUid == request.auth.uid
+          && (request.resource.data.status == 'open' || request.resource.data.status == 'no_show')
+          && request.resource.data.checkedInAt == null
+          && request.resource.data.checkedInByUid == null
+          && request.resource.data.checkedInByName == null
+          && request.resource.data.checkedInDevice == null
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.lastActionAt == request.time
+          && request.resource.data.lastActionByName is string
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'checkedInAt', 'checkedInByUid', 'checkedInByName', 'checkedInDevice',
+            'updatedAt', 'lastActionAt', 'lastActionByName'
+          ])
+        )
       );
     }
 

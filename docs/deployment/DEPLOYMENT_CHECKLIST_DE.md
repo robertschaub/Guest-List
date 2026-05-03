@@ -49,7 +49,6 @@
 - [ ] Export geprüft
 - [ ] Leeres Event zeigt 0-Gäste-Warnung
 - [ ] Import mit Löschen verlangt Event-ID als Bestätigung
-- [ ] Massen-No-Show verlangt Event-ID als Bestätigung
 
 ## Event-Tag Backup
 

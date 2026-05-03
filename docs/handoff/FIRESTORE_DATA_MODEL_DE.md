@@ -130,10 +130,10 @@ Erwartete Felder:
 - `guestId` soll innerhalb eines Events eindeutig sein. Der CSV Import blockiert doppelte IDs in der Datei und bei Zusatzimporten auch IDs, die bereits im Event existieren.
 - `status` darf nur `open`, `checked_in`, `no_show` sein.
 - Doppel-Check-in-Schutz muss per Firestore Transaction geschehen.
-- Check-in Staff darf Status auf `checked_in` setzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen.
+- Check-in Staff darf Status auf `checked_in` setzen, den eigenen letzten Check-in unmittelbar wieder auf den vorherigen Nicht-Check-in-Status zurücksetzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen.
 - Check-in Staff darf nur innerhalb des Firestore-geprüften Zeitfensters `checkinAccessStartsAt` bis `checkinAccessEndsAt` lesen und schreiben. Admins können dieses Zeitfenster pro Event ändern, um Test- oder Demo-Events kontrolliert weiterzuverwenden.
-- Admin darf Import, Export, Massen-No-Show, PIN-Reset und Korrekturen durchführen.
-- Admin darf auch vergangene und versteckte Events per Event-ID oder Event-Link öffnen und bearbeiten.
+- Admin darf Import, Export, PIN-Reset und Korrekturen durchführen.
+- Admin darf auch vergangene und versteckte Events über die Eventliste oder direkte Event-Links öffnen und bearbeiten.
 - Admin darf Event-Metadaten auflisten, damit aktive, vergangene und inaktive/versteckte Events im Adminbereich zum Bearbeiten auswählbar sind.
 - Nur Haupt-Admins dürfen Events verstecken oder wieder sichtbar machen. Versteckte Events sind für Check-in Staff gesperrt, bleiben für Admins aber sichtbar und bearbeitbar.
 - Nur der namenlose Master Admin-PIN darf ein komplettes Event löschen. Dabei müssen Gäste, Admin-Notizen, Geräte/Sessions, Event-PINs und Audit Log vor bzw. mit dem Event entfernt werden.

@@ -52,7 +52,7 @@ Darf:
 - Gäste importieren.
 - Gäste manuell hinzufügen.
 - Gäste exportieren.
-- Offene Gäste auf No Show setzen.
+- Einzelne Gäste auf No Show setzen.
 - Check-ins überschreiben/korrigieren.
 
 ### Check-in Staff

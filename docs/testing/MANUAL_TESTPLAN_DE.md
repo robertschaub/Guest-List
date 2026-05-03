@@ -60,7 +60,7 @@ Prüfen:
 - Export sichtbar.
 - Gast hinzufügen sichtbar.
 - Gast bearbeiten in der Check-in-Liste sichtbar.
-- Massenaktion No Show sichtbar.
+- Einzelne Statuskorrekturen in der Check-in-Liste sichtbar.
 
 ## Test 4 — Check-in Staff Login
 
@@ -139,6 +139,9 @@ Prüfen:
 - Check-in Zeit wird angezeigt.
 - Check-in durch Name/Gerät wird angezeigt.
 - Dashboard-Zahlen aktualisieren sich.
+- `Rückgängig` erscheint nach dem Check-in.
+- Ohne andere Aktion kann der Check-in rückgängig gemacht werden; Status und Summen gehen zurück.
+- Nach einer anderen Bedienaktion verschwindet `Rückgängig`; Scrollen allein lässt es sichtbar.
 
 ## Test 8 — Doppel-Check-in
 
@@ -190,17 +193,17 @@ Prüfen alle Kategorien:
 - On Stage
 - Mitarbeiter
 
-## Test 12 — No Show
+## Test 12 — No Show / Statuskorrektur
 
-**Gegeben** offene Gäste existieren.  
-**Wenn** Admin offene Gäste auf No Show setzt.  
+**Gegeben** ein einzelner Gast muss korrigiert werden.
+**Wenn** Admin den Gast in der Check-in-Liste auf No Show oder Offen setzt.
 **Dann** werden Status und Summen korrekt aktualisiert.
 
 Prüfen:
 
-- Vor der Massenaktion muss die aktuelle Event-ID eingetippt werden.
-- Bereits eingecheckte Gäste bleiben eingecheckt.
-- Nur offene Gäste ändern Status.
+- Die Korrektur fragt nach Bestätigung.
+- Check-in-Daten werden beim Zurücksetzen auf Offen entfernt.
+- Audit Log enthält die Statusänderung.
 
 ## Test 13 — Export / Backup
 
