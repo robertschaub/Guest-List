@@ -758,8 +758,14 @@ function startAdminPinEdit(pin) {
   confirmInput.value = "";
   cancelButton?.classList.remove("hidden");
   updateAdminPinButtonState();
-  form?.scrollIntoView({ behavior: "smooth", block: "start" });
-  if (authInput) authInput.focus();
+  scrollBelowStickyHeader(form?.closest(".card") || form);
+}
+
+function scrollBelowStickyHeader(element) {
+  if (!element) return;
+  const headerHeight = document.querySelector(".app-header")?.getBoundingClientRect().height || 0;
+  const targetTop = element.getBoundingClientRect().top + window.scrollY - headerHeight - 12;
+  window.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
 }
 
 async function joinEventFromForm(event) {
