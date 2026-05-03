@@ -504,7 +504,7 @@ function renderRolePinSections() {
     : "";
   const eventContext = appState.eventId
     ? `<p class="small">Event-ID: <code>${escapeHtml(appState.eventId)}</code></p>${renderCheckinAccessLoginStatus()}`
-    : `<p class="small">Ohne Event-Link wird ein heute aktives Check-in-Event gesucht. Für Tests oder ältere Demo-Events bitte den konkreten Event-Link öffnen.</p>`;
+    : `<p class="small">Ohne Event-Link öffnet Admin ein bekanntes Event. Check-in Staff braucht ein aktuell freigegebenes Check-in-Event.</p>`;
 
   return `
     <section class="card">
@@ -879,7 +879,7 @@ async function joinEventFromForm(event) {
   }
 
   if (!appState.eventId) {
-    const defaultEvent = await findFirstAvailableEventFromDate();
+    const defaultEvent = await findFirstAvailableAdminEvent();
     if (defaultEvent) {
       appState.eventId = defaultEvent.id;
       appState.event = defaultEvent;
@@ -889,7 +889,7 @@ async function joinEventFromForm(event) {
       els.eventTitle.textContent = appState.event.name || "Gästeliste";
       setEventMeta();
     } else {
-      result.innerHTML = `<p class="notice error">Kein Event ab heute gefunden. Bitte Event-Link öffnen oder neues Event erstellen.</p>`;
+      result.innerHTML = `<p class="notice error">Kein bekanntes Event gefunden. Bitte Event-Link öffnen oder neues Event erstellen.</p>`;
       return;
     }
   }
@@ -5264,6 +5264,37 @@ function getKnownEvents() {
 async function findFirstAvailableEventFromDate(now = new Date()) {
   const today = localDateKey(now);
   const candidates = getKnownEvents().filter((event) => event.date && event.date >= today);
+
+  for (const candidate of candidates) {
+    const eventSnap = await getDoc(doc(appState.db, "events", candidate.id));
+    if (eventSnap.exists()) {
+      return { id: eventSnap.id, ...eventSnap.data() };
+    }
+  }
+
+  return null;
+}
+
+async function findFirstAvailableAdminEvent(now = new Date()) {
+  const today = localDateKey(now);
+  const knownEvents = getKnownEvents();
+  const candidates = [];
+  const addCandidate = (event) => {
+    const normalized = normalizeKnownEvent(event);
+    if (normalized && !candidates.some((candidate) => candidate.id === normalized.id)) {
+      candidates.push(normalized);
+    }
+  };
+
+  const lastEventId = localStorage.getItem("guestlist:lastEventId") || "";
+  if (lastEventId) {
+    addCandidate(knownEvents.find((event) => event.id === lastEventId) || { id: lastEventId });
+  }
+  knownEvents.filter((event) => event.date && event.date >= today).forEach(addCandidate);
+  knownEvents.forEach(addCandidate);
+  if (GLOBAL_ADMIN_EVENT_ID) {
+    addCandidate(knownEvents.find((event) => event.id === GLOBAL_ADMIN_EVENT_ID) || { id: GLOBAL_ADMIN_EVENT_ID });
+  }
 
   for (const candidate of candidates) {
     const eventSnap = await getDoc(doc(appState.db, "events", candidate.id));

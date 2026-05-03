@@ -69,6 +69,7 @@ Prüfen:
 - Als benannter Admin: eigenen Admin-PIN ändern und prüfen, dass die Sitzung danach weiter funktioniert und der neue Zugang direkt kopiert werden kann.
 - Als benannter Admin: eigenen Admin-PIN löschen versuchen und prüfen, dass die App dies blockiert.
 - Wenn bereits angemeldet: im Tab `Anmeldung` erneut anmelden, Dialog `Zuerst abmelden und dann neu anmelden?` bestätigen und prüfen, dass die neue Anmeldung aktiv ist.
+- Ohne Event-Link: Admin-Login öffnet ein bekanntes bestehendes Event, auch wenn es vergangen ist.
 
 ## Test 4 — Check-in Staff Login
 
