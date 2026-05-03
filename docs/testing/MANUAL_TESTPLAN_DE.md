@@ -39,19 +39,19 @@ Prüfen:
 ## Test 2 — Setup Flow
 
 **Gegeben** App wird mit `?setup=1` geöffnet.  
-**Wenn** Eventname, globaler Admin-PIN und Check-in-PIN gesetzt werden.
+**Wenn** Eventname, Main-PIN mit Admin-Name `Main` und Check-in-PIN gesetzt werden.
 **Dann** wird ein Event erstellt und ein Event-Link angezeigt.
 
 Prüfen:
 
 - Event-Link enthält `?event=...`.
-- Globalen Admin-PIN und Check-in-PIN sicher notieren.
+- Main-PIN und Check-in-PIN sicher notieren.
 - Kategorien enthalten GA, Member GA, Member VIP, On Stage, Mitarbeiter.
 
 ## Test 3 — Admin Login
 
 **Gegeben** Event-Link ist geöffnet.  
-**Wenn** Rolle Admin und globaler Admin-PIN eingegeben werden.
+**Wenn** Rolle Admin, Name `Main` und Main-PIN eingegeben werden.
 **Dann** sind Admin-Funktionen sichtbar.
 
 Prüfen:
@@ -61,9 +61,12 @@ Prüfen:
 - Gast hinzufügen sichtbar.
 - Gast bearbeiten in der Check-in-Liste sichtbar.
 - Einzelne Statuskorrekturen in der Check-in-Liste sichtbar.
-- Als Haupt-Admin: im gemeinsamen Admin-PIN-Formular Name leer lassen, Haupt-Master-PIN ändern und direkt danach `Admin-Zugang kopieren` prüfen.
-- Als Haupt-Admin: im gemeinsamen Admin-PIN-Formular Name eintragen, benannten Admin-PIN erstellen und direkt danach `Admin-Zugang kopieren` prüfen.
-- Als Haupt-Admin: bestehenden benannten Admin-PIN über `PIN ändern` im gleichen Formular ändern; Autorisierung mit altem PIN des Eintrags oder Haupt-Master-PIN prüfen.
+- Als Haupt-Admin: Login mit Main-PIN nur mit Name `Main` erlauben; anderer Name wird abgewiesen.
+- Als Haupt-Admin: in der Admin-PIN-Liste `Main` sehen; dort darf nur `PIN ändern` sichtbar sein.
+- Als Haupt-Admin: im gemeinsamen Admin-PIN-Formular Name `Main` eintragen, Main-PIN ändern und direkt danach `Admin-Zugang kopieren` prüfen.
+- Als Haupt-Admin: im gemeinsamen Admin-PIN-Formular anderen Namen eintragen, benannten Admin-PIN erstellen und direkt danach `Admin-Zugang kopieren` prüfen.
+- Als Haupt-Admin: prüfen, dass ein benannter Admin-PIN nicht denselben PIN wie `Main` verwenden darf und dass der Main-PIN nicht auf einen bereits benannten PIN gesetzt werden darf.
+- Als Haupt-Admin: bestehenden benannten Admin-PIN über `PIN ändern` im gleichen Formular ändern; Autorisierung mit altem PIN des Eintrags oder Main-PIN prüfen.
 - Als Haupt-Admin: benannten Admin über `Master berechtigen` zum zusätzlichen Master Admin machen, mit diesem Admin anmelden und Master-only Aktion ohne zusätzliche PIN-Abfrage sehen.
 - Als Master Admin: zusätzliche Master-Berechtigung über `Master entziehen` wieder entfernen und prüfen, dass die Master-only Bereiche danach ausgeblendet sind.
 - Als benannter Admin ohne Master-Recht: Master-only Bereiche und Aktionen sind nicht sichtbar.

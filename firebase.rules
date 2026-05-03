@@ -43,63 +43,83 @@ service cloud.firestore {
       return role == 'admin' || role == 'checkin';
     }
 
-    function validAdminPinForData(data, pinHash, pinNameHash) {
+    function mainAdminNameKey() {
+      return 'main';
+    }
+
+    function adminMainPinMatchesForData(data, pinHash) {
       return data.adminPinHash == pinHash
         || (
           data.keys().hasAny(['adminPinHashes'])
           && pinHash in data.adminPinHashes
-        )
-        || (
-          pinNameHash is string
-          && data.keys().hasAny(['adminNamedPinHashes'])
-          && pinNameHash in data.adminNamedPinHashes
         );
     }
 
-    function validMasterAdminPinForData(data, pinHash, pinNameHash) {
-      return data.adminPinHash == pinHash
-        || (
-          data.keys().hasAny(['adminPinHashes'])
-          && pinHash in data.adminPinHashes
-        )
-        || (
-          pinNameHash is string
-          && data.keys().hasAny(['adminMasterNamedPinHashes'])
-          && pinNameHash in data.adminMasterNamedPinHashes
-        );
+    function adminNamedPinMatchesForData(data, pinNameHash) {
+      return pinNameHash is string
+        && data.keys().hasAny(['adminNamedPinHashes'])
+        && pinNameHash in data.adminNamedPinHashes;
     }
 
-    function validLegacyAdminPin(eventId, pinHash, pinNameHash) {
-      return securityExists(eventId)
+    function adminMasterNamedPinMatchesForData(data, pinNameHash) {
+      return pinNameHash is string
+        && data.keys().hasAny(['adminMasterNamedPinHashes'])
+        && pinNameHash in data.adminMasterNamedPinHashes;
+    }
+
+    function validAdminMemberPinForData(data, pinHash, pinNameHash, displayNameKey) {
+      return displayNameKey is string
         && (
-          securityData(eventId).adminPinHash == pinHash
-          || (
-            securityData(eventId).keys().hasAny(['adminPinHashes'])
-            && pinHash in securityData(eventId).adminPinHashes
+          (
+            displayNameKey == mainAdminNameKey()
+            && adminMainPinMatchesForData(data, pinHash)
           )
           || (
-            pinNameHash is string
-            && securityData(eventId).keys().hasAny(['adminNamedPinHashes'])
-            && pinNameHash in securityData(eventId).adminNamedPinHashes
+            displayNameKey != mainAdminNameKey()
+            && adminNamedPinMatchesForData(data, pinNameHash)
           )
         );
+    }
+
+    function validMasterAdminMemberPinForData(data, pinHash, pinNameHash, displayNameKey) {
+      return displayNameKey is string
+        && (
+          (
+            displayNameKey == mainAdminNameKey()
+            && adminMainPinMatchesForData(data, pinHash)
+          )
+          || (
+            displayNameKey != mainAdminNameKey()
+            && adminMasterNamedPinMatchesForData(data, pinNameHash)
+          )
+        );
+    }
+
+    function validLegacyAdminMemberPin(eventId, pinHash, pinNameHash, displayNameKey) {
+      return securityExists(eventId)
+        && validAdminMemberPinForData(securityData(eventId), pinHash, pinNameHash, displayNameKey);
     }
 
     function validLegacyMasterAdminForData(data) {
       return data.authorizingEventId is string
         && isMember(data.authorizingEventId)
         && memberData(data.authorizingEventId).role == 'admin'
-        && validLegacyAdminPin(data.authorizingEventId, memberData(data.authorizingEventId).pinHash, '');
+        && validLegacyAdminMemberPin(
+          data.authorizingEventId,
+          memberData(data.authorizingEventId).pinHash,
+          memberData(data.authorizingEventId).pinNameHash,
+          memberData(data.authorizingEventId).displayNameKey
+        );
     }
 
-    function validAdminPin(eventId, pinHash, pinNameHash) {
+    function validAdminPin(eventId, pinHash, pinNameHash, displayNameKey) {
       return (
           adminSecurityExists()
-          && validAdminPinForData(adminSecurityData(), pinHash, pinNameHash)
+          && validAdminMemberPinForData(adminSecurityData(), pinHash, pinNameHash, displayNameKey)
         )
         || (
           !adminSecurityExists()
-          && validLegacyAdminPin(eventId, pinHash, pinNameHash)
+          && validLegacyAdminMemberPin(eventId, pinHash, pinNameHash, displayNameKey)
         );
     }
 
@@ -119,10 +139,10 @@ service cloud.firestore {
         );
     }
 
-    function validPin(eventId, role, pinHash, pinNameHash) {
+    function validPin(eventId, role, pinHash, pinNameHash, displayNameKey) {
       return (
           role == 'admin'
-          && validAdminPin(eventId, pinHash, pinNameHash)
+          && validAdminPin(eventId, pinHash, pinNameHash, displayNameKey)
         )
         || (
           role == 'checkin'
@@ -133,10 +153,10 @@ service cloud.firestore {
     function hasCurrentPin(eventId) {
       return isMember(eventId)
         && (
-          validPin(eventId, memberData(eventId).role, memberData(eventId).pinHash, '')
+          validPin(eventId, memberData(eventId).role, memberData(eventId).pinHash, '', memberData(eventId).displayNameKey)
           || (
             memberData(eventId).keys().hasAny(['pinNameHash'])
-            && validPin(eventId, memberData(eventId).role, memberData(eventId).pinHash, memberData(eventId).pinNameHash)
+            && validPin(eventId, memberData(eventId).role, memberData(eventId).pinHash, memberData(eventId).pinNameHash, memberData(eventId).displayNameKey)
           )
         );
     }
@@ -151,7 +171,12 @@ service cloud.firestore {
       return hasCurrentPin(eventId)
         && memberData(eventId).role == 'admin'
         && adminSecurityExists()
-        && validMasterAdminPinForData(adminSecurityData(), memberData(eventId).pinHash, memberData(eventId).pinNameHash);
+        && validMasterAdminMemberPinForData(
+          adminSecurityData(),
+          memberData(eventId).pinHash,
+          memberData(eventId).pinNameHash,
+          memberData(eventId).displayNameKey
+        );
     }
 
     function isAdmin(eventId) {
@@ -219,7 +244,7 @@ service cloud.firestore {
         && request.resource.data.displayNameKey is string
         && request.resource.data.displayName is string
         && request.resource.data.deviceLabel is string
-        && validPin(eventId, request.resource.data.role, request.resource.data.pinHash, request.resource.data.pinNameHash)
+        && validPin(eventId, request.resource.data.role, request.resource.data.pinHash, request.resource.data.pinNameHash, request.resource.data.displayNameKey)
         && memberWriteAllowedForRole(eventId, request.resource.data.role)
         && request.resource.data.keys().hasOnly([
           'uid', 'role', 'pinHash', 'pinNameHash', 'displayNameKey',
@@ -292,19 +317,23 @@ service cloud.firestore {
       return data.authorizingEventId is string
         && isMember(data.authorizingEventId)
         && memberData(data.authorizingEventId).role == 'admin'
-        && validMasterAdminPinForData(data, memberData(data.authorizingEventId).pinHash, memberData(data.authorizingEventId).pinNameHash);
+        && validMasterAdminMemberPinForData(
+          data,
+          memberData(data.authorizingEventId).pinHash,
+          memberData(data.authorizingEventId).pinNameHash,
+          memberData(data.authorizingEventId).displayNameKey
+        );
     }
 
     function validGlobalAdminForData(data) {
       return data.authorizingEventId is string
         && isMember(data.authorizingEventId)
         && memberData(data.authorizingEventId).role == 'admin'
-        && (
-          validAdminPinForData(data, memberData(data.authorizingEventId).pinHash, '')
-          || (
-            memberData(data.authorizingEventId).keys().hasAny(['pinNameHash'])
-            && validAdminPinForData(data, memberData(data.authorizingEventId).pinHash, memberData(data.authorizingEventId).pinNameHash)
-          )
+        && validAdminMemberPinForData(
+          data,
+          memberData(data.authorizingEventId).pinHash,
+          memberData(data.authorizingEventId).pinNameHash,
+          memberData(data.authorizingEventId).displayNameKey
         );
     }
 

@@ -42,6 +42,9 @@ const ADMIN_SECURITY_COLLECTION = "appSecurity";
 const ADMIN_SECURITY_DOC_ID = "admin";
 const ADMIN_PIN_SCOPE = "global-admin";
 const ADMIN_MASTER_NAMED_HASHES_FIELD = "adminMasterNamedPinHashes";
+const MAIN_ADMIN_NAME = "Main";
+const MAIN_ADMIN_NAME_KEY = "main";
+const MAIN_ADMIN_PIN_ID = "main-admin-pin";
 const PIN_MIN_LENGTH = 4;
 
 const STATUS_META = {
@@ -304,7 +307,7 @@ function renderEventSetupSections(options = {}) {
   const visibleKnownEvents = knownEvents.filter((event) => isAdmin() || !isEventHidden(event));
   const showEventDirectory = isAdmin() || visibleKnownEvents.length;
   const omitAdminPin = Boolean(options.omitAdminPin);
-  const setupName = getAdminSession()?.displayName || appState.member?.displayName || "Admin";
+  const setupName = getAdminSession()?.displayName || appState.member?.displayName || MAIN_ADMIN_NAME;
   return `
     ${showEventDirectory ? `
       <section class="card">
@@ -327,7 +330,7 @@ function renderEventSetupSections(options = {}) {
         </div>
         ${omitAdminPin ? "" : `
           <div class="form-row">
-            <label for="adminPin">Globaler Admin-PIN</label>
+            <label for="adminPin">Main-PIN</label>
             <input id="adminPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
           </div>
         `}
@@ -336,7 +339,7 @@ function renderEventSetupSections(options = {}) {
           <input id="checkinPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
         </div>
         <div class="form-row">
-          <label for="setupName">Dein Name</label>
+          <label for="setupName">Admin-Name</label>
           <input id="setupName" value="${escapeHtml(setupName)}" required />
         </div>
         <div class="form-row" style="grid-column:1/-1">
@@ -382,7 +385,7 @@ async function createEventFromForm(event) {
   const date = val("newEventDate").trim();
   const adminPin = val("adminPin") || (isAdmin() ? getAdminSession()?.pin || "" : "");
   const checkinPin = val("checkinPin");
-  const displayName = val("setupName").trim() || "Admin";
+  const displayName = val("setupName").trim() || MAIN_ADMIN_NAME;
   const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
   const categories = val("categoryList").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 
@@ -524,11 +527,11 @@ function renderRolePinSections() {
         <div class="form-row">
           <label for="memberPin">PIN</label>
           <input id="memberPin" type="password" minlength="${PIN_MIN_LENGTH}" required autocomplete="off" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
-          <p class="field-help">Admin: globaler Admin-PIN. Check-in Staff: Event-spezifischer Check-in-PIN.</p>
+          <p class="field-help">Admin: Main-PIN mit Name Main oder persönlicher Admin-PIN. Check-in Staff: Event-spezifischer Check-in-PIN.</p>
         </div>
         <div class="form-row">
-          <label for="memberName">Name Mitarbeiter:in</label>
-          <input id="memberName" value="${escapeHtml(displayName)}" required placeholder="z.B. Eingang 1 / Max" />
+          <label for="memberName">Name</label>
+          <input id="memberName" value="${escapeHtml(displayName)}" required placeholder="Admin: Main / Check-in: Eingang 1" />
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" id="joinSubmitBtn" type="submit" disabled>Anmelden</button>
@@ -574,12 +577,12 @@ function renderAdminPinSection(isMaster = false) {
       <form id="adminPinForm" class="grid two">
         <input id="adminPinEditId" type="hidden" />
         <div class="form-row">
-          <label for="adminPinAuthPin">Bisheriger PIN oder Haupt-Master-PIN</label>
-          <input id="adminPinAuthPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="alter PIN oder Haupt-Master-PIN" />
+          <label for="adminPinAuthPin">Bisheriger PIN oder Main-PIN</label>
+          <input id="adminPinAuthPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="alter PIN oder Main-PIN" />
         </div>
         <div class="form-row">
           <label for="adminPinName">Name Administrator:in</label>
-          <input id="adminPinName" autocomplete="name" placeholder="leer = Haupt-Master-PIN" />
+          <input id="adminPinName" autocomplete="name" placeholder="Main oder z.B. Robert" />
         </div>
         <div class="form-row">
           <label for="adminPinNew">Neuer Admin-PIN</label>
@@ -595,7 +598,7 @@ function renderAdminPinSection(isMaster = false) {
         </div>
       </form>
       <div class="admin-section">
-        <h3>Benannte Admin-PINs</h3>
+        <h3>Admin-PINs</h3>
         <div id="namedAdminPinList" class="pin-list"><p class="small">Lädt…</p></div>
       </div>
       <div id="adminPinResult"></div>
@@ -775,7 +778,7 @@ async function joinEventFromForm(event) {
 
   const role = val("memberRole");
   const pin = val("memberPin");
-  const displayName = val("memberName").trim() || "Check-in";
+  const displayName = val("memberName").trim() || (role === "admin" ? MAIN_ADMIN_NAME : "Check-in");
   const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
 
   if (pin.length < PIN_MIN_LENGTH) {
@@ -948,9 +951,24 @@ async function verifyGlobalAdminPin(pin, displayName, deviceLabel, fallbackAutho
     GLOBAL_ADMIN_EVENT_ID || appState.eventId || fallbackAuthorizingEventId,
     fallbackAuthorizingEventId
   ].filter(Boolean);
+  const connectedEventIds = [];
 
   for (const verifierEventId of [...new Set(verifierEventIds)]) {
     await connectAdminToEvent(verifierEventId, pin, displayName, deviceLabel);
+    connectedEventIds.push(verifierEventId);
+  }
+
+  let securitySnap = null;
+  try {
+    securitySnap = await getDoc(adminSecurityRef());
+  } catch (error) {
+    if (isPermissionError(error)) return;
+    throw error;
+  }
+  if (!securitySnap?.exists()) return;
+  if ((await mainAdminPinInputMatchesSecurity(securitySnap.data(), pin)) && !isMainAdminName(displayName)) {
+    await removeCurrentMemberFromEvents(connectedEventIds);
+    throw new Error('Für den Main-PIN muss als Name "Main" eingegeben werden.');
   }
 }
 
@@ -968,6 +986,9 @@ async function ensureGlobalAdminSecurity(pin, displayName, deviceLabel, fallback
   if (!authorizingEventId) {
     throw new Error("Globales Admin-Security-Dokument fehlt und kein bestehender Admin-Event ist konfiguriert.");
   }
+  if (!isMainAdminName(displayName)) {
+    throw new Error('Für den Main-PIN muss als Name "Main" eingegeben werden.');
+  }
   await connectLegacyAdminToEvent(authorizingEventId, pin, displayName, deviceLabel);
 
   const adminPinHash = await hashAdminPin(pin);
@@ -983,10 +1004,21 @@ async function ensureGlobalAdminSecurity(pin, displayName, deviceLabel, fallback
   return true;
 }
 
+async function removeCurrentMemberFromEvents(eventIds) {
+  const uniqueIds = uniqueEventIds(eventIds);
+  await Promise.all(uniqueIds.map(async (eventId) => {
+    try {
+      await deleteDoc(doc(appState.db, "events", eventId, "members", appState.user.uid));
+    } catch (error) {
+      if (!isPermissionError(error)) throw error;
+    }
+  }));
+}
+
 function setupErrorMessage(error) {
   const message = String(error?.message || error || "");
   if (/permission|insufficient/i.test(message)) {
-    return "Globaler Admin-PIN ist falsch oder die Firebase-Regeln blockieren die Prüfung.";
+    return "Main-PIN ist falsch oder die Firebase-Regeln blockieren die Prüfung.";
   }
   return message || "Unbekannter Fehler.";
 }
@@ -2698,7 +2730,7 @@ async function prepareAdminSecurityForEventDelete(eventId) {
     if (!reconnectPin) {
       throw new Error("Für das Ersatz-Event ist eine erneute Haupt-Admin-Anmeldung nötig.");
     }
-    await connectAdminToEvent(replacement.id, reconnectPin, session?.displayName || appState.member?.displayName || "Admin", appState.member?.deviceLabel || "");
+    await connectAdminToEvent(replacement.id, reconnectPin, session?.displayName || appState.member?.displayName || MAIN_ADMIN_NAME, appState.member?.deviceLabel || "");
     memberSnap = await getMemberSnapForEvent(replacement.id);
   }
   if (!memberSnap.exists() || !adminMasterHashMatches(data, memberSnap.data()?.pinHash, memberSnap.data()?.pinNameHash)) {
@@ -3163,10 +3195,26 @@ async function saveAdminPinFromForm(event) {
   const result = document.getElementById("adminPinResult");
   const authPin = val("adminPinAuthPin");
   const namedDisplayName = val("adminPinName").trim();
+  const normalizedAdminName = normalizeDisplayNameKey(namedDisplayName);
   const newPin = val("adminPinNew");
   const newPinConfirm = val("adminPinConfirm");
-  const editId = namedDisplayName ? val("adminPinEditId") : "";
+  const editId = val("adminPinEditId");
   const isEdit = Boolean(editId);
+  const isMainEdit = editId === MAIN_ADMIN_PIN_ID;
+  const isMainName = normalizedAdminName === MAIN_ADMIN_NAME_KEY;
+  const isMainTarget = isMainName && (!isEdit || isMainEdit);
+  if (!normalizedAdminName) {
+    notify('Name ist Pflicht. Für den Main-PIN bitte "Main" eingeben.', "warning");
+    return;
+  }
+  if (isMainEdit && !isMainName) {
+    notify('Für den Main-PIN muss der Name "Main" bleiben.', "warning");
+    return;
+  }
+  if (isEdit && !isMainEdit && isMainName) {
+    notify('"Main" ist für den Main-PIN reserviert. Bitte abbrechen oder einen anderen Namen verwenden.', "warning");
+    return;
+  }
   if (authPin.length < PIN_MIN_LENGTH || newPin.length < PIN_MIN_LENGTH) {
     notify(`Admin-PIN muss mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
     return;
@@ -3175,7 +3223,7 @@ async function saveAdminPinFromForm(event) {
     notify("Neuer Admin-PIN und Wiederholung stimmen nicht überein.", "warning");
     return;
   }
-  const displayName = appState.member?.displayName || "Admin";
+  const displayName = appState.member?.displayName || MAIN_ADMIN_NAME;
   const deviceLabel = appState.member?.deviceLabel || "";
   try {
     if (result) result.innerHTML = `<p class="notice info">Admin-PIN wird geprüft…</p>`;
@@ -3187,16 +3235,24 @@ async function saveAdminPinFromForm(event) {
     }
     const securityData = securitySnap.data();
     const mainPinMatches = await mainAdminPinInputMatchesSecurity(securityData, authPin);
+    const namedAdminPins = namedPinsFromSecurity(securityData, "admin");
 
-    if (!namedDisplayName) {
+    if (isMainTarget) {
       if (!mainPinMatches) {
-        const message = "Bisheriger Haupt-Master-PIN ist falsch.";
+        const message = "Bisheriger Main-PIN ist falsch.";
         notify(message, "warning");
         if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
         return;
       }
       if (authPin === newPin) {
-        const message = "Der neue Haupt-Master-PIN muss anders sein.";
+        const message = "Der neue Main-PIN muss anders sein.";
+        notify(message, "warning");
+        if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
+        return;
+      }
+      const collidingNamedPin = await findNamedAdminPinUsingLiteralPin(namedAdminPins, newPin);
+      if (collidingNamedPin) {
+        const message = adminPinCollisionMessage(collidingNamedPin);
         notify(message, "warning");
         if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
         return;
@@ -3210,10 +3266,10 @@ async function saveAdminPinFromForm(event) {
         updatedAt: serverTimestamp()
       });
       for (const eventId of uniqueEventIds([anchorEventId, appState.eventId])) {
-        await connectAdminToEvent(eventId, newPin, displayName, deviceLabel);
+        await connectAdminToEvent(eventId, newPin, MAIN_ADMIN_NAME, deviceLabel);
       }
 
-      saveAdminSession(newPin, displayName);
+      saveAdminSession(newPin, MAIN_ADMIN_NAME);
       const memberSnap = await getMemberSnapForEvent(appState.eventId);
       if (memberSnap.exists()) appState.member = { id: memberSnap.id, ...memberSnap.data() };
       appState.ui.masterAdmin = await currentAdminIsMasterAdmin();
@@ -3221,22 +3277,35 @@ async function saveAdminPinFromForm(event) {
       await addAudit("admin_pin_reset", { name: "Admin-PIN" }, { scope: "global_admin" });
       resetAdminPinForm();
       renderImmediateAdminAccessCopy(result, {
-        message: "Haupt-Master-PIN gespeichert.",
-        displayName: "frei wählbar",
+        message: "Main-PIN gespeichert.",
+        displayName: MAIN_ADMIN_NAME,
         pin: newPin
       });
-      notify("Haupt-Master-PIN gespeichert.", "success");
+      notify("Main-PIN gespeichert.", "success");
+      return;
+    }
+
+    if (await mainAdminPinInputMatchesSecurity(securityData, newPin)) {
+      const message = "Dieser PIN ist bereits der Main-PIN. Bitte einen anderen PIN wählen.";
+      notify(message, "warning");
+      if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
+      return;
+    }
+    const collidingNamedPin = await findNamedAdminPinUsingLiteralPin(namedAdminPins, newPin, isEdit ? editId : "");
+    if (collidingNamedPin) {
+      const message = adminPinCollisionMessage(collidingNamedPin);
+      notify(message, "warning");
+      if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
       return;
     }
 
     let existingNamedPin = null;
     if (isEdit) {
-      existingNamedPin = namedPinsFromSecurity(securityData, "admin")
-        .find((pin) => namedPinEditKey(pin) === editId);
+      existingNamedPin = namedAdminPins.find((pin) => namedPinEditKey(pin) === editId);
       if (!existingNamedPin) throw new Error("Der benannte Admin-PIN wurde nicht gefunden.");
       const oldNamedPinMatches = await namedAdminPinInputMatchesPin(existingNamedPin, authPin);
       if (!mainPinMatches && !oldNamedPinMatches) {
-        const message = "Bisheriger Admin-PIN oder Haupt-Master-PIN ist falsch.";
+        const message = "Bisheriger Admin-PIN oder Main-PIN ist falsch.";
         notify(message, "warning");
         if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
         return;
@@ -3248,7 +3317,7 @@ async function saveAdminPinFromForm(event) {
       }
     } else {
       if (!mainPinMatches) {
-        const message = "Zum Erstellen bitte den Haupt-Master-PIN eingeben.";
+        const message = "Zum Erstellen bitte den Main-PIN eingeben.";
         notify(message, "warning");
         if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
         return;
@@ -3363,7 +3432,7 @@ function namedPinConfig(role) {
       listId: "namedAdminPinList",
       resultId: "adminPinResult",
       label: "Admin-PIN",
-      empty: "Keine benannten Admin-PINs gespeichert."
+      empty: "Keine Admin-PINs gespeichert."
     };
   }
   return {
@@ -3395,7 +3464,7 @@ async function renderNamedPinList(role) {
     const securityData = securitySnap.exists() ? securitySnap.data() : {};
     const pins = role === "checkin"
       ? checkinPinsFromSecurity(securityData)
-      : namedPinsFromSecurity(securityData, role);
+      : adminPinsFromSecurity(securityData);
     const canEditAdminPins = role === "admin" && appState.ui.masterAdmin === true;
     target.innerHTML = pins.length ? pins.map((pin, listIndex) => `
       <div class="pin-list-row">
@@ -3407,8 +3476,8 @@ async function renderNamedPinList(role) {
         <span class="pin-list-actions">
           ${role === "checkin" ? `<button class="btn-secondary" type="button" data-copy-checkin-pin="${listIndex}" ${pin.pinValue ? "" : "disabled"}>Kopieren</button>` : ""}
           ${canEditAdminPins ? `<button class="btn-secondary" type="button" data-edit-named-admin-pin="${listIndex}">PIN ändern</button>` : ""}
-          ${canEditAdminPins ? `<button class="${pin.masterAdmin ? "btn-warning" : "btn-secondary"}" type="button" data-toggle-named-admin-master="${listIndex}">${pin.masterAdmin ? "Master entziehen" : "Master berechtigen"}</button>` : ""}
-          ${pin.kind === "generic" ? "" : `<button class="btn-danger" type="button" data-delete-named-pin="${escapeHtml(role)}" data-pin-index="${listIndex}">PIN löschen</button>`}
+          ${canEditAdminPins && pin.kind !== "main" ? `<button class="${pin.masterAdmin ? "btn-warning" : "btn-secondary"}" type="button" data-toggle-named-admin-master="${listIndex}">${pin.masterAdmin ? "Master entziehen" : "Master berechtigen"}</button>` : ""}
+          ${pin.kind === "generic" || pin.kind === "main" ? "" : `<button class="btn-danger" type="button" data-delete-named-pin="${escapeHtml(role)}" data-pin-index="${listIndex}">PIN löschen</button>`}
         </span>
       </div>
     `).join("") : `<p class="small">${config.empty}</p>`;
@@ -3434,8 +3503,23 @@ async function renderNamedPinList(role) {
     updateCheckinPinVisibilityButton();
   } catch (error) {
     console.error(error);
-    target.innerHTML = `<p class="notice error">Benannte PINs konnten nicht geladen werden.</p>`;
+    target.innerHTML = `<p class="notice error">PINs konnten nicht geladen werden.</p>`;
   }
+}
+
+function adminPinsFromSecurity(data) {
+  return [
+    {
+      kind: "main",
+      id: MAIN_ADMIN_PIN_ID,
+      displayName: MAIN_ADMIN_NAME,
+      displayNameKey: MAIN_ADMIN_NAME_KEY,
+      pinNameHash: "",
+      index: -1,
+      masterAdmin: true
+    },
+    ...namedPinsFromSecurity(data, "admin").map((pin) => ({ ...pin, kind: "named" }))
+  ];
 }
 
 function namedPinsFromSecurity(data, role) {
@@ -4520,8 +4604,8 @@ function adminMasterHashMatches(data, pinHash, pinNameHash = "") {
 
 function adminMasterKind(data, pinHash, pinNameHash = "") {
   if (!pinHash) return "";
-  if (data?.adminPinHash === pinHash) return "unnamed";
-  if (Array.isArray(data?.adminPinHashes) && data.adminPinHashes.includes(pinHash)) return "unnamed";
+  if (data?.adminPinHash === pinHash) return "main";
+  if (Array.isArray(data?.adminPinHashes) && data.adminPinHashes.includes(pinHash)) return "main";
   if (pinNameHash && Array.isArray(data?.[ADMIN_MASTER_NAMED_HASHES_FIELD]) && data[ADMIN_MASTER_NAMED_HASHES_FIELD].includes(pinNameHash)) {
     return "named";
   }
@@ -4530,7 +4614,7 @@ function adminMasterKind(data, pinHash, pinNameHash = "") {
 
 async function mainAdminPinInputMatchesSecurity(data, pin) {
   const pinHash = await hashAdminPin(pin);
-  return adminMasterKind(data, pinHash, "") === "unnamed";
+  return adminMasterKind(data, pinHash, "") === "main";
 }
 
 async function namedAdminPinInputMatchesPin(pinEntry, pin) {
@@ -4538,6 +4622,19 @@ async function namedAdminPinInputMatchesPin(pinEntry, pin) {
   const displayName = pinEntry.displayName || pinEntry.displayNameKey || "";
   if (!displayName) return false;
   return (await hashNamedPin(ADMIN_PIN_SCOPE, "admin", pin, displayName)) === pinEntry.pinNameHash;
+}
+
+async function findNamedAdminPinUsingLiteralPin(pins, pin, excludeEditId = "") {
+  for (const existingPin of pins) {
+    if (excludeEditId && namedPinEditKey(existingPin) === excludeEditId) continue;
+    if (await namedAdminPinInputMatchesPin(existingPin, pin)) return existingPin;
+  }
+  return null;
+}
+
+function adminPinCollisionMessage(pin) {
+  const name = pin?.displayName || pin?.displayNameKey || "einen anderen Admin";
+  return `Dieser PIN wird bereits für ${name} verwendet. Bitte einen anderen PIN wählen.`;
 }
 
 function roleDisplayLabel(role = appState.member?.role) {
@@ -4557,11 +4654,36 @@ async function refreshMasterAdminState(options = {}) {
   const previous = appState.ui.masterAdmin;
   const isMaster = await currentAdminIsMasterAdmin();
   appState.ui.masterAdmin = isMaster;
+  if (isMaster && appState.ui.masterAdminKind === "main") {
+    await ensureMainAdminMemberName();
+    updateFooterStatus();
+  }
   if (options.rerender !== false && previous !== isMaster) {
     renderShell();
     renderActiveTab();
   }
   return isMaster;
+}
+
+async function ensureMainAdminMemberName() {
+  if (!appState.member || isMainAdminName(appState.member.displayName)) return;
+  try {
+    await updateDoc(memberRef(appState.user.uid), {
+      displayName: MAIN_ADMIN_NAME,
+      displayNameKey: MAIN_ADMIN_NAME_KEY,
+      updatedAt: serverTimestamp()
+    });
+    appState.member = {
+      ...appState.member,
+      displayName: MAIN_ADMIN_NAME,
+      displayNameKey: MAIN_ADMIN_NAME_KEY
+    };
+    const session = getAdminSession();
+    if (session?.pin) saveAdminSession(session.pin, MAIN_ADMIN_NAME);
+    localStorage.setItem("guestlist:memberName", MAIN_ADMIN_NAME);
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 function val(id) {
@@ -4617,6 +4739,10 @@ async function hashAdminPin(pin) {
 
 function normalizeDisplayNameKey(value) {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function isMainAdminName(value) {
+  return normalizeDisplayNameKey(value) === MAIN_ADMIN_NAME_KEY;
 }
 
 function getLocalDeviceLabel() {
@@ -5188,7 +5314,7 @@ async function activateKnownEvent(eventId) {
     const session = getAdminSession();
     if (session?.pin) {
       try {
-        await connectAdminToEvent(targetEventId, session.pin, session.displayName || appState.member?.displayName || "Admin");
+        await connectAdminToEvent(targetEventId, session.pin, session.displayName || appState.member?.displayName || MAIN_ADMIN_NAME);
         memberSnap = await getMemberSnapForEvent(targetEventId);
       } catch (error) {
         console.error(error);
@@ -5239,14 +5365,15 @@ async function getMemberSnapForEvent(eventId) {
 
 async function connectAdminToEvent(eventId, pin, displayName, deviceLabel = "") {
   const resolvedDeviceLabel = deviceLabel || getLocalDeviceLabel();
-  const authFields = await adminMemberAuthFields(pin, displayName || "Admin");
+  const adminDisplayName = displayName || MAIN_ADMIN_NAME;
+  const authFields = await adminMemberAuthFields(pin, adminDisplayName);
   await setDoc(doc(appState.db, "events", eventId, "members", appState.user.uid), {
     uid: appState.user.uid,
     role: "admin",
     pinHash: authFields.pinHash,
     pinNameHash: authFields.pinNameHash,
     displayNameKey: authFields.displayNameKey,
-    displayName: displayName || "Admin",
+    displayName: adminDisplayName,
     deviceLabel: resolvedDeviceLabel,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
@@ -5255,14 +5382,15 @@ async function connectAdminToEvent(eventId, pin, displayName, deviceLabel = "") 
 
 async function connectLegacyAdminToEvent(eventId, pin, displayName, deviceLabel = "") {
   const resolvedDeviceLabel = deviceLabel || getLocalDeviceLabel();
-  const authFields = await memberAuthFields(eventId, "admin", pin, displayName || "Admin");
+  const adminDisplayName = displayName || MAIN_ADMIN_NAME;
+  const authFields = await memberAuthFields(eventId, "admin", pin, adminDisplayName);
   await setDoc(doc(appState.db, "events", eventId, "members", appState.user.uid), {
     uid: appState.user.uid,
     role: "admin",
     pinHash: authFields.pinHash,
     pinNameHash: authFields.pinNameHash,
     displayNameKey: authFields.displayNameKey,
-    displayName: displayName || "Admin",
+    displayName: adminDisplayName,
     deviceLabel: resolvedDeviceLabel,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
