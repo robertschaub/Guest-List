@@ -575,7 +575,6 @@ function renderAdminPinSection(isMaster = false) {
         <div style="grid-column:1/-1">
           <h3 id="adminPinFormTitle">Admin-PIN verwalten</h3>
           <input id="adminPinEditId" type="hidden" />
-          <p class="small">Name leer lassen, um den Haupt-Master-PIN zu ändern. Name eintragen, um einen benannten Admin-PIN zu erstellen oder zu ändern.</p>
         </div>
         <div class="form-row">
           <label for="adminPinAuthPin">Bisheriger PIN oder Haupt-Master-PIN</label>
@@ -594,7 +593,7 @@ function renderAdminPinSection(isMaster = false) {
           <input id="adminPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
         </div>
         <div class="actions" style="grid-column:1/-1">
-          <button class="btn-primary" id="adminPinSaveBtn" type="submit" disabled>Admin-PIN speichern</button>
+          <button class="btn-primary" id="adminPinSaveBtn" type="submit" disabled>PIN speichern</button>
           <button class="btn-secondary hidden" id="adminPinCancelBtn" type="button">Abbrechen</button>
         </div>
       </form>
@@ -736,9 +735,7 @@ function updateAdminPinButtonState() {
   saveButton.disabled = authInput.value.length < PIN_MIN_LENGTH
     || pin.length < PIN_MIN_LENGTH
     || pin !== confirmInput.value;
-  saveButton.textContent = hasName
-    ? (isEdit ? "Benannten Admin-PIN ändern" : "Benannten Admin-PIN speichern")
-    : "Haupt-Master-PIN speichern";
+  saveButton.textContent = "PIN speichern";
   if (title) {
     title.textContent = hasName
       ? (isEdit ? "Benannten Admin-PIN ändern" : "Benannten Admin-PIN hinzufügen")
