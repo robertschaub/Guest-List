@@ -344,6 +344,50 @@ input:focus, select:focus, textarea:focus {
 .notice.warning { background: var(--warning-bg); color: var(--warning); border-color: #fde68a; }
 .notice.info { background: var(--info-bg); color: var(--info); border-color: #bfdbfe; }
 
+.copy-access-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.copy-access-notice button {
+  min-height: 42px;
+}
+
+.pin-prompt-backdrop {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.48);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 18px;
+  position: fixed;
+  z-index: 1000;
+}
+
+.pin-prompt-dialog {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  display: grid;
+  gap: 14px;
+  max-width: 440px;
+  padding: 22px;
+  width: min(100%, 440px);
+}
+
+.pin-prompt-dialog h2,
+.pin-prompt-dialog p {
+  margin: 0;
+}
+
+.pin-prompt-dialog input {
+  width: 100%;
+}
+
 .flash-message {
   display: flex;
   align-items: flex-start;
@@ -1088,6 +1132,14 @@ tr:last-child td { border-bottom: 0; }
   .notice {
     padding: 10px;
     margin: 8px 0;
+  }
+
+  .copy-access-notice {
+    display: grid;
+  }
+
+  .copy-access-notice button {
+    width: 100%;
   }
 
   .checkin-undo-message {

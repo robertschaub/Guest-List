@@ -24,8 +24,9 @@ Erwartete Felder:
 - `createdByUid`
 - `adminPinHash`: Hash des namenlosen Master Admin-PIN
 - `adminPinHashes`: Liste der namenlosen Master Admin-PIN-Hashes, maximal ein Eintrag
+- `adminMasterNamedPinHashes`: Liste benannter Admin-PIN+Name-Hashes, die zusätzlich als Master Admin berechtigt sind
 - `adminNamedPinHashes`: Liste der benannten Admin-PIN+Name-Hashes
-- `adminNamedPins`: Liste benannter Admin-PIN-Einträge zur Master-Admin-Anzeige und Löschung
+- `adminNamedPins`: Liste benannter Admin-PIN-Einträge zur Master-Admin-Anzeige, Änderung und Löschung. Der Admin-PIN-Klartext wird nicht dauerhaft gespeichert; Kopieren ist nur direkt nach dem Erstellen oder Ändern aus der aktuellen Eingabe möglich.
 - `createdAt`
 - `updatedAt` optional nach PIN-Änderungen
 
@@ -135,13 +136,13 @@ Erwartete Felder:
 - Admin darf Import, Export, PIN-Reset und Korrekturen durchführen.
 - Admin darf auch vergangene und versteckte Events über die Eventliste oder direkte Event-Links öffnen und bearbeiten.
 - Admin darf Event-Metadaten auflisten, damit aktive, vergangene und inaktive/versteckte Events im Adminbereich zum Bearbeiten auswählbar sind.
-- Nur Haupt-Admins dürfen Events verstecken oder wieder sichtbar machen. Versteckte Events sind für Check-in Staff gesperrt, bleiben für Admins aber sichtbar und bearbeitbar.
-- Nur der namenlose Master Admin-PIN darf ein komplettes Event löschen. Dabei müssen Gäste, Admin-Notizen, Geräte/Sessions, Event-PINs und Audit Log vor bzw. mit dem Event entfernt werden.
+- Nur Haupt-Admins dürfen Events verstecken oder wieder sichtbar machen. Nicht-Master-Admins sehen die Aktion, müssen beim Ausführen aber den Master-Admin-PIN eingeben; ihre aktuelle Sitzung wird nur temporär für diese Aktion auf Master Admin hochgestuft und danach wieder auf den vorherigen benannten Admin zurückgesetzt. Versteckte Events sind für Check-in Staff gesperrt, bleiben für Admins aber sichtbar und bearbeitbar.
+- Nur Master Admins dürfen ein komplettes Event löschen. Nicht-Master-Admins sehen die Löschaktion, müssen beim Ausführen aber den Master-Admin-PIN eingeben. Die temporäre Master-Hochstufung wird bei Abbruch oder Fehler zurückgesetzt; nach erfolgreicher Event-Löschung wird weitergeleitet. Dabei müssen Gäste, Admin-Notizen, Geräte/Sessions, Event-PINs und Audit Log vor bzw. mit dem Event entfernt werden.
 - Admin darf angemeldete Geräte über deren `members/{uid}` Dokument abmelden; Benutzer dürfen ihr eigenes Member-Dokument zum Abmelden löschen.
 - Benutzer geben beim Anmelden keinen Gerätenamen ein. Die App erzeugt lokal eine Geräte-ID; Admins dürfen den Gerätenamen im Admin-Tab ändern.
 - Bei Anmeldung mit gleichem Rollennamen auf mehreren Geräten fragt die App, ob andere Geräte mit gleicher Rolle und gleichem `displayNameKey` abgemeldet werden sollen. Check-in Staff darf dafür nur solche eigenen Namens-Sessions lesen und löschen.
 - Admin-only Infos liegen unter `guestAdminNotes` und dürfen nur von Admins gelesen und geschrieben werden.
-- Admin-PINs sind global. Der namenlose Admin-PIN ist der Master Admin-PIN; nur Master Admins dürfen benannte Admin-PINs erstellen, ändern oder löschen.
+- Admin-PINs sind global. Der namenlose Admin-PIN ist immer ein Master Admin-PIN. Master Admins dürfen benannte Admins zusätzlich als Master Admin berechtigen oder diese Berechtigung wieder entziehen. Nur Master Admins dürfen den Haupt-Admin-PIN und benannte Admin-PINs erstellen, ändern oder löschen. Nicht-Master-Admins sehen diese Controls, müssen zum Ausführen aber den Master-Admin-PIN maskiert eingeben; temporär berührte Event-Member werden danach vollständig auf den vorherigen Admin zurückgeschaltet. Der eigene benannte Admin-PIN darf geändert, aber nicht aus der laufenden Sitzung heraus gelöscht werden. Nach dem Erstellen oder Ändern bietet die UI einmalig das Kopieren von Name und PIN an, ohne den PIN später auslesbar zu speichern.
 - Check-in-PINs sind event-spezifisch. Pro Event darf es mehrere benannte Check-in-PINs geben und maximal einen namenlosen Check-in-PIN.
 - Bei benannten PINs muss beim Anmelden der Name case-insensitive passen, der PIN bleibt case-sensitive.
 
