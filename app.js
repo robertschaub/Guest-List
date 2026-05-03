@@ -560,7 +560,6 @@ async function renderAdminSettings() {
   `;
   if (isMaster) {
     bindAdminPinForm();
-    bindNamedAdminPinForm();
     void renderNamedPinList("admin");
   }
   void renderLoggedInMembersList();
@@ -571,51 +570,32 @@ function renderAdminPinSection(isMaster = false) {
 
   return `
     <section class="card">
-      <h2>Haupt-Admin-PINs</h2>
-      <form id="adminPinForm" class="grid">
+      <h2>Admin-PINs</h2>
+      <form id="adminPinForm" class="grid two">
         <div style="grid-column:1/-1">
-          <h3>Haupt-Admin-PIN ändern</h3>
+          <h3 id="adminPinFormTitle">Admin-PIN verwalten</h3>
+          <input id="adminPinEditId" type="hidden" />
+          <p class="small">Name leer lassen, um den Haupt-Master-PIN zu ändern. Name eintragen, um einen benannten Admin-PIN zu erstellen oder zu ändern.</p>
         </div>
         <div class="form-row">
-          <label for="currentAdminPin">Master-Admin-PIN</label>
-          <input id="currentAdminPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="bisheriger Master-Admin-PIN" />
+          <label for="adminPinAuthPin">Bisheriger PIN oder Haupt-Master-PIN</label>
+          <input id="adminPinAuthPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="alter PIN oder Haupt-Master-PIN" />
         </div>
         <div class="form-row">
-          <label for="newAdminPin">Neuer Admin-PIN</label>
-          <input id="newAdminPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
+          <label for="adminPinName">Name Administrator:in</label>
+          <input id="adminPinName" autocomplete="name" placeholder="leer = Haupt-Master-PIN" />
         </div>
         <div class="form-row">
-          <label for="newAdminPinConfirm">Neuer Admin-PIN wiederholen</label>
-          <input id="newAdminPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
-        </div>
-        <div class="actions">
-          <button class="btn-primary" id="adminPinSaveBtn" type="submit" disabled>Admin-PIN speichern</button>
-        </div>
-      </form>
-      <form id="namedAdminPinForm" class="grid two admin-section">
-        <div style="grid-column:1/-1">
-          <h3 id="namedAdminPinFormTitle">Benannten Admin-PIN hinzufügen</h3>
-          <input id="namedAdminPinEditId" type="hidden" />
+          <label for="adminPinNew">Neuer Admin-PIN</label>
+          <input id="adminPinNew" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
         </div>
         <div class="form-row">
-          <label for="currentAdminPinForNamed">Master-Admin-PIN</label>
-          <input id="currentAdminPinForNamed" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="Master-Admin-PIN zur Bestätigung" />
-        </div>
-        <div class="form-row">
-          <label for="namedAdminName">Name Administrator:in</label>
-          <input id="namedAdminName" autocomplete="name" placeholder="z.B. Robert" />
-        </div>
-        <div class="form-row">
-          <label for="namedAdminPin">Admin-PIN</label>
-          <input id="namedAdminPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
-        </div>
-        <div class="form-row">
-          <label for="namedAdminPinConfirm">Admin-PIN wiederholen</label>
-          <input id="namedAdminPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
+          <label for="adminPinConfirm">Neuer Admin-PIN wiederholen</label>
+          <input id="adminPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
         </div>
         <div class="actions" style="grid-column:1/-1">
-          <button class="btn-primary" id="namedAdminPinSaveBtn" type="submit">Benannten Admin-PIN speichern</button>
-          <button class="btn-secondary hidden" id="namedAdminPinCancelBtn" type="button">Abbrechen</button>
+          <button class="btn-primary" id="adminPinSaveBtn" type="submit" disabled>Admin-PIN speichern</button>
+          <button class="btn-secondary hidden" id="adminPinCancelBtn" type="button">Abbrechen</button>
         </div>
       </form>
       <div class="admin-section">
@@ -721,97 +701,80 @@ function bindJoinForm() {
 
 function bindAdminPinForm() {
   const form = document.getElementById("adminPinForm");
-  const currentInput = document.getElementById("currentAdminPin");
-  const newInput = document.getElementById("newAdminPin");
-  const confirmInput = document.getElementById("newAdminPinConfirm");
+  const authInput = document.getElementById("adminPinAuthPin");
+  const nameInput = document.getElementById("adminPinName");
+  const newInput = document.getElementById("adminPinNew");
+  const confirmInput = document.getElementById("adminPinConfirm");
   const button = document.getElementById("adminPinSaveBtn");
-  if (!form || !currentInput || !newInput || !confirmInput || !button) return;
+  const cancelButton = document.getElementById("adminPinCancelBtn");
+  if (!form || !authInput || !nameInput || !newInput || !confirmInput || !button) return;
 
-  const updateButtonState = () => {
-    button.disabled = currentInput.value.length < PIN_MIN_LENGTH
-      || newInput.value.length < PIN_MIN_LENGTH
-      || newInput.value !== confirmInput.value
-      || currentInput.value === newInput.value;
-  };
-
-  updateButtonState();
-  [currentInput, newInput, confirmInput].forEach((input) => input.addEventListener("input", updateButtonState));
-  form.addEventListener("submit", updateGlobalAdminPinFromForm);
-}
-
-function bindNamedAdminPinForm() {
-  const form = document.getElementById("namedAdminPinForm");
-  const currentInput = document.getElementById("currentAdminPinForNamed");
-  const nameInput = document.getElementById("namedAdminName");
-  const pinInput = document.getElementById("namedAdminPin");
-  const confirmInput = document.getElementById("namedAdminPinConfirm");
-  const button = document.getElementById("namedAdminPinSaveBtn");
-  const cancelButton = document.getElementById("namedAdminPinCancelBtn");
-  if (!form || !currentInput || !nameInput || !pinInput || !confirmInput || !button) return;
-
-  updateNamedAdminPinButtonState();
-  [currentInput, nameInput, pinInput, confirmInput].forEach((input) => {
-    input.addEventListener("input", updateNamedAdminPinButtonState);
-    input.addEventListener("change", updateNamedAdminPinButtonState);
-    input.addEventListener("keyup", updateNamedAdminPinButtonState);
-    input.addEventListener("paste", () => window.setTimeout(updateNamedAdminPinButtonState, 0));
+  updateAdminPinButtonState();
+  [authInput, nameInput, newInput, confirmInput].forEach((input) => {
+    input.addEventListener("input", updateAdminPinButtonState);
+    input.addEventListener("change", updateAdminPinButtonState);
+    input.addEventListener("keyup", updateAdminPinButtonState);
+    input.addEventListener("paste", () => window.setTimeout(updateAdminPinButtonState, 0));
   });
-  cancelButton?.addEventListener("click", resetNamedAdminPinForm);
-  form.addEventListener("submit", addNamedGlobalAdminPinFromForm);
+  cancelButton?.addEventListener("click", resetAdminPinForm);
+  form.addEventListener("submit", saveAdminPinFromForm);
 }
 
-function updateNamedAdminPinButtonState() {
-  const currentInput = document.getElementById("currentAdminPinForNamed");
-  const nameInput = document.getElementById("namedAdminName");
-  const pinInput = document.getElementById("namedAdminPin");
-  const confirmInput = document.getElementById("namedAdminPinConfirm");
-  const button = document.getElementById("namedAdminPinSaveBtn");
-  if (!currentInput || !nameInput || !pinInput || !confirmInput || !button) return;
+function updateAdminPinButtonState() {
+  const authInput = document.getElementById("adminPinAuthPin");
+  const nameInput = document.getElementById("adminPinName");
+  const pinInput = document.getElementById("adminPinNew");
+  const confirmInput = document.getElementById("adminPinConfirm");
+  const editInput = document.getElementById("adminPinEditId");
+  const title = document.getElementById("adminPinFormTitle");
+  const saveButton = document.getElementById("adminPinSaveBtn");
+  if (!authInput || !nameInput || !pinInput || !confirmInput || !saveButton) return;
 
+  const hasName = Boolean(nameInput.value.trim());
+  const isEdit = Boolean(editInput?.value);
   const pin = pinInput.value;
-  const ready = currentInput.value.length >= PIN_MIN_LENGTH
-    && Boolean(nameInput.value.trim())
-    && pin.length >= PIN_MIN_LENGTH
-    && pin === confirmInput.value;
-  button.classList.toggle("btn-primary", ready);
-  button.classList.toggle("btn-secondary", !ready);
+  saveButton.disabled = authInput.value.length < PIN_MIN_LENGTH
+    || pin.length < PIN_MIN_LENGTH
+    || pin !== confirmInput.value;
+  saveButton.textContent = hasName
+    ? (isEdit ? "Benannten Admin-PIN ändern" : "Benannten Admin-PIN speichern")
+    : "Haupt-Master-PIN speichern";
+  if (title) {
+    title.textContent = hasName
+      ? (isEdit ? "Benannten Admin-PIN ändern" : "Benannten Admin-PIN hinzufügen")
+      : "Haupt-Master-PIN ändern";
+  }
 }
 
-function resetNamedAdminPinForm() {
-  document.getElementById("namedAdminPinForm")?.reset();
-  const editInput = document.getElementById("namedAdminPinEditId");
-  const title = document.getElementById("namedAdminPinFormTitle");
-  const saveButton = document.getElementById("namedAdminPinSaveBtn");
-  const cancelButton = document.getElementById("namedAdminPinCancelBtn");
+function resetAdminPinForm() {
+  document.getElementById("adminPinForm")?.reset();
+  const editInput = document.getElementById("adminPinEditId");
+  const cancelButton = document.getElementById("adminPinCancelBtn");
   if (editInput) editInput.value = "";
-  if (title) title.textContent = "Benannten Admin-PIN hinzufügen";
-  if (saveButton) saveButton.textContent = "Benannten Admin-PIN speichern";
   cancelButton?.classList.add("hidden");
-  updateNamedAdminPinButtonState();
+  updateAdminPinButtonState();
 }
 
-function startNamedAdminPinEdit(pin) {
+function startAdminPinEdit(pin) {
   if (!pin) return;
-  const editInput = document.getElementById("namedAdminPinEditId");
-  const nameInput = document.getElementById("namedAdminName");
-  const pinInput = document.getElementById("namedAdminPin");
-  const confirmInput = document.getElementById("namedAdminPinConfirm");
-  const title = document.getElementById("namedAdminPinFormTitle");
-  const saveButton = document.getElementById("namedAdminPinSaveBtn");
-  const cancelButton = document.getElementById("namedAdminPinCancelBtn");
-  const form = document.getElementById("namedAdminPinForm");
+  const editInput = document.getElementById("adminPinEditId");
+  const authInput = document.getElementById("adminPinAuthPin");
+  const nameInput = document.getElementById("adminPinName");
+  const pinInput = document.getElementById("adminPinNew");
+  const confirmInput = document.getElementById("adminPinConfirm");
+  const cancelButton = document.getElementById("adminPinCancelBtn");
+  const form = document.getElementById("adminPinForm");
   if (!editInput || !nameInput || !pinInput || !confirmInput) return;
 
   editInput.value = namedPinEditKey(pin);
+  if (authInput) authInput.value = "";
   nameInput.value = pin.displayName || pin.displayNameKey || "";
   pinInput.value = "";
   confirmInput.value = "";
-  if (title) title.textContent = "Benannten Admin-PIN ändern";
-  if (saveButton) saveButton.textContent = "Admin-PIN ändern";
   cancelButton?.classList.remove("hidden");
-  updateNamedAdminPinButtonState();
+  updateAdminPinButtonState();
   form?.scrollIntoView({ behavior: "smooth", block: "start" });
-  pinInput.focus();
+  if (authInput) authInput.focus();
 }
 
 async function joinEventFromForm(event) {
@@ -3197,20 +3160,23 @@ async function addNamedCheckinPinFromForm(event) {
   }
 }
 
-async function updateGlobalAdminPinFromForm(event) {
+async function saveAdminPinFromForm(event) {
   event.preventDefault();
   if (!requireOnline("Admin-PIN speichern")) return;
   if (!isAdmin()) {
     notify("Nur Admins dürfen PINs ändern.", "warning");
     return;
   }
-  if (!(await requireMasterAdmin("Haupt-Admin-PIN ändern"))) return;
+  if (!(await requireMasterAdmin("Admin-PIN verwalten"))) return;
 
   const result = document.getElementById("adminPinResult");
-  const currentPin = val("currentAdminPin");
-  const newPin = val("newAdminPin");
-  const newPinConfirm = val("newAdminPinConfirm");
-  if (currentPin.length < PIN_MIN_LENGTH || newPin.length < PIN_MIN_LENGTH) {
+  const authPin = val("adminPinAuthPin");
+  const namedDisplayName = val("adminPinName").trim();
+  const newPin = val("adminPinNew");
+  const newPinConfirm = val("adminPinConfirm");
+  const editId = namedDisplayName ? val("adminPinEditId") : "";
+  const isEdit = Boolean(editId);
+  if (authPin.length < PIN_MIN_LENGTH || newPin.length < PIN_MIN_LENGTH) {
     notify(`Admin-PIN muss mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
     return;
   }
@@ -3221,79 +3187,7 @@ async function updateGlobalAdminPinFromForm(event) {
   const displayName = appState.member?.displayName || "Admin";
   const deviceLabel = appState.member?.deviceLabel || "";
   try {
-    if (result) result.innerHTML = `<p class="notice info">Haupt-Admin-PIN wird geprüft…</p>`;
-
-  const securitySnap = await getDoc(adminSecurityRef());
-  if (!securitySnap.exists()) {
-    notify("Globales Admin-Security-Dokument fehlt.", "error");
-    return;
-  }
-  if (!(await masterPinInputMatchesSecurity(securitySnap.data(), currentPin))) {
-    notify("Master-Admin-PIN ist falsch.", "warning");
-    return;
-  }
-
-    const adminPinHash = await hashAdminPin(newPin);
-    const anchorEventId = securitySnap.data().authorizingEventId || GLOBAL_ADMIN_EVENT_ID || appState.eventId;
-    await updateDoc(adminSecurityRef(), {
-      adminPinHash,
-      adminPinHashes: [adminPinHash],
-      updatedAt: serverTimestamp()
-    });
-    for (const eventId of [...new Set([anchorEventId, appState.eventId].filter(Boolean))]) {
-      await connectAdminToEvent(eventId, newPin, displayName, deviceLabel);
-    }
-
-    saveAdminSession(newPin, displayName);
-    const memberSnap = await getMemberSnapForEvent(appState.eventId);
-    if (memberSnap.exists()) appState.member = { id: memberSnap.id, ...memberSnap.data() };
-    await addAudit("admin_pin_reset", { name: "Admin-PIN" }, { scope: "global_admin" });
-    document.getElementById("adminPinForm")?.reset();
-    const saveButton = document.getElementById("adminPinSaveBtn");
-    if (saveButton) saveButton.disabled = true;
-    renderImmediateAdminAccessCopy(result, {
-      message: "Haupt-Admin-PIN gespeichert.",
-      displayName: "frei wählbar",
-      pin: newPin
-    });
-    notify("Haupt-Admin-PIN gespeichert.", "success");
-  } catch (error) {
-    console.error(error);
-    notify(`Admin-PIN konnte nicht gesetzt werden: ${error.message || error}`, "error");
-    if (result) result.innerHTML = `<p class="notice error">${escapeHtml(error.message || error)}</p>`;
-  }
-}
-
-async function addNamedGlobalAdminPinFromForm(event) {
-  event.preventDefault();
-  if (!requireOnline("Admin-PIN speichern")) return;
-  if (!isAdmin()) {
-    notify("Nur Admins dürfen PINs ändern.", "warning");
-    return;
-  }
-  if (!(await requireMasterAdmin("Benannten Admin-PIN verwalten"))) return;
-
-  const result = document.getElementById("adminPinResult");
-  const currentPin = val("currentAdminPinForNamed");
-  const namedDisplayName = val("namedAdminName").trim();
-  const newPin = val("namedAdminPin");
-  const newPinConfirm = val("namedAdminPinConfirm");
-  const editId = val("namedAdminPinEditId");
-  const isEdit = Boolean(editId);
-  if (!namedDisplayName) {
-    notify("Name ist Pflicht.", "warning");
-    return;
-  }
-  if (currentPin.length < PIN_MIN_LENGTH || newPin.length < PIN_MIN_LENGTH) {
-    notify(`Admin-PIN muss mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
-    return;
-  }
-  if (newPin !== newPinConfirm) {
-    notify("Neuer Admin-PIN und Wiederholung stimmen nicht überein.", "warning");
-    return;
-  }
-  try {
-    if (result) result.innerHTML = `<p class="notice info">Haupt-Admin-PIN wird geprüft…</p>`;
+    if (result) result.innerHTML = `<p class="notice info">Admin-PIN wird geprüft…</p>`;
 
     const securitySnap = await getDoc(adminSecurityRef());
     if (!securitySnap.exists()) {
@@ -3301,20 +3195,73 @@ async function addNamedGlobalAdminPinFromForm(event) {
       return;
     }
     const securityData = securitySnap.data();
-    if (!(await masterPinInputMatchesSecurity(securityData, currentPin))) {
-      notify("Master-Admin-PIN ist falsch.", "warning");
+    const mainPinMatches = await mainAdminPinInputMatchesSecurity(securityData, authPin);
+
+    if (!namedDisplayName) {
+      if (!mainPinMatches) {
+        const message = "Bisheriger Haupt-Master-PIN ist falsch.";
+        notify(message, "warning");
+        if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
+        return;
+      }
+      if (authPin === newPin) {
+        const message = "Der neue Haupt-Master-PIN muss anders sein.";
+        notify(message, "warning");
+        if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
+        return;
+      }
+
+      const adminPinHash = await hashAdminPin(newPin);
+      const anchorEventId = securityData.authorizingEventId || GLOBAL_ADMIN_EVENT_ID || appState.eventId;
+      await updateDoc(adminSecurityRef(), {
+        adminPinHash,
+        adminPinHashes: [adminPinHash],
+        updatedAt: serverTimestamp()
+      });
+      for (const eventId of uniqueEventIds([anchorEventId, appState.eventId])) {
+        await connectAdminToEvent(eventId, newPin, displayName, deviceLabel);
+      }
+
+      saveAdminSession(newPin, displayName);
+      const memberSnap = await getMemberSnapForEvent(appState.eventId);
+      if (memberSnap.exists()) appState.member = { id: memberSnap.id, ...memberSnap.data() };
+      appState.ui.masterAdmin = await currentAdminIsMasterAdmin();
+      updateFooterStatus();
+      await addAudit("admin_pin_reset", { name: "Admin-PIN" }, { scope: "global_admin" });
+      resetAdminPinForm();
+      renderImmediateAdminAccessCopy(result, {
+        message: "Haupt-Master-PIN gespeichert.",
+        displayName: "frei wählbar",
+        pin: newPin
+      });
+      notify("Haupt-Master-PIN gespeichert.", "success");
       return;
     }
 
+    let existingNamedPin = null;
     if (isEdit) {
-      const existingNamedPin = namedPinsFromSecurity(securityData, "admin")
+      existingNamedPin = namedPinsFromSecurity(securityData, "admin")
         .find((pin) => namedPinEditKey(pin) === editId);
+      if (!existingNamedPin) throw new Error("Der benannte Admin-PIN wurde nicht gefunden.");
+      const oldNamedPinMatches = await namedAdminPinInputMatchesPin(existingNamedPin, authPin);
+      if (!mainPinMatches && !oldNamedPinMatches) {
+        const message = "Bisheriger Admin-PIN oder Haupt-Master-PIN ist falsch.";
+        notify(message, "warning");
+        if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
+        return;
+      }
       const editsCurrentNamedAdmin = isCurrentNamedAdminPin(existingNamedPin);
       await replaceNamedPinInEvent("", "admin", editId, newPin, namedDisplayName);
       if (editsCurrentNamedAdmin) {
         await reconnectNamedAdminSessionAfterPinChange(securityData, newPin, namedDisplayName);
       }
     } else {
+      if (!mainPinMatches) {
+        const message = "Zum Erstellen bitte den Haupt-Master-PIN eingeben.";
+        notify(message, "warning");
+        if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
+        return;
+      }
       await appendNamedPinToEvent("", "admin", newPin, namedDisplayName, createNamedPinId());
     }
     await addAudit("admin_pin_reset", { name: "Admin-PIN" }, {
@@ -3322,7 +3269,7 @@ async function addNamedGlobalAdminPinFromForm(event) {
       mode: isEdit ? "edit_named" : "named",
       displayName: namedDisplayName
     });
-    resetNamedAdminPinForm();
+    resetAdminPinForm();
     await renderNamedPinList("admin");
     renderImmediateAdminAccessCopy(result, {
       message: isEdit ? "Benannter Admin-PIN geändert." : "Benannter Admin-PIN gespeichert.",
@@ -3483,7 +3430,7 @@ async function renderNamedPinList(role) {
     });
     target.querySelectorAll("[data-edit-named-admin-pin]").forEach((button) => {
       const pin = pins[Number(button.dataset.editNamedAdminPin)];
-      button.addEventListener("click", () => startNamedAdminPinEdit(pin));
+      button.addEventListener("click", () => startAdminPinEdit(pin));
     });
     target.querySelectorAll("[data-toggle-named-admin-master]").forEach((button) => {
       const pin = pins[Number(button.dataset.toggleNamedAdminMaster)];
@@ -4590,14 +4537,16 @@ function adminMasterKind(data, pinHash, pinNameHash = "") {
   return "";
 }
 
-async function masterPinInputMatchesSecurity(data, pin) {
+async function mainAdminPinInputMatchesSecurity(data, pin) {
   const pinHash = await hashAdminPin(pin);
-  if (adminMasterHashMatches(data, pinHash, "")) return true;
+  return adminMasterKind(data, pinHash, "") === "unnamed";
+}
 
-  const displayName = appState.member?.displayName || "";
+async function namedAdminPinInputMatchesPin(pinEntry, pin) {
+  if (!pinEntry?.pinNameHash) return false;
+  const displayName = pinEntry.displayName || pinEntry.displayNameKey || "";
   if (!displayName) return false;
-  const pinNameHash = await hashNamedPin(ADMIN_PIN_SCOPE, "admin", pin, displayName);
-  return adminMasterHashMatches(data, pinHash, pinNameHash);
+  return (await hashNamedPin(ADMIN_PIN_SCOPE, "admin", pin, displayName)) === pinEntry.pinNameHash;
 }
 
 function roleDisplayLabel(role = appState.member?.role) {
