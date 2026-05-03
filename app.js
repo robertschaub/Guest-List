@@ -310,11 +310,6 @@ function renderEventSetupSections(options = {}) {
       </section>
     ` : ""}
     <section class="card">
-      <h2>Event öffnen</h2>
-      <p class="small">Für ältere Events: Event-ID oder vollständigen Event-Link einfügen. Admins können das Event danach bearbeiten.</p>
-      ${renderOpenEventForm()}
-    </section>
-    <section class="card">
       <h2>Neues Event erstellen</h2>
       <form id="createEventForm" class="grid two">
         <div class="form-row">
@@ -359,8 +354,6 @@ function bindEventSetupHandlers() {
     bindKnownLinkCopyButtons();
     bindKnownEventButtons();
   }
-  bindOpenEventForm();
-
   document.getElementById("createEventForm")?.addEventListener("submit", createEventFromForm);
 }
 
@@ -1937,11 +1930,6 @@ function renderAdmin() {
       <h2>Event wechseln</h2>
       <p class="small">Zeigt alle Events aus Firebase, inklusive vergangener und versteckter Events. Gäste, Import und Export bleiben pro Event getrennt.</p>
       <div id="adminEventDirectory"><p class="small">Events werden geladen…</p></div>
-      <div class="admin-section">
-        <h3>Event per ID oder Link öffnen</h3>
-        <p class="small">Für alte Events, die in dieser Liste noch fehlen: Event-ID oder vollständigen Event-Link einfügen.</p>
-        ${renderOpenEventForm()}
-      </div>
     </section>
 
     <section class="card">
@@ -2007,19 +1995,10 @@ function renderAdmin() {
       <div id="backupStatus">${appState.ui.lastBackupMessage ? `<p class="notice success">${escapeHtml(appState.ui.lastBackupMessage)}</p>` : ""}</div>
     </section>
 
-    <section class="card danger-section">
-      <h2>Tagesabschluss</h2>
-      <p class="notice warning"><strong>Gefährliche Massenaktion:</strong> Diese Aktion setzt alle noch offenen Gäste auf No Show und muss mit der Event-ID bestätigt werden.</p>
-      <div class="actions">
-        <button class="btn-danger" id="markOpenNoShowBtn">Offene Gäste auf No Show setzen</button>
-      </div>
-    </section>
-
     <div id="eventDeleteSection"></div>
     <div id="eventVisibilitySection"></div>
   `;
 
-  bindOpenEventForm();
   bindEventNameForm();
   bindCheckinAccessForm();
   bindCheckinPinForm();
@@ -2030,7 +2009,6 @@ function renderAdmin() {
   document.getElementById("runImportBtn")?.addEventListener("click", runCsvImport);
   document.querySelectorAll("[data-export]").forEach((btn) => btn.addEventListener("click", () => exportGuests(btn.dataset.export)));
   document.getElementById("exportAuditBtn")?.addEventListener("click", exportAuditLog);
-  document.getElementById("markOpenNoShowBtn")?.addEventListener("click", markOpenGuestsNoShow);
   void renderAdminEventDirectory();
   void renderEventDeleteSection();
   void renderEventVisibilitySection();
@@ -2915,39 +2893,6 @@ function confirmByTypingEventId(actionText) {
   return true;
 }
 
-async function markOpenGuestsNoShow() {
-  if (!requireOnline("No Show setzen")) return;
-  if (!isAdmin()) return;
-  const openGuests = appState.guests.filter((g) => (g.status || "open") === "open");
-  if (!openGuests.length) {
-    notify("Keine offenen Gäste gefunden.", "info");
-    return;
-  }
-  if (!confirmByTypingEventId(`Du setzt ${openGuests.length} offene Gäste im Event "${appState.event?.name || appState.eventId}" auf No Show.`)) return;
-
-  try {
-    const chunkSize = 450;
-    for (let i = 0; i < openGuests.length; i += chunkSize) {
-      const batch = writeBatch(appState.db);
-      openGuests.slice(i, i + chunkSize).forEach((guest) => {
-        batch.update(guestRef(guest.id), {
-          status: "no_show",
-          updatedAt: serverTimestamp(),
-          lastActionAt: serverTimestamp(),
-          lastActionByName: appState.member.displayName || "Admin",
-          ...staleGuestFieldDeletes()
-        });
-      });
-      await batch.commit();
-    }
-    await addAudit("bulk_no_show", { name: "Bulk No Show" }, { count: openGuests.length });
-    notify(`${openGuests.length} Gäste auf No Show gesetzt.`, "success");
-  } catch (error) {
-    console.error(error);
-    notify(`Bulk-Aktion fehlgeschlagen: ${error.message || error}`, "error");
-  }
-}
-
 async function updateCheckinPinFromForm(event) {
   event.preventDefault();
   if (!requireOnline("Check-in-PIN neu setzen")) return;
@@ -3735,7 +3680,6 @@ function auditActionValues() {
     "guest_import",
     "guest_export",
     "audit_export",
-    "bulk_no_show",
     "pins_reset",
     "admin_pin_reset"
   ];
@@ -4666,21 +4610,6 @@ function renderKnownEventCard(event, currentEventId = "", options = {}) {
   `;
 }
 
-function renderOpenEventForm() {
-  return `
-    <form id="openEventForm" class="grid two">
-      <div class="form-row" style="grid-column:1/-1">
-        <label for="openEventInput">Event-ID oder Event-Link</label>
-        <input id="openEventInput" placeholder="z.B. demo-201257-260501 oder https://.../?event=..." autocomplete="off" />
-      </div>
-      <div class="actions" style="grid-column:1/-1">
-        <button class="btn-primary" type="submit">Event öffnen</button>
-      </div>
-    </form>
-    <div id="openEventResult"></div>
-  `;
-}
-
 function renderCurrentEventLink() {
   const event = {
     id: appState.eventId,
@@ -4744,40 +4673,6 @@ function bindKnownEventButtons(root = document) {
   });
 }
 
-function bindOpenEventForm() {
-  document.getElementById("openEventForm")?.addEventListener("submit", openEventFromForm);
-}
-
-async function openEventFromForm(event) {
-  event.preventDefault();
-  const input = document.getElementById("openEventInput");
-  const result = document.getElementById("openEventResult");
-  const eventId = parseEventIdOrLink(input?.value || "");
-  if (!eventId) {
-    if (result) result.innerHTML = `<p class="notice warning">Bitte Event-ID oder Event-Link eingeben.</p>`;
-    return;
-  }
-
-  const submitButton = event.currentTarget.querySelector("button[type='submit']");
-  if (submitButton) {
-    submitButton.disabled = true;
-    submitButton.textContent = "Öffnet…";
-  }
-  if (result) result.innerHTML = `<p class="notice info">Event wird geöffnet…</p>`;
-
-  try {
-    await activateKnownEvent(eventId);
-  } catch (error) {
-    console.error(error);
-    removeMissingKnownEvent(eventId, error);
-    if (result) result.innerHTML = `<p class="notice error">Event konnte nicht geöffnet werden: ${escapeHtml(error?.message || error)}</p>`;
-    if (submitButton) {
-      submitButton.disabled = false;
-      submitButton.textContent = "Event öffnen";
-    }
-  }
-}
-
 function removeMissingKnownEvent(eventId, error) {
   const message = String(error?.message || error || "");
   if (!message.includes("wurde nicht gefunden")) return;
@@ -4785,30 +4680,6 @@ function removeMissingKnownEvent(eventId, error) {
   if (appState.currentTab === "setup" || appState.currentTab === "admin") {
     renderActiveTab();
   }
-}
-
-function parseEventIdOrLink(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-
-  try {
-    const url = new URL(raw, window.location.origin);
-    const eventId = url.searchParams.get("event");
-    if (eventId) return resolveEventId(eventId);
-  } catch {
-    // Fall through to direct Event-ID parsing.
-  }
-
-  const eventMatch = raw.match(/[?&]event=([^&#\s]+)/);
-  if (eventMatch?.[1]) {
-    try {
-      return resolveEventId(decodeURIComponent(eventMatch[1]));
-    } catch {
-      return resolveEventId(eventMatch[1]);
-    }
-  }
-
-  return resolveEventId(raw);
 }
 
 async function activateKnownEvent(eventId) {
