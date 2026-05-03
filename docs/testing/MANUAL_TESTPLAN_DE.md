@@ -64,8 +64,8 @@ Prüfen:
 - Als Haupt-Admin: benannten Admin-PIN erstellen und direkt danach `Admin-Zugang kopieren` prüfen.
 - Als Haupt-Admin: bestehenden benannten Admin-PIN über `PIN ändern` ändern und direkt danach `Admin-Zugang kopieren` prüfen.
 - Als Haupt-Admin: benannten Admin über `Master berechtigen` zum zusätzlichen Master Admin machen, mit diesem Admin anmelden und Master-only Aktion ohne zusätzliche PIN-Abfrage sehen.
-- Als Master Admin: zusätzliche Master-Berechtigung über `Master entziehen` wieder entfernen und prüfen, dass danach wieder der Master-Admin-PIN abgefragt wird.
-- Als benannter Admin: Master-only Bereiche sind sichtbar, fragen beim Ausführen den Master-Admin-PIN maskiert ab, führen die Aktion nur mit korrektem Master-Admin-PIN aus und zeigen danach wieder den benannten Admin statt `Master Admin`.
+- Als Master Admin: zusätzliche Master-Berechtigung über `Master entziehen` wieder entfernen und prüfen, dass die Master-only Bereiche danach ausgeblendet sind.
+- Als benannter Admin ohne Master-Recht: Master-only Bereiche und Aktionen sind nicht sichtbar.
 - Als benannter Admin: eigenen Admin-PIN ändern und prüfen, dass die Sitzung danach weiter funktioniert und der neue Zugang direkt kopiert werden kann.
 - Als benannter Admin: eigenen Admin-PIN löschen versuchen und prüfen, dass die App dies blockiert.
 - Wenn bereits angemeldet: im Tab `Anmeldung` erneut anmelden, Dialog `Zuerst abmelden und dann neu anmelden?` bestätigen und prüfen, dass die neue Anmeldung aktiv ist.

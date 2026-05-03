@@ -557,20 +557,20 @@ async function renderAdminSettings() {
     ${renderAdminPinSection(isMaster)}
     ${renderLoggedInMembersSection()}
   `;
-  bindAdminPinForm();
-  bindNamedAdminPinForm();
-  bindAdminPinUnlockHandlers();
   if (isMaster) {
+    bindAdminPinForm();
+    bindNamedAdminPinForm();
     void renderNamedPinList("admin");
   }
   void renderLoggedInMembersList();
 }
 
 function renderAdminPinSection(isMaster = false) {
+  if (!isMaster) return "";
+
   return `
     <section class="card">
       <h2>Haupt-Admin-PINs</h2>
-      ${isMaster ? "" : `<p class="notice info">Diese Funktionen sind Master-only. Du kannst sie als Admin starten; vor dem Speichern oder Löschen wird der Master-Admin-PIN geprüft.</p>`}
       <form id="adminPinForm" class="grid">
         <div style="grid-column:1/-1">
           <h3>Haupt-Admin-PIN ändern</h3>
@@ -619,16 +619,7 @@ function renderAdminPinSection(isMaster = false) {
       </form>
       <div class="admin-section">
         <h3>Benannte Admin-PINs</h3>
-        <div id="namedAdminPinList" class="pin-list">
-          ${isMaster
-            ? `<p class="small">Lädt…</p>`
-            : `
-              <p class="small">Zum Anzeigen, Ändern oder Löschen der benannten Admin-PINs ist der Master-Admin-PIN nötig.</p>
-              <div class="actions">
-                <button class="btn-secondary" id="unlockNamedAdminPinsBtn" type="button">Benannte Admin-PINs anzeigen</button>
-              </div>
-            `}
-        </div>
+        <div id="namedAdminPinList" class="pin-list"><p class="small">Lädt…</p></div>
       </div>
       <div id="adminPinResult"></div>
     </section>
@@ -766,18 +757,6 @@ function bindNamedAdminPinForm() {
   });
   cancelButton?.addEventListener("click", resetNamedAdminPinForm);
   form.addEventListener("submit", addNamedGlobalAdminPinFromForm);
-}
-
-function bindAdminPinUnlockHandlers() {
-  document.getElementById("unlockNamedAdminPinsBtn")?.addEventListener("click", async () => {
-    const masterContext = await beginMasterAdminAction("Benannte Admin-PINs anzeigen");
-    if (!masterContext) return;
-    try {
-      await renderNamedPinList("admin");
-    } finally {
-      await restoreTemporaryMasterAdmin(masterContext);
-    }
-  });
 }
 
 function updateNamedAdminPinButtonState() {
@@ -2521,6 +2500,10 @@ async function renderEventVisibilitySection() {
   }
 
   if (!document.body.contains(target)) return;
+  if (!isMaster) {
+    target.innerHTML = "";
+    return;
+  }
 
   const hidden = isEventHidden(appState.event);
   const hiddenKnownEvents = getKnownEvents()
@@ -2535,14 +2518,13 @@ async function renderEventVisibilitySection() {
           ? "Dieses Event ist aus normalen Eventlisten ausgeblendet. Nur Haupt-Admins können es wieder sichtbar machen."
           : "Dieses Event ist in normalen Eventlisten sichtbar."}
       </p>
-      ${isMaster ? "" : `<p class="notice info">Master-only: Beim Ändern der Sichtbarkeit wird der Master-Admin-PIN abgefragt.</p>`}
       <div class="actions">
         <button class="${hidden ? "btn-primary" : "btn-warning"}" id="toggleEventVisibilityBtn" type="button">${hidden ? "Event wieder sichtbar machen" : "Event verstecken"}</button>
       </div>
       ${hiddenKnownEvents.length ? `
         <div class="admin-section">
           <h3>Versteckte bekannte Events</h3>
-          <p class="small">Öffnen, prüfen und bei Bedarf mit Master-Admin-PIN wieder sichtbar machen.</p>
+          <p class="small">Öffnen und prüfen. Sichtbarkeit ändern nur Master Admins.</p>
           <div class="event-switch-list">
             ${hiddenKnownEvents.map((event) => renderKnownEventCard(event, appState.eventId, { openLabel: "Öffnen" })).join("")}
           </div>
@@ -2563,6 +2545,7 @@ async function toggleCurrentEventVisibility() {
     notify("Nur Admins dürfen Events verwalten.", "warning");
     return;
   }
+  if (!(await requireMasterAdmin("Event-Sichtbarkeit ändern"))) return;
 
   const hidden = isEventHidden(appState.event);
   const eventName = appState.event?.name || appState.eventId;
@@ -2570,8 +2553,6 @@ async function toggleCurrentEventVisibility() {
   if (nextHidden && !window.confirm(`Event "${eventName}" aus normalen Eventlisten verstecken? Nur Haupt-Admins können es wieder sichtbar machen.`)) {
     return;
   }
-  const masterContext = await beginMasterAdminAction("Event-Sichtbarkeit ändern");
-  if (!masterContext) return;
 
   const button = document.getElementById("toggleEventVisibilityBtn");
   const result = document.getElementById("eventVisibilityResult");
@@ -2627,8 +2608,6 @@ async function toggleCurrentEventVisibility() {
     }
     if (result) result.innerHTML = `<p class="notice error">Event-Sichtbarkeit konnte nicht gespeichert werden: ${escapeHtml(message)}</p>`;
     notify(`Event-Sichtbarkeit konnte nicht gespeichert werden: ${message}`, "error");
-  } finally {
-    await restoreTemporaryMasterAdmin(masterContext);
   }
 }
 
@@ -2652,6 +2631,11 @@ async function renderEventDeleteSection() {
 
   if (!document.body.contains(target)) return;
 
+  if (!isMaster) {
+    target.innerHTML = "";
+    return;
+  }
+
   const isAuthorizingEvent = adminSecurityData?.authorizingEventId === appState.eventId;
   const replacement = isAuthorizingEvent ? await findReplacementAuthorizingEvent(appState.eventId) : null;
   const cannotDeleteAuthorizingEvent = isAuthorizingEvent && !replacement;
@@ -2659,7 +2643,7 @@ async function renderEventDeleteSection() {
   target.innerHTML = `
     <section class="card danger-section event-delete-card">
       <h2>Event löschen</h2>
-      <p class="notice error"><strong>Master-only:</strong> Löscht dieses Event inklusive Gäste, Admin-Notizen, aktiver Anmeldungen, Event-PINs und Audit Log.${isMaster ? "" : " Beim Klick wird der Master-Admin-PIN abgefragt."}</p>
+      <p class="notice error"><strong>Master-only:</strong> Löscht dieses Event inklusive Gäste, Admin-Notizen, aktiver Anmeldungen, Event-PINs und Audit Log.</p>
       ${isAuthorizingEvent ? `<p class="notice warning">Dieses Event ist aktuell das Haupt-Admin-Anker-Event.${replacement ? ` Vor dem Löschen wird der Anker auf <strong>${escapeHtml(replacement.name || replacement.id)}</strong> umgestellt.` : " Lege zuerst ein anderes Event an, bevor dieses Event gelöscht werden kann."}</p>` : ""}
       <div class="actions">
         <button class="btn-danger" id="deleteEventBtn" type="button" ${cannotDeleteAuthorizingEvent ? "disabled" : ""}>Event endgültig löschen</button>
@@ -2677,6 +2661,7 @@ async function deleteCurrentEvent() {
     notify("Nur Admins dürfen Events verwalten.", "warning");
     return;
   }
+  if (!(await requireMasterAdmin("Event löschen"))) return;
 
   const eventId = appState.eventId;
   const eventName = appState.event?.name || eventId;
@@ -2689,8 +2674,6 @@ async function deleteCurrentEvent() {
     notify("Abgebrochen: Bestätigungstext stimmte nicht. Es wurde nichts gelöscht.", "warning");
     return;
   }
-  const masterContext = await beginMasterAdminAction("Event löschen");
-  if (!masterContext) return;
 
   const button = document.getElementById("deleteEventBtn");
   const result = document.getElementById("deleteEventResult");
@@ -2702,7 +2685,7 @@ async function deleteCurrentEvent() {
 
   let eventWasDeleted = false;
   try {
-    const replacement = await prepareAdminSecurityForEventDelete(eventId, masterContext.pin || "");
+    const replacement = await prepareAdminSecurityForEventDelete(eventId);
     const counts = {};
     const updateStatus = (label, count) => {
       counts[label] = count;
@@ -2739,12 +2722,10 @@ async function deleteCurrentEvent() {
     const message = error.message || String(error);
     if (result) result.innerHTML = `<p class="notice error">Event konnte nicht gelöscht werden: ${escapeHtml(message)}</p>`;
     notify(`Event konnte nicht gelöscht werden: ${message}`, "error");
-  } finally {
-    await restoreTemporaryMasterAdmin(masterContext, eventWasDeleted ? { skipEventIds: [eventId] } : {});
   }
 }
 
-async function prepareAdminSecurityForEventDelete(eventId, masterPin = "") {
+async function prepareAdminSecurityForEventDelete(eventId) {
   const securitySnap = await getDoc(adminSecurityRef());
   const data = securitySnap.exists() ? securitySnap.data() : null;
   if (!data || data.authorizingEventId !== eventId) return null;
@@ -2755,7 +2736,7 @@ async function prepareAdminSecurityForEventDelete(eventId, masterPin = "") {
   }
 
   const session = getAdminSession();
-  const reconnectPin = masterPin || session?.pin || "";
+  const reconnectPin = session?.pin || "";
   let memberSnap = await getMemberSnapForEvent(replacement.id);
   if (!memberSnap.exists()) {
     if (!reconnectPin) {
@@ -3221,6 +3202,7 @@ async function updateGlobalAdminPinFromForm(event) {
     notify("Nur Admins dürfen PINs ändern.", "warning");
     return;
   }
+  if (!(await requireMasterAdmin("Haupt-Admin-PIN ändern"))) return;
 
   const result = document.getElementById("adminPinResult");
   const currentPin = val("currentAdminPin");
@@ -3234,9 +3216,6 @@ async function updateGlobalAdminPinFromForm(event) {
     notify("Neuer Admin-PIN und Wiederholung stimmen nicht überein.", "warning");
     return;
   }
-  const masterContext = await beginMasterAdminAction("Haupt-Admin-PIN ändern", { pin: currentPin });
-  if (!masterContext) return;
-
   const displayName = appState.member?.displayName || "Admin";
   const deviceLabel = appState.member?.deviceLabel || "";
   try {
@@ -3280,8 +3259,6 @@ async function updateGlobalAdminPinFromForm(event) {
     console.error(error);
     notify(`Admin-PIN konnte nicht gesetzt werden: ${error.message || error}`, "error");
     if (result) result.innerHTML = `<p class="notice error">${escapeHtml(error.message || error)}</p>`;
-  } finally {
-    await restoreTemporaryMasterAdmin(masterContext);
   }
 }
 
@@ -3292,6 +3269,7 @@ async function addNamedGlobalAdminPinFromForm(event) {
     notify("Nur Admins dürfen PINs ändern.", "warning");
     return;
   }
+  if (!(await requireMasterAdmin("Benannten Admin-PIN verwalten"))) return;
 
   const result = document.getElementById("adminPinResult");
   const currentPin = val("currentAdminPinForNamed");
@@ -3312,9 +3290,6 @@ async function addNamedGlobalAdminPinFromForm(event) {
     notify("Neuer Admin-PIN und Wiederholung stimmen nicht überein.", "warning");
     return;
   }
-  const masterContext = await beginMasterAdminAction("Benannten Admin-PIN verwalten", { pin: currentPin });
-  if (!masterContext) return;
-
   try {
     if (result) result.innerHTML = `<p class="notice info">Haupt-Admin-PIN wird geprüft…</p>`;
 
@@ -3332,13 +3307,10 @@ async function addNamedGlobalAdminPinFromForm(event) {
     if (isEdit) {
       const existingNamedPin = namedPinsFromSecurity(securityData, "admin")
         .find((pin) => namedPinEditKey(pin) === editId);
-      const editsCurrentNamedAdmin = isCurrentNamedAdminPin(existingNamedPin, masterContext);
+      const editsCurrentNamedAdmin = isCurrentNamedAdminPin(existingNamedPin);
       await replaceNamedPinInEvent("", "admin", editId, newPin, namedDisplayName);
       if (editsCurrentNamedAdmin) {
-        await updateNamedAdminRestoreContext(masterContext, existingNamedPin.pinNameHash, newPin, namedDisplayName);
-        if (!masterContext.temporary) {
-          await reconnectNamedAdminSessionAfterPinChange(securityData, newPin, namedDisplayName);
-        }
+        await reconnectNamedAdminSessionAfterPinChange(securityData, newPin, namedDisplayName);
       }
     } else {
       await appendNamedPinToEvent("", "admin", newPin, namedDisplayName, createNamedPinId());
@@ -3360,8 +3332,6 @@ async function addNamedGlobalAdminPinFromForm(event) {
     console.error(error);
     notify(`Admin-PIN konnte nicht gespeichert werden: ${error.message || error}`, "error");
     if (result) result.innerHTML = `<p class="notice error">${escapeHtml(error.message || error)}</p>`;
-  } finally {
-    await restoreTemporaryMasterAdmin(masterContext);
   }
 }
 
@@ -3627,43 +3597,9 @@ async function copyAdminAccess(displayName, pin) {
   }
 }
 
-function isCurrentNamedAdminPin(pin, masterContext = null) {
+function isCurrentNamedAdminPin(pin) {
   if (!pin?.pinNameHash) return false;
-  const hashes = [
-    appState.member?.pinNameHash,
-    masterContext?.previousMember?.pinNameHash,
-    ...Object.values(masterContext?.previousMembersByEventId || {}).map((member) => member?.pinNameHash)
-  ].filter(Boolean);
-  return hashes.includes(pin.pinNameHash);
-}
-
-async function updateNamedAdminRestoreContext(masterContext, oldPinNameHash, newPin, displayName) {
-  if (!masterContext?.temporary || !oldPinNameHash) return;
-  const authFields = await adminMemberAuthFields(newPin, displayName);
-  let changedCurrentRestore = false;
-  const replaceMember = (member) => {
-    if (!member || member.role !== "admin" || member.pinNameHash !== oldPinNameHash) return member;
-    changedCurrentRestore = true;
-    return {
-      ...member,
-      pinHash: authFields.pinHash,
-      pinNameHash: authFields.pinNameHash,
-      displayNameKey: authFields.displayNameKey,
-      displayName
-    };
-  };
-
-  masterContext.previousMember = replaceMember(masterContext.previousMember);
-  Object.keys(masterContext.previousMembersByEventId || {}).forEach((eventId) => {
-    masterContext.previousMembersByEventId[eventId] = replaceMember(masterContext.previousMembersByEventId[eventId]);
-  });
-  if (changedCurrentRestore) {
-    masterContext.previousAdminSession = JSON.stringify({
-      pin: newPin,
-      displayName,
-      savedAt: Date.now()
-    });
-  }
+  return appState.member?.pinNameHash === pin.pinNameHash;
 }
 
 async function reconnectNamedAdminSessionAfterPinChange(securityData, newPin, displayName) {
@@ -3694,8 +3630,7 @@ async function toggleNamedAdminMaster(pin) {
   if (!window.confirm(message)) return;
 
   const result = document.getElementById("adminPinResult");
-  const masterContext = await beginMasterAdminAction(nextMaster ? "Master-Admin berechtigen" : "Master-Admin entziehen");
-  if (!masterContext) return;
+  if (!(await requireMasterAdmin(nextMaster ? "Master-Admin berechtigen" : "Master-Admin entziehen"))) return;
 
   try {
     await setNamedAdminMasterStatus(pin, nextMaster);
@@ -3717,8 +3652,6 @@ async function toggleNamedAdminMaster(pin) {
     console.error(error);
     notify(`Master-Admin-Berechtigung konnte nicht geändert werden: ${error.message || error}`, "error");
     if (result) result.innerHTML = `<p class="notice error">${escapeHtml(error.message || error)}</p>`;
-  } finally {
-    await restoreTemporaryMasterAdmin(masterContext);
   }
 }
 
@@ -3763,13 +3696,10 @@ async function deleteNamedPin(role, pin) {
   if (!confirmed) return;
 
   const result = document.getElementById(config.resultId);
-  const masterContext = role === "admin"
-    ? await beginMasterAdminAction("Benannten Admin-PIN löschen")
-    : null;
-  if (role === "admin" && !masterContext) return;
+  if (role === "admin" && !(await requireMasterAdmin("Benannten Admin-PIN löschen"))) return;
 
   try {
-    if (role === "admin" && isCurrentNamedAdminPin(pin, masterContext)) {
+    if (role === "admin" && isCurrentNamedAdminPin(pin)) {
       const message = "Den aktuell verwendeten Admin-PIN kannst du nicht löschen. Melde dich zuerst mit einem anderen Master Admin an.";
       notify(message, "warning");
       if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
@@ -3788,8 +3718,6 @@ async function deleteNamedPin(role, pin) {
     console.error(error);
     notify(`${config.label} konnte nicht gelöscht werden: ${error.message || error}`, "error");
     if (result) result.innerHTML = `<p class="notice error">${escapeHtml(error.message || error)}</p>`;
-  } finally {
-    await restoreTemporaryMasterAdmin(masterContext);
   }
 }
 
@@ -4527,48 +4455,6 @@ function notify(message, type = "info") {
   }, 4500);
 }
 
-function requestMasterAdminPin(actionLabel) {
-  return new Promise((resolve) => {
-    document.getElementById("masterPinPromptOverlay")?.remove();
-    const overlay = document.createElement("div");
-    overlay.className = "pin-prompt-backdrop";
-    overlay.id = "masterPinPromptOverlay";
-    overlay.innerHTML = `
-      <form class="pin-prompt-dialog" id="masterPinPromptForm">
-        <h2>Master-Admin-PIN</h2>
-        <p class="small">${escapeHtml(actionLabel)} bestätigen.</p>
-        <label for="masterPinPromptInput">Master-Admin-PIN</label>
-        <input id="masterPinPromptInput" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="PIN eingeben" />
-        <div class="actions">
-          <button class="btn-primary" type="submit">Bestätigen</button>
-          <button class="btn-secondary" id="masterPinPromptCancel" type="button">Abbrechen</button>
-        </div>
-      </form>
-    `;
-
-    const close = (value) => {
-      document.removeEventListener("keydown", onKeydown);
-      overlay.remove();
-      resolve(value);
-    };
-    const onKeydown = (event) => {
-      if (event.key === "Escape") close(null);
-    };
-
-    overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) close(null);
-    });
-    overlay.querySelector("#masterPinPromptCancel")?.addEventListener("click", () => close(null));
-    overlay.querySelector("#masterPinPromptForm")?.addEventListener("submit", (event) => {
-      event.preventDefault();
-      close(overlay.querySelector("#masterPinPromptInput")?.value || "");
-    });
-    document.addEventListener("keydown", onKeydown);
-    document.body.appendChild(overlay);
-    window.setTimeout(() => overlay.querySelector("#masterPinPromptInput")?.focus(), 0);
-  });
-}
-
 function showBackupStatus(message, type = "info") {
   appState.ui.lastBackupMessage = message;
   const target = document.getElementById("backupStatus");
@@ -4655,203 +4541,26 @@ async function currentAdminIsMasterAdmin() {
   }
 }
 
-async function beginMasterAdminAction(actionLabel, options = {}) {
+async function requireMasterAdmin(actionLabel) {
   if (!isAdmin()) {
     notify("Nur Admins dürfen diese Aktion ausführen.", "warning");
-    return null;
-  }
-
-  if (await currentAdminIsMasterAdmin()) {
-    appState.ui.masterAdmin = true;
-    return { temporary: false };
-  }
-
-  const pin = typeof options.pin === "string"
-    ? options.pin
-    : await requestMasterAdminPin(actionLabel);
-  if (pin === null) return null;
-  if (pin.length < PIN_MIN_LENGTH) {
-    notify(`Master-Admin-PIN muss mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
-    return null;
-  }
-
-  const context = {
-    temporary: true,
-    pin,
-    previousMember: cloneMemberForRestore(appState.member),
-    previousMembersByEventId: {},
-    touchedEventIds: [],
-    previousAdminSession: currentRawAdminSession()
-  };
-
-  try {
-    await elevateCurrentAdminToMaster(pin, { persistSession: false, restoreContext: context });
-    notify("Master-Admin-PIN bestätigt.", "success");
-    return context;
-  } catch (error) {
-    console.error(error);
-    await restoreTemporaryMasterAdmin(context);
-    notify("Master-Admin-PIN ist falsch oder konnte nicht geprüft werden.", "warning");
-    return null;
-  }
-}
-
-async function elevateCurrentAdminToMaster(pin, options = {}) {
-  const displayName = appState.member?.displayName || getAdminSession()?.displayName || "Admin";
-  const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
-  const eventIds = uniqueEventIds([
-    GLOBAL_ADMIN_EVENT_ID,
-    appState.eventId,
-    ...getKnownEvents().map((event) => event.id)
-  ]);
-
-  let connected = false;
-  let lastError = null;
-  for (const eventId of eventIds) {
-    try {
-      await rememberMemberForTemporaryRestore(options.restoreContext, eventId);
-      await connectAdminToEvent(eventId, pin, displayName, deviceLabel);
-      markTemporaryMasterEventTouched(options.restoreContext, eventId);
-      connected = true;
-    } catch (error) {
-      lastError = error;
-      if (!isPermissionError(error)) throw error;
-    }
-  }
-
-  if (!connected) throw lastError || new Error("Master-Admin-PIN konnte nicht verknüpft werden.");
-  if (appState.eventId) {
-    const memberSnap = await getMemberSnapForEvent(appState.eventId);
-    if (memberSnap.exists()) appState.member = { id: memberSnap.id, ...memberSnap.data() };
+    return false;
   }
 
   const isMaster = await currentAdminIsMasterAdmin();
-  if (!isMaster) throw new Error("PIN ist kein Master-Admin-PIN.");
-  appState.ui.masterAdmin = true;
-  if (options.persistSession !== false) saveAdminSession(pin, displayName);
+  appState.ui.masterAdmin = isMaster;
+  if (!isMaster) {
+    notify(`${actionLabel} ist nur für Master Admins möglich.`, "warning");
+    updateFooterStatus();
+    return false;
+  }
+  return true;
 }
 
 function uniqueEventIds(eventIds) {
   return [...new Set(eventIds
     .map((eventId) => resolveEventId(String(eventId || "").trim()))
     .filter(Boolean))];
-}
-
-async function rememberMemberForTemporaryRestore(context, eventId) {
-  if (!context?.temporary || !eventId || !appState.user?.uid) return;
-  context.previousMembersByEventId ||= {};
-  if (Object.prototype.hasOwnProperty.call(context.previousMembersByEventId, eventId)) return;
-
-  const memberSnap = await getDoc(doc(appState.db, "events", eventId, "members", appState.user.uid));
-  context.previousMembersByEventId[eventId] = memberSnap.exists()
-    ? cloneMemberForRestore(memberSnap.data())
-    : null;
-}
-
-function markTemporaryMasterEventTouched(context, eventId) {
-  if (!context?.temporary || !eventId) return;
-  context.touchedEventIds ||= [];
-  if (!context.touchedEventIds.includes(eventId)) context.touchedEventIds.push(eventId);
-}
-
-function cloneMemberForRestore(member) {
-  if (!member?.role) return null;
-  return {
-    role: member.role || "",
-    pinHash: member.pinHash || "",
-    pinNameHash: member.pinNameHash || "",
-    displayNameKey: member.displayNameKey || normalizeDisplayNameKey(member.displayName || ""),
-    displayName: member.displayName || "",
-    deviceLabel: member.deviceLabel || getLocalDeviceLabel(),
-    createdAt: member.createdAt || null
-  };
-}
-
-function currentRawAdminSession() {
-  try {
-    return sessionStorage.getItem(ADMIN_SESSION_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function restoreRawAdminSession(rawSession) {
-  try {
-    if (rawSession) sessionStorage.setItem(ADMIN_SESSION_STORAGE_KEY, rawSession);
-    else sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
-  } catch {
-    // Session convenience only; ignore if browser blocks it.
-  }
-}
-
-async function restoreTemporaryMasterAdmin(context, options = {}) {
-  if (!context?.temporary) return;
-  const skippedEventIds = new Set(uniqueEventIds(options.skipEventIds || []));
-  try {
-    restoreRawAdminSession(context.previousAdminSession);
-    const eventIds = context.touchedEventIds?.length
-      ? [...context.touchedEventIds].reverse()
-      : uniqueEventIds([appState.eventId]);
-
-    let restoreError = null;
-    for (const eventId of uniqueEventIds(eventIds)) {
-      if (skippedEventIds.has(eventId) || !appState.user?.uid) continue;
-      const hasSnapshot = Object.prototype.hasOwnProperty.call(context.previousMembersByEventId || {}, eventId);
-      const previousMember = hasSnapshot
-        ? context.previousMembersByEventId[eventId]
-        : (eventId === appState.eventId ? context.previousMember : undefined);
-      if (previousMember === undefined) continue;
-
-      try {
-        const targetRef = doc(appState.db, "events", eventId, "members", appState.user.uid);
-        if (previousMember) {
-          await setDoc(targetRef, memberRestorePayload(previousMember), { merge: true });
-        } else {
-          await deleteDoc(targetRef);
-        }
-      } catch (error) {
-        restoreError ||= error;
-      }
-    }
-    if (restoreError) throw restoreError;
-
-    if (appState.eventId && !skippedEventIds.has(appState.eventId)) {
-      const memberSnap = await getMemberSnapForEvent(appState.eventId);
-      appState.member = memberSnap.exists() ? { id: memberSnap.id, ...memberSnap.data() } : null;
-    }
-    appState.ui.masterAdmin = await currentAdminIsMasterAdmin();
-    updateFooterStatus();
-  } catch (error) {
-    console.error(error);
-    notify("Zurückschalten auf den benannten Admin ist fehlgeschlagen. Dieses Gerät wird abgemeldet.", "warning");
-    try {
-      const cleanupEventIds = context.touchedEventIds?.length
-        ? context.touchedEventIds
-        : uniqueEventIds([appState.eventId]);
-      for (const eventId of uniqueEventIds(cleanupEventIds)) {
-        if (!skippedEventIds.has(eventId) && appState.user?.uid) {
-          await deleteDoc(doc(appState.db, "events", eventId, "members", appState.user.uid));
-        }
-      }
-    } catch {
-      // Best effort cleanup.
-    }
-    finishLocalLogout("role", "Bitte erneut anmelden.");
-  }
-}
-
-function memberRestorePayload(member) {
-  return {
-    uid: appState.user.uid,
-    role: member.role,
-    pinHash: member.pinHash,
-    pinNameHash: member.pinNameHash,
-    displayNameKey: member.displayNameKey,
-    displayName: member.displayName,
-    deviceLabel: member.deviceLabel || getLocalDeviceLabel(),
-    createdAt: member.createdAt || serverTimestamp(),
-    updatedAt: serverTimestamp()
-  };
 }
 
 function adminMasterHashMatches(data, pinHash, pinNameHash = "") {
