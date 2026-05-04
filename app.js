@@ -678,10 +678,6 @@ function renderCheckinPinSection() {
           <label for="checkinPinNew">Check-in-PIN</label>
           <input id="checkinPinNew" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
         </div>
-        <div class="form-row">
-          <label for="checkinPinConfirm">Check-in-PIN wiederholen</label>
-          <input id="checkinPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
-        </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" id="checkinPinSaveBtn" type="submit" disabled>PIN speichern</button>
           <button class="btn-secondary hidden" id="checkinPinCancelBtn" type="button">Abbrechen</button>
@@ -2355,13 +2351,12 @@ function bindCheckinPinForm() {
   const form = document.getElementById("checkinPinForm");
   const nameInput = document.getElementById("checkinPinName");
   const pinInput = document.getElementById("checkinPinNew");
-  const confirmInput = document.getElementById("checkinPinConfirm");
   const button = document.getElementById("checkinPinSaveBtn");
   const cancelButton = document.getElementById("checkinPinCancelBtn");
-  if (!form || !nameInput || !pinInput || !confirmInput || !button) return;
+  if (!form || !nameInput || !pinInput || !button) return;
 
   updateCheckinPinButtonState();
-  [nameInput, pinInput, confirmInput].forEach((input) => {
+  [nameInput, pinInput].forEach((input) => {
     input.addEventListener("input", updateCheckinPinButtonState);
     input.addEventListener("change", updateCheckinPinButtonState);
     input.addEventListener("keyup", updateCheckinPinButtonState);
@@ -2373,12 +2368,11 @@ function bindCheckinPinForm() {
 
 function updateCheckinPinButtonState() {
   const pinInput = document.getElementById("checkinPinNew");
-  const confirmInput = document.getElementById("checkinPinConfirm");
   const saveButton = document.getElementById("checkinPinSaveBtn");
-  if (!pinInput || !confirmInput || !saveButton) return;
+  if (!pinInput || !saveButton) return;
 
   const pin = pinInput.value;
-  saveButton.disabled = pin.length < PIN_MIN_LENGTH || pin !== confirmInput.value;
+  saveButton.disabled = pin.length < PIN_MIN_LENGTH;
   saveButton.textContent = "PIN speichern";
 }
 
@@ -2396,15 +2390,13 @@ function startCheckinPinEdit(pin) {
   const editInput = document.getElementById("checkinPinEditId");
   const nameInput = document.getElementById("checkinPinName");
   const pinInput = document.getElementById("checkinPinNew");
-  const confirmInput = document.getElementById("checkinPinConfirm");
   const cancelButton = document.getElementById("checkinPinCancelBtn");
   const form = document.getElementById("checkinPinForm");
-  if (!editInput || !nameInput || !pinInput || !confirmInput) return;
+  if (!editInput || !nameInput || !pinInput) return;
 
   editInput.value = namedPinEditKey(pin);
   nameInput.value = pin.kind === "generic" ? "" : (pin.displayName || pin.displayNameKey || "");
   pinInput.value = "";
-  confirmInput.value = "";
   cancelButton?.classList.remove("hidden");
   updateCheckinPinButtonState();
   scrollBelowStickyHeader(form?.closest(".card") || form);
@@ -3160,13 +3152,8 @@ async function saveCheckinPinFromForm(event) {
   const editId = val("checkinPinEditId");
   const displayName = val("checkinPinName").trim();
   const pin = val("checkinPinNew");
-  const pinConfirm = val("checkinPinConfirm");
   if (pin.length < PIN_MIN_LENGTH) {
     notify(`Check-in-PIN muss mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
-    return;
-  }
-  if (pin !== pinConfirm) {
-    notify("Check-in-PIN und Wiederholung stimmen nicht überein.", "warning");
     return;
   }
   if (editId && editId !== GENERAL_CHECKIN_PIN_ID && !displayName) {
