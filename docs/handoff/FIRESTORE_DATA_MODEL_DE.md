@@ -55,8 +55,8 @@ Privates Security-Dokument pro Event. Nur Admins dürfen es lesen oder aktualisi
 Erwartete Felder:
 
 - `checkinPinHash`
-- `checkinPinHashes`: Liste der namenlosen Check-in-PIN-Hashes, maximal ein Eintrag
-- `checkinPinValue`: admin-lesbarer Check-in-PIN ohne Namen für Anzeige/Verbergen im Adminbereich
+- `checkinPinHashes`: Liste der allgemeinen Check-in-PIN-Hashes, maximal ein Eintrag
+- `checkinPinValue`: admin-lesbarer allgemeiner Check-in-PIN für Anzeige/Verbergen im Adminbereich
 - `checkinNamedPinHashes`: Liste der Check-in-PIN+Name-Hashes
 - `checkinNamedPins`: Liste benannter Check-in-PIN-Einträge zur Admin-Anzeige, Anzeige/Verbergen und Löschung
 - `createdAt`
@@ -143,7 +143,7 @@ Erwartete Felder:
 - Bei Anmeldung mit gleichem Rollennamen auf mehreren Geräten fragt die App, ob andere Geräte mit gleicher Rolle und gleichem `displayNameKey` abgemeldet werden sollen. Check-in Staff darf dafür nur solche eigenen Namens-Sessions lesen und löschen.
 - Admin-only Infos liegen unter `guestAdminNotes` und dürfen nur von Admins gelesen und geschrieben werden.
 - Admin-PINs sind global. Der feste Admin-Name `Main` ist immer ein Master Admin; der Main-PIN wird nur mit `displayNameKey = main` akzeptiert. Master Admins dürfen benannte Admins zusätzlich als Master Admin berechtigen oder diese Berechtigung wieder entziehen. Nur Master Admins dürfen den Main-PIN und benannte Admin-PINs anzeigen, erstellen, ändern oder löschen. Nicht-Master-Admins sehen diese Controls nicht. Die UI nutzt ein gemeinsames Admin-PIN-Formular: Name `Main` ändert den Main-PIN, andere Namen erstellen oder ändern benannte Admin-PINs. Beim Ändern wird der alte PIN des Zieleintrags oder der Main-PIN verlangt; beim Erstellen wird der Main-PIN verlangt. Der Main-PIN und benannte Admin-PINs dürfen nicht denselben PIN-Wert verwenden. Der eigene benannte Admin-PIN darf geändert, aber nicht aus der laufenden Sitzung heraus gelöscht werden. Nach dem Erstellen oder Ändern bietet die UI einmalig das Kopieren von Name und PIN an, ohne den PIN später auslesbar zu speichern.
-- Check-in-PINs sind event-spezifisch. Pro Event darf es mehrere benannte Check-in-PINs geben und maximal einen namenlosen Check-in-PIN.
+- Check-in-PINs sind event-spezifisch. Pro Event darf es mehrere benannte Check-in-PINs geben und maximal einen allgemeinen Check-in-PIN ohne festen Namen. Die Admin-UI nutzt ein gemeinsames Check-in-PIN-Formular: leerer Name speichert den allgemeinen PIN, ein Name erstellt oder ändert einen benannten Check-in-PIN. Beim Erstellen eines neuen Events kann die UI den allgemeinen Check-in-PIN aus einem bestehenden Admin-zugänglichen Event vorbefüllen; gespeichert wird er trotzdem neu pro Event.
 - Bei benannten PINs muss beim Anmelden der Name case-insensitive passen, der PIN bleibt case-sensitive.
 
 ## Zu prüfen

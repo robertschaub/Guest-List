@@ -46,6 +46,7 @@ Prüfen:
 
 - Event-Link enthält `?event=...`.
 - Main-PIN und Check-in-PIN sicher notieren.
+- Als eingeloggter Admin: Check-in-PIN wird aus einem bestehenden Event vorbefüllt und kann vor dem Speichern überschrieben werden.
 - Kategorien enthalten GA, Member GA, Member VIP, On Stage, Mitarbeiter.
 
 ## Test 3 — Admin Login
@@ -74,6 +75,8 @@ Prüfen:
 - Als benannter Master Admin: eigenen Admin-PIN löschen versuchen und prüfen, dass die App dies blockiert.
 - Wenn bereits angemeldet: im Tab `Anmeldung` erneut anmelden, Dialog `Zuerst abmelden und dann neu anmelden?` bestätigen und prüfen, dass die neue Anmeldung aktiv ist.
 - Ohne Event-Link: Admin-Login öffnet ein bekanntes bestehendes Event, auch wenn es vergangen ist.
+- Im Event-Tab: allgemeinen Check-in-PIN über `PIN ändern` in der PIN-Liste ändern; im gemeinsamen Formular bleibt der Name leer.
+- Im Event-Tab: benannten Check-in-PIN mit Name erstellen, über `PIN ändern` ändern und direkt aus der Liste kopieren.
 
 ## Test 4 — Check-in Staff Login
 

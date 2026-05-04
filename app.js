@@ -45,6 +45,7 @@ const ADMIN_MASTER_NAMED_HASHES_FIELD = "adminMasterNamedPinHashes";
 const MAIN_ADMIN_NAME = "Main";
 const MAIN_ADMIN_NAME_KEY = "main";
 const MAIN_ADMIN_PIN_ID = "main-admin-pin";
+const GENERAL_CHECKIN_PIN_ID = "generic";
 const PIN_MIN_LENGTH = 4;
 
 const STATUS_META = {
@@ -362,7 +363,53 @@ function bindEventSetupHandlers() {
     bindKnownLinkCopyButtons();
     bindKnownEventButtons();
   }
+  if (isAdmin() || getAdminSession()?.pin) {
+    void prefillSetupCheckinPinFromRecentEvent();
+  }
   document.getElementById("createEventForm")?.addEventListener("submit", createEventFromForm);
+}
+
+async function prefillSetupCheckinPinFromRecentEvent() {
+  const input = document.getElementById("checkinPin");
+  if (!input || input.value || input.dataset.prefillAttempted === "1") return;
+  input.dataset.prefillAttempted = "1";
+
+  const reusablePin = await findReusableCheckinPinValue();
+  if (!reusablePin?.pinValue) return;
+  const currentInput = document.getElementById("checkinPin");
+  if (!currentInput || currentInput.value) return;
+  currentInput.value = reusablePin.pinValue;
+  currentInput.dataset.prefilledFromEvent = reusablePin.eventId;
+  currentInput.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+async function findReusableCheckinPinValue() {
+  for (const eventId of recentCheckinPinSourceEventIds()) {
+    try {
+      const securitySnap = await getDoc(doc(appState.db, "events", eventId, "private", "security"));
+      if (!securitySnap.exists()) continue;
+      const pinValue = securitySnap.data()?.checkinPinValue;
+      if (typeof pinValue === "string" && pinValue.length >= PIN_MIN_LENGTH) {
+        return { eventId, pinValue };
+      }
+    } catch (error) {
+      if (!isPermissionError(error)) console.error(error);
+    }
+  }
+  return null;
+}
+
+function recentCheckinPinSourceEventIds() {
+  const candidates = [];
+  const addCandidate = (eventId) => {
+    const resolved = resolveEventId(eventId);
+    if (resolved && !candidates.includes(resolved)) candidates.push(resolved);
+  };
+  addCandidate(appState.eventId);
+  addCandidate(localStorage.getItem("guestlist:lastEventId") || "");
+  getKnownEvents().forEach((event) => addCandidate(event.id));
+  addCandidate(GLOBAL_ADMIN_EVENT_ID);
+  return candidates;
 }
 
 function renderEventSetup() {
@@ -622,47 +669,30 @@ function renderCheckinPinSection() {
       <h2>Check-in-PINs</h2>
       <p class="small">Gilt nur für <strong>${escapeHtml(appState.event?.name || appState.eventId || "aktueller Event")}</strong>. Andere Events behalten ihren eigenen Check-in-PIN.</p>
       <form id="checkinPinForm" class="grid two">
-        <div style="grid-column:1/-1">
-          <h3>Allgemeinen Check-in-PIN ändern</h3>
+        <input id="checkinPinEditId" type="hidden" />
+        <div class="form-row">
+          <label for="checkinPinName">Name Mitarbeiter:in</label>
+          <input id="checkinPinName" autocomplete="name" placeholder="frei lassen für allgemeinen PIN" />
         </div>
         <div class="form-row">
-          <label for="eventCheckinPin">Neuer Check-in-PIN</label>
-          <input id="eventCheckinPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
+          <label for="checkinPinNew">Check-in-PIN</label>
+          <input id="checkinPinNew" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
         </div>
         <div class="form-row">
-          <label for="eventCheckinPinConfirm">Neuer Check-in-PIN wiederholen</label>
-          <input id="eventCheckinPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
+          <label for="checkinPinConfirm">Check-in-PIN wiederholen</label>
+          <input id="checkinPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
         </div>
         <div class="actions" style="grid-column:1/-1">
-          <button class="btn-primary" id="checkinPinSaveBtn" type="submit" disabled>Check-in-PIN speichern</button>
-        </div>
-      </form>
-      <form id="namedCheckinPinForm" class="grid two admin-section">
-        <div style="grid-column:1/-1">
-          <h3>Benannten Check-in-PIN hinzufügen</h3>
-        </div>
-        <div class="form-row">
-          <label for="namedCheckinName">Name Mitarbeiter:in</label>
-          <input id="namedCheckinName" autocomplete="name" placeholder="z.B. Eingang 1 / Max" />
-        </div>
-        <div class="form-row">
-          <label for="namedCheckinPin">Check-in-PIN</label>
-          <input id="namedCheckinPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
-        </div>
-        <div class="form-row">
-          <label for="namedCheckinPinConfirm">Check-in-PIN wiederholen</label>
-          <input id="namedCheckinPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
-        </div>
-        <div class="actions" style="grid-column:1/-1">
-          <button class="btn-primary" id="namedCheckinPinSaveBtn" type="submit" disabled>Benannten Check-in-PIN speichern</button>
+          <button class="btn-primary" id="checkinPinSaveBtn" type="submit" disabled>PIN speichern</button>
+          <button class="btn-secondary hidden" id="checkinPinCancelBtn" type="button">Abbrechen</button>
         </div>
       </form>
       <div class="admin-section">
         <div class="pin-list-header">
-          <h3>Check-in-Staff PINs</h3>
+          <h3>Gespeicherte PINs</h3>
           <button class="btn-secondary" id="toggleCheckinPinsBtn" type="button">${appState.ui.showCheckinPins ? "PINs verbergen" : "PINs anzeigen"}</button>
         </div>
-        <div id="namedCheckinPinList" class="pin-list"><p class="small">Lädt…</p></div>
+        <div id="checkinPinList" class="pin-list"><p class="small">Lädt…</p></div>
       </div>
       <div id="checkinPinResult"></div>
     </section>
@@ -2209,7 +2239,6 @@ function renderAdmin() {
   bindEventNameForm();
   bindCheckinAccessForm();
   bindCheckinPinForm();
-  bindNamedCheckinPinForm();
   bindCheckinPinVisibilityToggle();
   void renderNamedPinList("checkin");
   document.getElementById("previewImportBtn")?.addEventListener("click", previewCsvImport);
@@ -2324,40 +2353,61 @@ function bindCheckinAccessForm() {
 
 function bindCheckinPinForm() {
   const form = document.getElementById("checkinPinForm");
-  const pinInput = document.getElementById("eventCheckinPin");
-  const confirmInput = document.getElementById("eventCheckinPinConfirm");
+  const nameInput = document.getElementById("checkinPinName");
+  const pinInput = document.getElementById("checkinPinNew");
+  const confirmInput = document.getElementById("checkinPinConfirm");
   const button = document.getElementById("checkinPinSaveBtn");
-  if (!form || !pinInput || !confirmInput || !button) return;
-
-  const updateButtonState = () => {
-    const pin = pinInput.value;
-    button.disabled = pin.length < PIN_MIN_LENGTH || pin !== confirmInput.value;
-  };
-
-  updateButtonState();
-  pinInput.addEventListener("input", updateButtonState);
-  confirmInput.addEventListener("input", updateButtonState);
-  form.addEventListener("submit", updateCheckinPinFromForm);
-}
-
-function bindNamedCheckinPinForm() {
-  const form = document.getElementById("namedCheckinPinForm");
-  const nameInput = document.getElementById("namedCheckinName");
-  const pinInput = document.getElementById("namedCheckinPin");
-  const confirmInput = document.getElementById("namedCheckinPinConfirm");
-  const button = document.getElementById("namedCheckinPinSaveBtn");
+  const cancelButton = document.getElementById("checkinPinCancelBtn");
   if (!form || !nameInput || !pinInput || !confirmInput || !button) return;
 
-  const updateButtonState = () => {
-    const pin = pinInput.value;
-    button.disabled = !nameInput.value.trim()
-      || pin.length < PIN_MIN_LENGTH
-      || pin !== confirmInput.value;
-  };
+  updateCheckinPinButtonState();
+  [nameInput, pinInput, confirmInput].forEach((input) => {
+    input.addEventListener("input", updateCheckinPinButtonState);
+    input.addEventListener("change", updateCheckinPinButtonState);
+    input.addEventListener("keyup", updateCheckinPinButtonState);
+    input.addEventListener("paste", () => window.setTimeout(updateCheckinPinButtonState, 0));
+  });
+  cancelButton?.addEventListener("click", resetCheckinPinForm);
+  form.addEventListener("submit", saveCheckinPinFromForm);
+}
 
-  updateButtonState();
-  [nameInput, pinInput, confirmInput].forEach((input) => input.addEventListener("input", updateButtonState));
-  form.addEventListener("submit", addNamedCheckinPinFromForm);
+function updateCheckinPinButtonState() {
+  const pinInput = document.getElementById("checkinPinNew");
+  const confirmInput = document.getElementById("checkinPinConfirm");
+  const saveButton = document.getElementById("checkinPinSaveBtn");
+  if (!pinInput || !confirmInput || !saveButton) return;
+
+  const pin = pinInput.value;
+  saveButton.disabled = pin.length < PIN_MIN_LENGTH || pin !== confirmInput.value;
+  saveButton.textContent = "PIN speichern";
+}
+
+function resetCheckinPinForm() {
+  document.getElementById("checkinPinForm")?.reset();
+  const editInput = document.getElementById("checkinPinEditId");
+  const cancelButton = document.getElementById("checkinPinCancelBtn");
+  if (editInput) editInput.value = "";
+  cancelButton?.classList.add("hidden");
+  updateCheckinPinButtonState();
+}
+
+function startCheckinPinEdit(pin) {
+  if (!pin) return;
+  const editInput = document.getElementById("checkinPinEditId");
+  const nameInput = document.getElementById("checkinPinName");
+  const pinInput = document.getElementById("checkinPinNew");
+  const confirmInput = document.getElementById("checkinPinConfirm");
+  const cancelButton = document.getElementById("checkinPinCancelBtn");
+  const form = document.getElementById("checkinPinForm");
+  if (!editInput || !nameInput || !pinInput || !confirmInput) return;
+
+  editInput.value = namedPinEditKey(pin);
+  nameInput.value = pin.kind === "generic" ? "" : (pin.displayName || pin.displayNameKey || "");
+  pinInput.value = "";
+  confirmInput.value = "";
+  cancelButton?.classList.remove("hidden");
+  updateCheckinPinButtonState();
+  scrollBelowStickyHeader(form?.closest(".card") || form);
 }
 
 function bindCheckinPinVisibilityToggle() {
@@ -3098,51 +3148,7 @@ function confirmByTypingEventId(actionText) {
   return true;
 }
 
-async function updateCheckinPinFromForm(event) {
-  event.preventDefault();
-  if (!requireOnline("Check-in-PIN neu setzen")) return;
-  if (!isAdmin()) {
-    notify("Nur Admins dürfen PINs ändern.", "warning");
-    return;
-  }
-
-  const result = document.getElementById("checkinPinResult");
-  const checkinPin = val("eventCheckinPin");
-  const checkinPinConfirm = val("eventCheckinPinConfirm");
-  if (checkinPin.length < PIN_MIN_LENGTH) {
-    notify(`Check-in-PIN muss mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
-    return;
-  }
-  if (checkinPin !== checkinPinConfirm) {
-    notify("Check-in-PIN und Wiederholung stimmen nicht überein.", "warning");
-    return;
-  }
-
-  try {
-    const securityRef = doc(appState.db, "events", appState.eventId, "private", "security");
-    const securitySnap = await getDoc(securityRef);
-    if (!securitySnap.exists()) throw new Error("Security-Dokument fehlt.");
-    const checkinPinHash = await hashPin(appState.eventId, "checkin", checkinPin);
-    await updateDoc(securityRef, {
-      checkinPinHash,
-      checkinPinHashes: [checkinPinHash],
-      checkinPinValue: checkinPin,
-      updatedAt: serverTimestamp()
-    });
-    await addAudit("pins_reset", { name: "Check-in-PIN" }, { scope: "current_event" });
-    document.getElementById("checkinPinForm")?.reset();
-    const saveButton = document.getElementById("checkinPinSaveBtn");
-    if (saveButton) saveButton.disabled = true;
-    if (result) result.innerHTML = `<p class="notice success">Check-in-PIN für diesen Event gespeichert.</p>`;
-    notify("Check-in-PIN für diesen Event gespeichert.", "success");
-  } catch (error) {
-    console.error(error);
-    notify(`Check-in-PIN konnte nicht gesetzt werden: ${error.message || error}`, "error");
-    if (result) result.innerHTML = `<p class="notice error">${escapeHtml(error.message || error)}</p>`;
-  }
-}
-
-async function addNamedCheckinPinFromForm(event) {
+async function saveCheckinPinFromForm(event) {
   event.preventDefault();
   if (!requireOnline("Check-in-PIN speichern")) return;
   if (!isAdmin()) {
@@ -3151,13 +3157,10 @@ async function addNamedCheckinPinFromForm(event) {
   }
 
   const result = document.getElementById("checkinPinResult");
-  const displayName = val("namedCheckinName").trim();
-  const pin = val("namedCheckinPin");
-  const pinConfirm = val("namedCheckinPinConfirm");
-  if (!displayName) {
-    notify("Name ist Pflicht.", "warning");
-    return;
-  }
+  const editId = val("checkinPinEditId");
+  const displayName = val("checkinPinName").trim();
+  const pin = val("checkinPinNew");
+  const pinConfirm = val("checkinPinConfirm");
   if (pin.length < PIN_MIN_LENGTH) {
     notify(`Check-in-PIN muss mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
     return;
@@ -3166,16 +3169,44 @@ async function addNamedCheckinPinFromForm(event) {
     notify("Check-in-PIN und Wiederholung stimmen nicht überein.", "warning");
     return;
   }
+  if (editId && editId !== GENERAL_CHECKIN_PIN_ID && !displayName) {
+    notify("Name ist Pflicht.", "warning");
+    return;
+  }
+  if (editId === GENERAL_CHECKIN_PIN_ID && displayName) {
+    notify("Für den allgemeinen Check-in-PIN das Namensfeld leer lassen.", "warning");
+    return;
+  }
 
   try {
-    await appendNamedPinToEvent(appState.eventId, "checkin", pin, displayName);
-    await addAudit("pins_reset", { name: "Check-in-PIN" }, { scope: "current_event", mode: "named", displayName });
-    document.getElementById("namedCheckinPinForm")?.reset();
-    const saveButton = document.getElementById("namedCheckinPinSaveBtn");
-    if (saveButton) saveButton.disabled = true;
+    const isGeneralPin = editId === GENERAL_CHECKIN_PIN_ID || !displayName;
+    if (isGeneralPin) {
+      const securityRef = doc(appState.db, "events", appState.eventId, "private", "security");
+      const securitySnap = await getDoc(securityRef);
+      if (!securitySnap.exists()) throw new Error("Security-Dokument fehlt.");
+      const checkinPinHash = await hashPin(appState.eventId, "checkin", pin);
+      await updateDoc(securityRef, {
+        checkinPinHash,
+        checkinPinHashes: [checkinPinHash],
+        checkinPinValue: pin,
+        updatedAt: serverTimestamp()
+      });
+      await addAudit("pins_reset", { name: "Check-in-PIN" }, { scope: "current_event", mode: "general" });
+    } else if (editId) {
+      await replaceNamedPinInEvent(appState.eventId, "checkin", editId, pin, displayName);
+      await addAudit("pins_reset", { name: "Check-in-PIN" }, { scope: "current_event", mode: "edit_named", displayName });
+    } else {
+      await appendNamedPinToEvent(appState.eventId, "checkin", pin, displayName);
+      await addAudit("pins_reset", { name: "Check-in-PIN" }, { scope: "current_event", mode: "named", displayName });
+    }
+
+    resetCheckinPinForm();
     await renderNamedPinList("checkin");
-    if (result) result.innerHTML = `<p class="notice success">Benannter Check-in-PIN gespeichert.</p>`;
-    notify("Benannter Check-in-PIN gespeichert.", "success");
+    const message = isGeneralPin
+      ? "Allgemeiner Check-in-PIN gespeichert."
+      : (editId ? "Benannter Check-in-PIN geändert." : "Benannter Check-in-PIN gespeichert.");
+    if (result) result.innerHTML = `<p class="notice success">${escapeHtml(message)}</p>`;
+    notify(message, "success");
   } catch (error) {
     console.error(error);
     notify(`Check-in-PIN konnte nicht gespeichert werden: ${error.message || error}`, "error");
@@ -3438,10 +3469,10 @@ function namedPinConfig(role) {
   return {
     hashField: "checkinNamedPinHashes",
     listField: "checkinNamedPins",
-    listId: "namedCheckinPinList",
+    listId: "checkinPinList",
     resultId: "checkinPinResult",
     label: "Check-in-PIN",
-    empty: "Keine Check-in-Staff PINs gespeichert."
+    empty: "Keine PINs gespeichert."
   };
 }
 
@@ -3466,6 +3497,7 @@ async function renderNamedPinList(role) {
       ? checkinPinsFromSecurity(securityData)
       : adminPinsFromSecurity(securityData);
     const canEditAdminPins = role === "admin" && appState.ui.masterAdmin === true;
+    const canEditCheckinPins = role === "checkin" && isAdmin();
     target.innerHTML = pins.length ? pins.map((pin, listIndex) => `
       <div class="pin-list-row">
         <span>
@@ -3475,6 +3507,7 @@ async function renderNamedPinList(role) {
         </span>
         <span class="pin-list-actions">
           ${role === "checkin" ? `<button class="btn-secondary" type="button" data-copy-checkin-pin="${listIndex}" ${pin.pinValue ? "" : "disabled"}>Kopieren</button>` : ""}
+          ${canEditCheckinPins ? `<button class="btn-secondary" type="button" data-edit-checkin-pin="${listIndex}">PIN ändern</button>` : ""}
           ${canEditAdminPins ? `<button class="btn-secondary" type="button" data-edit-named-admin-pin="${listIndex}">PIN ändern</button>` : ""}
           ${canEditAdminPins && pin.kind !== "main" ? `<button class="${pin.masterAdmin ? "btn-warning" : "btn-secondary"}" type="button" data-toggle-named-admin-master="${listIndex}">${pin.masterAdmin ? "Master entziehen" : "Master berechtigen"}</button>` : ""}
           ${pin.kind === "generic" || pin.kind === "main" ? "" : `<button class="btn-danger" type="button" data-delete-named-pin="${escapeHtml(role)}" data-pin-index="${listIndex}">PIN löschen</button>`}
@@ -3487,6 +3520,10 @@ async function renderNamedPinList(role) {
       button.addEventListener("click", () => {
         void copyCheckinPinForStaff(pin);
       });
+    });
+    target.querySelectorAll("[data-edit-checkin-pin]").forEach((button) => {
+      const pin = pins[Number(button.dataset.editCheckinPin)];
+      button.addEventListener("click", () => startCheckinPinEdit(pin));
     });
     target.querySelectorAll("[data-edit-named-admin-pin]").forEach((button) => {
       const pin = pins[Number(button.dataset.editNamedAdminPin)];
@@ -3554,7 +3591,7 @@ function checkinPinsFromSecurity(data) {
   const pins = [];
   pins.push({
     kind: "generic",
-    id: "generic",
+    id: GENERAL_CHECKIN_PIN_ID,
     displayName: "Allgemeiner Check-in-PIN",
     displayNameKey: "",
     pinNameHash: "",
