@@ -131,7 +131,7 @@ Erwartete Felder:
 - `guestId` soll innerhalb eines Events eindeutig sein. Der CSV Import blockiert doppelte IDs in der Datei und bei Zusatzimporten auch IDs, die bereits im Event existieren.
 - `status` darf nur `open`, `checked_in`, `no_show` sein.
 - Doppel-Check-in-Schutz muss per Firestore Transaction geschehen.
-- Check-in Staff darf Status auf `checked_in` setzen, den eigenen letzten Check-in unmittelbar wieder auf den vorherigen Nicht-Check-in-Status zurücksetzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen.
+- Check-in Staff darf Status auf `checked_in` setzen, eigene Check-ins während 1 Minute wieder auf den vorherigen Nicht-Check-in-Status zurücksetzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen. Die App hält eigene rückgängig machbare Check-ins während dieses Zeitfensters in der Check-in-Liste sichtbar, auch wenn Suche, Status- oder Kategorie-Filter sie sonst ausblenden würden.
 - Check-in Staff darf nur innerhalb des Firestore-geprüften Zeitfensters `checkinAccessStartsAt` bis `checkinAccessEndsAt` lesen und schreiben. Admins können dieses Zeitfenster pro Event ändern, um Test- oder Demo-Events kontrolliert weiterzuverwenden.
 - Admin darf Import, Export, PIN-Reset und Korrekturen durchführen.
 - Admin darf auch vergangene und versteckte Events über die Eventliste oder direkte Event-Links öffnen und bearbeiten.

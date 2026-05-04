@@ -47,6 +47,7 @@ const MAIN_ADMIN_NAME_KEY = "main";
 const MAIN_ADMIN_PIN_ID = "main-admin-pin";
 const GENERAL_CHECKIN_PIN_ID = "generic";
 const PIN_MIN_LENGTH = 4;
+const CHECKIN_UNDO_WINDOW_MS = 60 * 1000;
 
 const STATUS_META = {
   open: { label: "Offen", badge: "warning" },
@@ -122,6 +123,8 @@ const appState = {
     importInProgress: false,
     editingGuestId: "",
     checkinUndo: null,
+    checkinUndos: [],
+    checkinUndoTimerId: null,
     masterAdmin: null,
     masterAdminKind: "",
     showCheckinPins: false,
@@ -158,7 +161,6 @@ async function boot() {
     });
 
     setConnectionStatus(navigator.onLine ? "Online" : "Offline", navigator.onLine ? "ok" : "warn");
-    installCheckinUndoInvalidation();
 
     onAuthStateChanged(appState.auth, async (user) => {
       if (!user) return;
@@ -1284,6 +1286,7 @@ function subscribeAdminNotes() {
 function renderCheckin() {
   const content = tabContent();
   const categories = getCategories();
+  pruneExpiredCheckinUndos();
 
   if (!appState.guestsLoaded) {
     content.innerHTML = `
@@ -1297,7 +1300,7 @@ function renderCheckin() {
     return;
   }
 
-  const filteredGuests = filterGuests(appState.ui.search, appState.ui.categoryFilter, appState.ui.statusFilter);
+  const filteredGuests = prioritizeActiveUndoGuests(filterGuests(appState.ui.search, appState.ui.categoryFilter, appState.ui.statusFilter));
   const results = filteredGuests.slice(0, 60);
   const filteredCount = filteredGuests.length;
 
@@ -1422,7 +1425,7 @@ function finishLocalLogout(nextTab = "role", message = "") {
   appState.guestsLoaded = false;
   appState.member = null;
   appState.ui.editingGuestId = "";
-  appState.ui.checkinUndo = null;
+  clearCheckinUndo();
   appState.currentTab = nextTab;
   renderShell();
   renderActiveTab();
@@ -1480,6 +1483,10 @@ function renderGuestCard(guest) {
   const internalNote = isAdmin() ? adminOnlyInfoForGuest(guest) : "";
   const primaryCheckinClass = `${alreadyChecked ? "btn-secondary" : "btn-success"} btn-checkin-primary`;
   const primaryCheckinLabel = alreadyChecked ? "Bereits eingecheckt" : "Einchecken";
+  const activeUndo = activeCheckinUndoForGuest(guest);
+  const primaryAction = activeUndo
+    ? `<button class="btn-warning btn-checkin-primary" data-action="undo-checkin" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Check-in rückgängig</button>`
+    : `<button class="${primaryCheckinClass}" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="0" ${disabled}>${primaryCheckinLabel}</button>`;
   const overrideCheckinButton = alreadyChecked && canOverride
     ? `<button class="btn-warning" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="1" ${disabled}>Check-in überschreiben</button>`
     : "";
@@ -1500,7 +1507,7 @@ function renderGuestCard(guest) {
       ${internalNote ? `<p class="notice info"><strong>${INFO_LABELS.adminOnly}:</strong> ${escapeHtml(internalNote)}</p>` : ""}
       ${adminStaffInfo ? `<p class="notice info"><strong>${INFO_LABELS.adminToStaff}:</strong> ${escapeHtml(adminStaffInfo)}</p>` : ""}
       <div class="guest-primary-action">
-        <button class="${primaryCheckinClass}" data-action="checkin" data-guest-id="${escapeHtml(guest.id)}" data-force="0" ${disabled}>${primaryCheckinLabel}</button>
+        ${primaryAction}
       </div>
       <div class="guest-secondary-panels">
         <details class="guest-note-panel" ${staffInfo ? "open" : ""}>
@@ -1579,6 +1586,10 @@ function renderGuestEditCard(guest) {
 function attachGuestCardHandlers(root) {
   root.querySelectorAll("[data-action='checkin']").forEach((button) => {
     button.addEventListener("click", () => checkInGuest(button.dataset.guestId, button.dataset.force === "1"));
+  });
+
+  root.querySelectorAll("[data-action='undo-checkin']").forEach((button) => {
+    button.addEventListener("click", () => undoCheckin(button.dataset.guestId));
   });
 
   root.querySelectorAll("[data-action='save-comment']").forEach((button) => {
@@ -1694,6 +1705,7 @@ function buildCheckinUndoState(guestDocId, before = {}, force = false) {
   const actorName = appState.member?.displayName || "Check-in";
   const actorDevice = appState.member?.deviceLabel || "";
   const previousStatus = before.status || "open";
+  const now = Date.now();
   return {
     eventId: appState.eventId,
     guestDocId,
@@ -1710,12 +1722,21 @@ function buildCheckinUndoState(guestDocId, before = {}, force = false) {
     checkedInByUid: appState.user.uid,
     checkedInByName: actorName,
     checkedInDevice: actorDevice,
+    createdAtMs: now,
+    expiresAtMs: now + CHECKIN_UNDO_WINDOW_MS,
     force: Boolean(force)
   };
 }
 
 function setCheckinUndo(undo) {
+  pruneExpiredCheckinUndos();
+  const existing = appState.ui.checkinUndos || [];
+  appState.ui.checkinUndos = [
+    ...existing.filter((item) => item.eventId !== undo.eventId || item.guestDocId !== undo.guestDocId),
+    undo
+  ];
   appState.ui.checkinUndo = undo;
+  scheduleCheckinUndoExpiry();
   renderCheckinUndoNotice(undo);
 }
 
@@ -1725,41 +1746,85 @@ function renderCheckinUndoNotice(undo) {
   const statusLabel = STATUS_META[undo.previousStatus]?.label || "Offen";
   flash.innerHTML = `
     <div class="notice success flash-message checkin-undo-message" data-checkin-undo-notice>
-      <span><strong>${escapeHtml(undo.guestName)} eingecheckt.</strong> Rückgängig möglich bis zur nächsten Aktion. Vorheriger Status: ${escapeHtml(statusLabel)}.</span>
+      <span><strong>${escapeHtml(undo.guestName)} eingecheckt.</strong> Rückgängig für 1 Minute möglich. Vorheriger Status: ${escapeHtml(statusLabel)}.</span>
       <button class="btn-secondary" type="button" data-undo-checkin="${escapeHtml(undo.guestDocId)}">Rückgängig</button>
     </div>
   `;
   flash.querySelector("[data-undo-checkin]")?.addEventListener("click", () => {
-    void undoLastCheckin();
+    void undoCheckin(undo.guestDocId);
   });
 }
 
-function clearCheckinUndo() {
-  appState.ui.checkinUndo = null;
+function clearCheckinUndo(guestDocId = "") {
+  if (guestDocId) {
+    appState.ui.checkinUndos = (appState.ui.checkinUndos || []).filter((undo) => undo.guestDocId !== guestDocId);
+  } else {
+    appState.ui.checkinUndos = [];
+  }
+  appState.ui.checkinUndo = latestCheckinUndo();
   const flash = document.getElementById("flash");
-  if (flash?.querySelector("[data-checkin-undo-notice]")) flash.innerHTML = "";
+  if (appState.ui.checkinUndo) {
+    renderCheckinUndoNotice(appState.ui.checkinUndo);
+  } else if (flash?.querySelector("[data-checkin-undo-notice]")) {
+    flash.innerHTML = "";
+  }
+  scheduleCheckinUndoExpiry();
 }
 
-function installCheckinUndoInvalidation() {
-  const clearForAction = (event) => {
-    if (!appState.ui.checkinUndo) return;
-    const target = event.target;
-    if (target?.closest?.("[data-checkin-undo-notice]")) return;
-    clearCheckinUndo();
-  };
-  document.addEventListener("click", clearForAction, true);
-  document.addEventListener("input", clearForAction, true);
-  document.addEventListener("change", clearForAction, true);
-  document.addEventListener("submit", clearForAction, true);
+function latestCheckinUndo() {
+  return activeCheckinUndos().sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0))[0] || null;
 }
 
-async function undoLastCheckin() {
-  const undo = appState.ui.checkinUndo;
+function activeCheckinUndos(now = Date.now()) {
+  return (appState.ui.checkinUndos || []).filter((undo) => checkinUndoIsActive(undo, now));
+}
+
+function checkinUndoIsActive(undo, now = Date.now()) {
+  return Boolean(undo?.eventId === appState.eventId
+    && undo.guestDocId
+    && undo.checkedInByUid === appState.user?.uid
+    && undo.expiresAtMs
+    && now < undo.expiresAtMs);
+}
+
+function pruneExpiredCheckinUndos(options = {}) {
+  const active = activeCheckinUndos();
+  if (active.length === (appState.ui.checkinUndos || []).length) return;
+  appState.ui.checkinUndos = active;
+  appState.ui.checkinUndo = latestCheckinUndo();
+  if (appState.ui.checkinUndo) renderCheckinUndoNotice(appState.ui.checkinUndo);
+  else {
+    const flash = document.getElementById("flash");
+    if (flash?.querySelector("[data-checkin-undo-notice]")) flash.innerHTML = "";
+  }
+  scheduleCheckinUndoExpiry();
+  if (options.rerender && appState.currentTab === "checkin") renderCheckin();
+}
+
+function scheduleCheckinUndoExpiry() {
+  if (appState.ui.checkinUndoTimerId) {
+    clearTimeout(appState.ui.checkinUndoTimerId);
+    appState.ui.checkinUndoTimerId = null;
+  }
+  const active = activeCheckinUndos();
+  if (!active.length) return;
+  const nextExpiry = Math.min(...active.map((undo) => undo.expiresAtMs));
+  appState.ui.checkinUndoTimerId = window.setTimeout(() => {
+    appState.ui.checkinUndoTimerId = null;
+    pruneExpiredCheckinUndos({ rerender: true });
+  }, Math.max(0, nextExpiry - Date.now() + 50));
+}
+
+async function undoCheckin(guestDocId = "") {
+  pruneExpiredCheckinUndos();
+  const undo = guestDocId
+    ? activeCheckinUndos().find((item) => item.guestDocId === guestDocId)
+    : appState.ui.checkinUndo;
   if (!undo) return;
   if (!requireEventMember("Check-in rückgängig machen")) return;
   if (!requireOnline("Check-in rückgängig machen")) return;
-  if (undo.eventId !== appState.eventId || undo.guestDocId !== findGuest(undo.guestDocId)?.id) {
-    clearCheckinUndo();
+  if (!checkinUndoIsActive(undo) || undo.eventId !== appState.eventId || undo.guestDocId !== findGuest(undo.guestDocId)?.id) {
+    clearCheckinUndo(guestDocId);
     notify("Rückgängig ist nicht mehr verfügbar.", "warning");
     return;
   }
@@ -1779,7 +1844,7 @@ async function undoLastCheckin() {
       const snap = await transaction.get(ref);
       if (!snap.exists()) throw new Error("UNDO_NOT_AVAILABLE");
       const current = snap.data();
-      if (!checkinUndoStillMatches(current, undo)) throw new Error("UNDO_NOT_AVAILABLE");
+      if (!checkinUndoIsActive(undo) || !checkinUndoStillMatches(current, undo)) throw new Error("UNDO_NOT_AVAILABLE");
 
       transaction.update(ref, {
         status: restoredStatus,
@@ -1799,17 +1864,21 @@ async function undoLastCheckin() {
       newStatus: restoredStatus,
       force: undo.force
     });
-    clearCheckinUndo();
+    clearCheckinUndo(undo.guestDocId);
     notify(`Check-in rückgängig gemacht: ${undo.guestName}.`, "success");
   } catch (error) {
     if (error.message === "UNDO_NOT_AVAILABLE") {
-      clearCheckinUndo();
+      clearCheckinUndo(undo.guestDocId);
       notify("Rückgängig nicht mehr möglich: Der Gast wurde inzwischen geändert.", "warning");
       return;
     }
     console.error(error);
     notify(`Rückgängig fehlgeschlagen: ${error.message || error}`, "error");
   }
+}
+
+function undoLastCheckin() {
+  return undoCheckin();
 }
 
 function normalizeUndoStatus(status) {
@@ -4238,12 +4307,33 @@ function calculateStats() {
 function filterGuests(search, category, status) {
   const normalizedSearch = normalizeForSearch(search || "");
   return appState.guests.filter((guest) => {
+    if (activeCheckinUndoForGuest(guest)) return true;
     const text = `${guest.name || ""} ${guest.guestId || ""} ${guest.category || ""} ${isEventMember() ? `${staffInfoForGuest(guest)} ${adminStaffInfoForGuest(guest)}` : ""} ${isAdmin() ? adminOnlyInfoForGuest(guest) : ""}`;
     const searchMatches = !normalizedSearch || normalizeForSearch(text).includes(normalizedSearch);
     const categoryMatches = !category || category === "all" || (guest.category || "") === category;
     const statusMatches = !status || status === "all" || (guest.status || "open") === status;
     return searchMatches && categoryMatches && statusMatches;
   });
+}
+
+function prioritizeActiveUndoGuests(guests) {
+  const undoIds = activeCheckinUndos()
+    .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0))
+    .map((undo) => undo.guestDocId);
+  if (!undoIds.length) return guests;
+  const guestById = new Map(guests.map((guest) => [guest.id, guest]));
+  const pinned = undoIds.map((id) => guestById.get(id)).filter(Boolean);
+  if (!pinned.length) return guests;
+  const pinnedIds = new Set(pinned.map((guest) => guest.id));
+  return [...pinned, ...guests.filter((guest) => !pinnedIds.has(guest.id))];
+}
+
+function activeCheckinUndoForGuest(guest) {
+  if (!guest?.id) return null;
+  return activeCheckinUndos().find((undo) =>
+    undo.guestDocId === guest.id
+    && checkinUndoStillMatches(guest, undo)
+  ) || null;
 }
 
 function getCategories() {

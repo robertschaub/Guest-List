@@ -156,8 +156,9 @@ Prüfen:
 - Check-in durch Name/Gerät wird angezeigt.
 - Dashboard-Zahlen aktualisieren sich.
 - `Rückgängig` erscheint nach dem Check-in.
-- Ohne andere Aktion kann der Check-in rückgängig gemacht werden; Status und Summen gehen zurück.
-- Nach einer anderen Bedienaktion verschwindet `Rückgängig`; Scrollen allein lässt es sichtbar.
+- Derselbe Check-in Staff kann den eigenen Check-in innerhalb von 1 Minute rückgängig machen; Status und Summen gehen zurück.
+- Während der 1 Minute bleibt der Gast trotz Suche, Status- oder Kategorie-Filter sichtbar, wenn der Filter ihn sonst ausblenden würde.
+- Nach mehr als 1 Minute verschwindet `Rückgängig`; Firestore Rules blockieren den Staff-Undo dann.
 
 ## Test 8 — Doppel-Check-in
 

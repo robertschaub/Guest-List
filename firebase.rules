@@ -427,6 +427,8 @@ service cloud.firestore {
         (
           resource.data.status == 'checked_in'
           && resource.data.checkedInByUid == request.auth.uid
+          && resource.data.checkedInAt is timestamp
+          && request.time < resource.data.checkedInAt + duration.value(1, 'm')
           && (request.resource.data.status == 'open' || request.resource.data.status == 'no_show')
           && request.resource.data.checkedInAt == null
           && request.resource.data.checkedInByUid == null
