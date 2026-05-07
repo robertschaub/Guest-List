@@ -609,6 +609,7 @@ async function renderAdminSettings() {
   tabContent().innerHTML = `
     ${renderAdminPinSection(isMaster)}
     ${renderLoggedInMembersSection()}
+    ${renderNonMasterAdminLimitationsSection(isMaster)}
   `;
   if (isMaster) {
     bindAdminPinForm();
@@ -661,6 +662,15 @@ function renderLoggedInMembersSection() {
       <h2>Aktive Anmeldungen</h2>
       <p class="small">Angemeldete Personen und Geräte prüfen, Gerätenamen korrigieren oder andere Anmeldungen vom Event abmelden.</p>
       <div id="loggedInMembersList" class="pin-list"><p class="small">Lädt…</p></div>
+    </section>
+  `;
+}
+
+function renderNonMasterAdminLimitationsSection(isMaster = false) {
+  return `
+    <section class="card compact">
+      <h2>Admin-Rechte</h2>
+      <p class="small">Master Admins haben folgende Rechte zusätzlich: Admin-PINs verwalten, Events verstecken oder löschen, Master-Rechte vergeben oder entziehen.</p>
     </section>
   `;
 }
