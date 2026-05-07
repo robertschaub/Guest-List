@@ -1152,6 +1152,7 @@ function renderShell() {
     renderActiveTab();
   });
   document.getElementById("shellAuthBtn")?.addEventListener("click", handleCheckinAuthButton);
+  renderActiveCheckinUndoNotice();
 }
 
 function updateFooterStatus() {
@@ -1356,6 +1357,7 @@ function renderCheckin() {
   document.getElementById("addGuestForm")?.addEventListener("submit", addGuestFromForm);
 
   attachGuestCardHandlers(content);
+  renderActiveCheckinUndoNotice();
 }
 
 function renderEmptyEventWarning() {
@@ -1755,6 +1757,11 @@ function renderCheckinUndoNotice(undo) {
   });
 }
 
+function renderActiveCheckinUndoNotice() {
+  const undo = latestCheckinUndo();
+  if (undo) renderCheckinUndoNotice(undo);
+}
+
 function clearCheckinUndo(guestDocId = "") {
   if (guestDocId) {
     appState.ui.checkinUndos = (appState.ui.checkinUndos || []).filter((undo) => undo.guestDocId !== guestDocId);
@@ -1887,13 +1894,7 @@ function normalizeUndoStatus(status) {
 
 function checkinUndoStillMatches(current, undo) {
   return current.status === "checked_in"
-    && (current.checkedInByUid || "") === (undo.checkedInByUid || "")
-    && (current.checkedInByName || "") === (undo.checkedInByName || "")
-    && (current.checkedInDevice || "") === (undo.checkedInDevice || "")
-    && (current.name || "") === (undo.guestName || "")
-    && (current.category || "") === (undo.category || "")
-    && (current.supportComment || "") === (undo.supportComment || "")
-    && (current.adminStaffInfo || "") === (undo.adminStaffInfo || "");
+    && (current.checkedInByUid || "") === (undo.checkedInByUid || "");
 }
 
 async function saveGuestComment(guestDocId) {
@@ -1916,6 +1917,7 @@ async function saveGuestComment(guestDocId) {
       oldComment: staffInfoForGuest(guest),
       newComment
     });
+    clearCheckinUndo(guestDocId);
     notify("Notiz gespeichert.", "success");
   } catch (error) {
     console.error(error);
@@ -1990,6 +1992,7 @@ async function saveEditedGuest(event, guestDocId) {
       adminOnlyInfoChanged: internalNote !== adminOnlyInfoForGuest(guest)
     });
     appState.ui.editingGuestId = "";
+    clearCheckinUndo(guestDocId);
     notify("Gast aktualisiert.", "success");
   } catch (error) {
     console.error(error);
@@ -2032,6 +2035,7 @@ async function updateGuestStatus(guestDocId, status) {
       oldStatus: currentStatus,
       newStatus: status
     });
+    clearCheckinUndo(guestDocId);
     notify(`Status geändert: ${guest.name} → ${STATUS_META[status]?.label || status}.`, "success");
   } catch (error) {
     console.error(error);
@@ -2062,6 +2066,7 @@ async function deleteGuest(guestDocId) {
       checkedInBy: guest.checkedInByName || ""
     });
     if (appState.ui.editingGuestId === guestDocId) appState.ui.editingGuestId = "";
+    clearCheckinUndo(guestDocId);
     notify(`Gast gelöscht: ${guest.name || guest.guestId || guest.id}.`, "success");
   } catch (error) {
     console.error(error);
@@ -4330,10 +4335,13 @@ function prioritizeActiveUndoGuests(guests) {
 
 function activeCheckinUndoForGuest(guest) {
   if (!guest?.id) return null;
-  return activeCheckinUndos().find((undo) =>
-    undo.guestDocId === guest.id
-    && checkinUndoStillMatches(guest, undo)
-  ) || null;
+  const undo = activeCheckinUndos().find((item) => item.guestDocId === guest.id);
+  if (!undo) return null;
+  if (checkinUndoStillMatches(guest, undo)) {
+    undo.snapshotConfirmed = true;
+    return undo;
+  }
+  return !undo.snapshotConfirmed ? undo : null;
 }
 
 function getCategories() {
