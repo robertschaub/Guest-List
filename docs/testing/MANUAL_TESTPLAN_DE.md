@@ -45,6 +45,7 @@ Prüfen:
 Prüfen:
 
 - Event-Link enthält `?event=...`.
+- Event-Link-Vorschau folgt `TT-MM-JJJJ-event-name`, z.B. `02-05-2026-the-lago`; Artist/Line-up steht nur im Eventnamen, nicht in der Event-Link ID.
 - Main-PIN und Check-in-PIN sicher notieren.
 - Als eingeloggter Admin: Check-in-PIN wird aus einem bestehenden Event vorbefüllt und kann vor dem Speichern überschrieben werden.
 - Kategorien enthalten GA, Member GA, Member VIP, On Stage, Mitarbeiter.

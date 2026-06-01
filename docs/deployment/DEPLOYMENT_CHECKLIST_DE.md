@@ -48,7 +48,7 @@
 - [ ] Admin-Übersicht geprüft
 - [ ] Export geprüft
 - [ ] Leeres Event zeigt 0-Gäste-Warnung
-- [ ] Import mit Löschen verlangt Event-ID als Bestätigung
+- [ ] Import mit Löschen verlangt Event-Link ID als Bestätigung
 
 ## Event-Tag Backup
 

@@ -37,6 +37,7 @@ const KNOWN_EVENTS_STORAGE_KEY = "guestlist:knownEvents";
 const ADMIN_SESSION_STORAGE_KEY = "guestlist:adminSession";
 const DEVICE_LABEL_STORAGE_KEY = "guestlist:deviceLabel";
 const EVENT_ALIASES = CONFIG.app?.eventAliases || {};
+const EVENT_PUBLIC_IDS = CONFIG.app?.publicEventIds || {};
 const GLOBAL_ADMIN_EVENT_ID = CONFIG.app?.globalAdminEventId || CONFIGURED_EVENTS[0]?.id || "";
 const ADMIN_SECURITY_COLLECTION = "appSecurity";
 const ADMIN_SECURITY_DOC_ID = "admin";
@@ -218,7 +219,7 @@ async function startApp() {
     return;
   }
 
-  if (rawEventParam && eventParam !== rawEventParam) {
+  if (rawEventParam && eventUrlId(eventParam) !== rawEventParam) {
     window.location.replace(urlWithEvent(eventParam));
     return;
   }
@@ -311,6 +312,7 @@ function renderEventSetupSections(options = {}) {
   const showEventDirectory = isAdmin() || visibleKnownEvents.length;
   const omitAdminPin = Boolean(options.omitAdminPin);
   const setupName = getAdminSession()?.displayName || appState.member?.displayName || MAIN_ADMIN_NAME;
+  const defaultEventName = CONFIG.app?.defaultEventName || "Event Gästeliste";
   return `
     ${showEventDirectory ? `
       <section class="card">
@@ -325,11 +327,21 @@ function renderEventSetupSections(options = {}) {
       <form id="createEventForm" class="grid two">
         <div class="form-row">
           <label for="newEventName">Eventname</label>
-          <input id="newEventName" value="${escapeHtml(CONFIG.app?.defaultEventName || "Event Gästeliste")}" required />
+          <input id="newEventName" value="${escapeHtml(defaultEventName)}" required />
         </div>
         <div class="form-row">
           <label for="newEventDate">Datum</label>
           <input id="newEventDate" type="date" required />
+        </div>
+        <div class="form-row">
+          <label for="newEventLinkName">Event-Link Name</label>
+          <input id="newEventLinkName" value="${escapeHtml(suggestEventLinkName(defaultEventName))}" required />
+          <p class="small">Stabiler Eventname ohne Artist, Line-up oder Sponsor.</p>
+        </div>
+        <div class="form-row">
+          <label for="newEventLinkPreview">Event-Link Vorschau</label>
+          <input id="newEventLinkPreview" readonly aria-label="Event-Link Vorschau" />
+          <p class="small">Format: TT-MM-JJJJ-Eventname, z.B. <code>02-05-2026-the-lago</code>.</p>
         </div>
         ${omitAdminPin ? "" : `
           <div class="form-row">
@@ -368,7 +380,33 @@ function bindEventSetupHandlers() {
   if (isAdmin() || getAdminSession()?.pin) {
     void prefillSetupCheckinPinFromRecentEvent();
   }
+  bindEventIdPreview();
   document.getElementById("createEventForm")?.addEventListener("submit", createEventFromForm);
+}
+
+function bindEventIdPreview() {
+  const nameInput = document.getElementById("newEventName");
+  const linkNameInput = document.getElementById("newEventLinkName");
+  const dateInput = document.getElementById("newEventDate");
+  const previewInput = document.getElementById("newEventLinkPreview");
+  if (!nameInput || !linkNameInput || !dateInput || !previewInput) return;
+
+  let linkNameEdited = false;
+  const updatePreview = () => {
+    if (!linkNameEdited) {
+      linkNameInput.value = suggestEventLinkName(nameInput.value);
+    }
+    const eventId = buildEventId(linkNameInput.value, dateInput.value);
+    previewInput.value = eventId ? urlWithEvent(eventId) : "";
+  };
+
+  nameInput.addEventListener("input", updatePreview);
+  dateInput.addEventListener("input", updatePreview);
+  linkNameInput.addEventListener("input", () => {
+    linkNameEdited = true;
+    updatePreview();
+  });
+  updatePreview();
 }
 
 async function prefillSetupCheckinPinFromRecentEvent() {
@@ -432,20 +470,25 @@ async function createEventFromForm(event) {
 
   const name = val("newEventName").trim();
   const date = val("newEventDate").trim();
+  const linkName = val("newEventLinkName").trim();
   const adminPin = val("adminPin") || (isAdmin() ? getAdminSession()?.pin || "" : "");
   const checkinPin = val("checkinPin");
   const displayName = val("setupName").trim() || MAIN_ADMIN_NAME;
   const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
   const categories = val("categoryList").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 
-  if (!name || !date) {
-    result.innerHTML = `<p class="notice error">Eventname und Datum sind Pflichtfelder.</p>`;
+  if (!name || !date || !linkName) {
+    result.innerHTML = `<p class="notice error">Eventname, Datum und Event-Link Name sind Pflichtfelder.</p>`;
     return;
   }
 
-  const eventId = buildEventId(name, date);
+  const eventId = buildEventId(linkName, date);
   const checkinAccessWindow = checkinAccessWindowForDate(date);
 
+  if (!eventId) {
+    result.innerHTML = `<p class="notice error">Event-Link Name oder Eventdatum ist ungültig.</p>`;
+    return;
+  }
   if (adminPin.length < PIN_MIN_LENGTH || checkinPin.length < PIN_MIN_LENGTH) {
     result.innerHTML = `<p class="notice error">PINs müssen mindestens ${PIN_MIN_LENGTH} Zeichen haben.</p>`;
     return;
@@ -462,7 +505,7 @@ async function createEventFromForm(event) {
     const targetEventRef = doc(appState.db, "events", eventId);
     const existingEventSnap = await getDoc(targetEventRef);
     if (existingEventSnap.exists()) {
-      result.innerHTML = `<p class="notice error">Event-ID <code>${escapeHtml(eventId)}</code> existiert bereits. Bitte Eventname oder Datum anpassen.</p>`;
+      result.innerHTML = `<p class="notice error">Event-Link ID <code>${escapeHtml(eventId)}</code> existiert bereits. Bitte Eventname oder Datum anpassen.</p>`;
       return;
     }
 
@@ -521,11 +564,11 @@ async function createEventFromForm(event) {
 
 function renderEventNotFound(eventId) {
   els.eventTitle.textContent = "Event nicht gefunden";
-  setHeaderMeta([`ID: ${eventId}`]);
+  setHeaderMeta([`Event-Link ID: ${eventUrlId(eventId)}`]);
   render(`
     <section class="card">
       <h2>Event nicht gefunden</h2>
-      <p>Für die Event-ID <code>${escapeHtml(eventId)}</code> wurde kein Event gefunden.</p>
+      <p>Für die Event-Link ID <code>${escapeHtml(eventUrlId(eventId))}</code> wurde kein Event gefunden.</p>
       <div class="actions">
         <button class="btn-secondary" onclick="window.location.href='${escapeJsUrl(urlWithoutParams())}?setup=1'">Zur Event-Auswahl</button>
       </div>
@@ -556,7 +599,7 @@ function renderRolePinSections() {
     ? `<p class="notice warning">${escapeHtml(checkinStaffAccessMessage())}</p>`
     : "";
   const eventContext = appState.eventId
-    ? `<p class="small">Event-ID: <code>${escapeHtml(appState.eventId)}</code></p>${renderCheckinAccessLoginStatus()}`
+    ? `<p class="small">Event-Link ID: <code>${escapeHtml(eventUrlId(appState.eventId))}</code></p>${renderCheckinAccessLoginStatus()}`
     : `<p class="small">Ohne Event-Link öffnet Admin ein bekanntes Event. Check-in Staff braucht ein aktuell freigegebenes Check-in-Event.</p>`;
 
   return `
@@ -1168,7 +1211,7 @@ function renderShell() {
 function updateFooterStatus() {
   if (!els.footerText) return;
   const role = roleDisplayLabel(appState.member?.role) || "User";
-  els.footerText.textContent = `${role} · ${appState.member?.displayName || ""} · ${appState.member?.deviceLabel || ""} · Event: ${appState.eventId || "-"}`;
+  els.footerText.textContent = `${role} · ${appState.member?.displayName || ""} · ${appState.member?.deviceLabel || ""} · Event: ${eventUrlId(appState.eventId) || "-"}`;
 }
 
 function adminMobileTabs(tabs) {
@@ -1377,7 +1420,7 @@ function renderEmptyEventWarning() {
     return `
       <div class="notice warning">
         <strong>Dieses Event hat aktuell 0 Gäste.</strong>
-        Prüfe oben Eventname, Datum und Event-ID. Importiere zuerst die passende CSV im Admin-Tab, bevor der Link an Check-in-Geräte geht.
+        Prüfe oben Eventname, Datum und Event-Link ID. Importiere zuerst die passende CSV im Admin-Tab, bevor der Link an Check-in-Geräte geht.
       </div>
     `;
   }
@@ -2257,8 +2300,8 @@ function renderAdmin() {
           <input id="eventNameInput" value="${escapeHtml(appState.event?.name || "")}" required />
         </div>
         <div class="form-row">
-          <label>Event-ID</label>
-          <input value="${escapeHtml(appState.eventId || "")}" readonly />
+          <label>Event-Link ID</label>
+          <input value="${escapeHtml(eventUrlId(appState.eventId) || "")}" readonly />
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" id="eventNameSaveBtn" type="submit" disabled>Eventname speichern</button>
@@ -2301,7 +2344,7 @@ function renderAdmin() {
 
     <section class="card">
       <h2>Backup & Export</h2>
-      <p class="small">Backup für dieses Event: ${escapeHtml(appState.event?.name || "")} · ${escapeHtml(appState.event?.date || "")} · ${escapeHtml(appState.eventId || "")} · aktuell ${appState.guests.length} Gäste.</p>
+      <p class="small">Backup für dieses Event: ${escapeHtml(appState.event?.name || "")} · ${escapeHtml(appState.event?.date || "")} · ${escapeHtml(eventUrlId(appState.eventId) || "")} · aktuell ${appState.guests.length} Gäste.</p>
       <div class="actions">
         <button class="btn-secondary" data-export="all" ${exportDisabled}>Alle Gäste CSV</button>
         <button class="btn-secondary" data-export="checked_in" ${exportDisabled}>Eingecheckte CSV</button>
@@ -3214,11 +3257,11 @@ function auditExportFilterSummary(filters) {
 }
 
 function confirmByTypingEventId(actionText) {
-  const expected = appState.eventId || "";
-  const entered = window.prompt(`${actionText}\n\nDas ist eine irreversible Massenaktion im aktuellen Event.\nZur Bestätigung exakt die Event-ID eingeben:\n${expected}`);
+  const expected = eventUrlId(appState.eventId) || "";
+  const entered = window.prompt(`${actionText}\n\nDas ist eine irreversible Massenaktion im aktuellen Event.\nZur Bestätigung exakt die Event-Link ID eingeben:\n${expected}`);
   if (entered === null) return false;
   if (entered.trim() !== expected) {
-    notify("Abgebrochen: Event-ID stimmte nicht. Es wurde nichts geändert.", "warning");
+    notify("Abgebrochen: Event-Link ID stimmte nicht. Es wurde nichts geändert.", "warning");
     return false;
   }
   return true;
@@ -4916,17 +4959,22 @@ async function adminMemberAuthFields(pin, displayName) {
   return memberAuthFields(ADMIN_PIN_SCOPE, "admin", pin, displayName);
 }
 
-function buildEventId(name, date) {
-  const words = normalizeForSearch(name).split(/\s+/).filter(Boolean).slice(0, 2);
-  const namePart = (words.length ? words : ["event"]).join("-");
-  const datePart = shortDateForEventId(date);
-  return [namePart, datePart].filter(Boolean).join("-");
+function buildEventId(linkName, date) {
+  const datePart = chDateForEventId(date);
+  const namePart = normalizeForSearch(linkName).split(/\s+/).filter(Boolean).join("-");
+  if (!datePart || !namePart) return "";
+  return `${datePart}-${namePart}`;
 }
 
-function shortDateForEventId(date) {
+function chDateForEventId(date) {
   const match = String(date || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return "";
-  return `${match[1].slice(2)}${match[2]}${match[3]}`;
+  return `${match[3]}-${match[2]}-${match[1]}`;
+}
+
+function suggestEventLinkName(displayName) {
+  const name = String(displayName || "").trim();
+  return name.split(/\s+(?:w\/|with|feat\.?|ft\.?|vs\.?)\s*/i)[0].trim() || name;
 }
 
 function checkinStaffAccessWindow(event = appState.event) {
@@ -5159,8 +5207,7 @@ function writeDisabledAttr() {
 
 function setEventMeta() {
   const parts = [
-    appState.event?.date ? `Datum: ${formatEventDate(appState.event.date)}` : "",
-    appState.eventId ? `ID: ${appState.eventId}` : ""
+    appState.event?.date ? `Datum: ${formatEventDate(appState.event.date)}` : ""
   ];
   setHeaderMeta(parts);
 }
@@ -5298,6 +5345,11 @@ function resolveEventId(id) {
   return EVENT_ALIASES[raw] || raw;
 }
 
+function eventUrlId(id) {
+  const resolved = resolveEventId(id);
+  return EVENT_PUBLIC_IDS[resolved] || resolved;
+}
+
 function renderKnownEventList(currentEventId = "") {
   const events = getKnownEvents().filter((event) => isAdmin() || !isEventHidden(event));
   if (!events.length) return `<p class="notice warning">Noch keine bekannten Events in dieser Installation.</p>`;
@@ -5345,12 +5397,13 @@ function renderKnownEventCard(event, currentEventId = "", options = {}) {
   const isCurrent = event.id === currentEventId;
   const link = urlWithEvent(event.id);
   const hiddenBadge = isEventHidden(event) ? ` <span class="badge warning">Versteckt</span>` : "";
+  const dateLabel = event.date ? escapeHtml(formatEventDate(event.date)) : "ohne Datum";
   return `
     <div class="event-switch-card ${isCurrent ? "current" : ""}">
       <span>
         <strong>${escapeHtml(event.name || event.id)}${hiddenBadge}</strong>
-        <small>${event.date ? escapeHtml(formatEventDate(event.date)) : "ohne Datum"} · ${escapeHtml(event.id)}</small>
-        <small>${escapeHtml(link)}</small>
+        <small>${dateLabel}</small>
+        <small>Event-Link: ${escapeHtml(link)}</small>
       </span>
       <span class="event-switch-actions">
         <button class="btn-secondary" type="button" data-copy-known-link="${escapeHtml(link)}">Link kopieren</button>
@@ -5553,7 +5606,7 @@ function urlWithoutParams() {
 }
 
 function urlWithEvent(id) {
-  return `${urlWithoutParams()}?event=${encodeURIComponent(id)}`;
+  return `${urlWithoutParams()}?event=${encodeURIComponent(eventUrlId(id))}`;
 }
 
 function timestampMillis(value) {
@@ -5612,7 +5665,7 @@ function eventFileStem() {
   const parts = [
     safeFileName(appState.event?.name || "gaesteliste"),
     appState.event?.date ? safeFileName(appState.event.date) : "",
-    appState.eventId ? safeFileName(appState.eventId) : ""
+    appState.eventId ? safeFileName(eventUrlId(appState.eventId)) : ""
   ].filter(Boolean);
   return parts.join("-");
 }

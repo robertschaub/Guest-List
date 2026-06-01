@@ -18,7 +18,13 @@ window.GUESTLIST_APP_CONFIG = {
     defaultEventName: "Event Gästeliste",
     globalAdminEventId: "the-garden-w-blondish",
     eventAliases: {
-      "the-garden-w-dj-prospa": "the-garden-w-blondish"
+      "the-garden-w-dj-prospa": "the-garden-w-blondish",
+      "01-05-2026-the-garden": "the-garden-w-blondish",
+      "02-05-2026-the-lago": "the-garden-w-me"
+    },
+    publicEventIds: {
+      "the-garden-w-blondish": "01-05-2026-the-garden",
+      "the-garden-w-me": "02-05-2026-the-lago"
     },
     knownEvents: [
       {
@@ -28,7 +34,7 @@ window.GUESTLIST_APP_CONFIG = {
       },
       {
         id: "the-garden-w-me",
-        name: "THE GARDEN w/ &ME",
+        name: "THE LAGO w/Adriatique",
         date: "2026-05-02"
       }
     ],

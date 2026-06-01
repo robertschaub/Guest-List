@@ -6,10 +6,10 @@ Verwende immer den Link für deinen Event. Die App wählt den Event nicht automa
 
 ```text
 1. Mai / BLOND:ISH:
-https://robertschaub.github.io/Guest-List/?event=the-garden-w-blondish
+https://robertschaub.github.io/Guest-List/?event=01-05-2026-the-garden
 
-2. Mai / &ME:
-https://robertschaub.github.io/Guest-List/?event=the-garden-w-me
+2. Mai / Adriatique:
+https://robertschaub.github.io/Guest-List/?event=02-05-2026-the-lago
 ```
 
 Die Basis-URL ohne `?event=...` nicht verwenden.

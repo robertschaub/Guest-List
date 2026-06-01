@@ -83,7 +83,13 @@ window.GUESTLIST_APP_CONFIG = {
     defaultEventName: "Event Gästeliste",
     globalAdminEventId: "the-garden-w-blondish",
     eventAliases: {
-      "the-garden-w-dj-prospa": "the-garden-w-blondish"
+      "the-garden-w-dj-prospa": "the-garden-w-blondish",
+      "01-05-2026-the-garden": "the-garden-w-blondish",
+      "02-05-2026-the-lago": "the-garden-w-me"
+    },
+    publicEventIds: {
+      "the-garden-w-blondish": "01-05-2026-the-garden",
+      "the-garden-w-me": "02-05-2026-the-lago"
     },
     categories: ["GA", "Member GA", "Member VIP", "On Stage", "Mitarbeiter"],
     statuses: ["open", "checked_in", "no_show"]
@@ -91,7 +97,7 @@ window.GUESTLIST_APP_CONFIG = {
 };
 ```
 
-Die Firebase-Konfiguration ist kein Passwort. Der Zugriff wird über Anonymous Auth, Event-ID, PIN-Hash und Firestore-Regeln geschützt.
+Die Firebase-Konfiguration ist kein Passwort. Der Zugriff wird über Anonymous Auth, Event-Link ID, PIN-Hash und Firestore-Regeln geschützt.
 
 ### 6. Zu GitHub Pages hochladen
 
@@ -120,32 +126,38 @@ https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?setup=1
 
 Dann:
 
-1. Eventname eingeben.
-2. Globalen Admin-PIN eingeben.
-3. Check-in-PIN für dieses Event setzen.
-4. Kategorien prüfen.
-5. Event erstellen.
-6. Check-in-PIN sicher speichern.
+1. Eventname eingeben, z.B. `THE LAGO w/Adriatique`.
+2. Event-Link Name ohne Artist, Line-up oder Sponsor prüfen, z.B. `THE LAGO`.
+3. Globalen Admin-PIN eingeben.
+4. Check-in-PIN für dieses Event setzen.
+5. Kategorien prüfen.
+6. Event erstellen.
+7. Check-in-PIN sicher speichern.
 
 Danach erzeugt die App einen Event-Link:
 
 ```text
-https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=evt-...
+https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=02-05-2026-the-lago
 ```
 
 Diesen Link gibst du an die Check-in-Geräte weiter. Die Mitarbeiter:innen brauchen zusätzlich den Check-in-PIN.
 
 ### Mehrere Events und Event-Wechsel
 
-Jedes Event hat eine eigene Event-ID und damit eine eigene Gästeliste in Firestore.
+Jedes Event hat eine eigene Event-Link ID und damit eine eigene Gästeliste. Technisch kann eine Event-Link ID per Alias auf eine bestehende Firestore Event-ID zeigen, damit alte Links kompatibel bleiben.
 
 Der Admin-PIN ist global und gilt für alle Events. Beim Erstellen eines neuen Events wird dieser globale Admin-PIN geprüft und danach automatisch als Admin-PIN des neuen Events verwendet. Check-in-PINs bleiben pro Event separat.
 
-Für THE GARDEN sind in der App zwei Eventtage vorbereitet:
+Neue Events verwenden als Event-Link ID das Format `TT-MM-JJJJ-event-name`, zum Beispiel `02-05-2026-the-lago`. Der Event-Link Name soll stabil bleiben und keine Artists, Line-ups, Sponsoren oder temporäre Mottos enthalten. Der sichtbare Eventname kann später geändert werden, die Event-Link ID bleibt gleich.
+
+Bestehende vorbereitete Events nutzen ab sofort saubere öffentliche Event-Link IDs. Die alten Links bleiben als Alias kompatibel.
 
 ```text
-https://robertschaub.github.io/Guest-List/?event=the-garden-w-blondish
-https://robertschaub.github.io/Guest-List/?event=the-garden-w-me
+1. Mai / BLOND:ISH:
+https://robertschaub.github.io/Guest-List/?event=01-05-2026-the-garden
+
+2. Mai / Adriatique:
+https://robertschaub.github.io/Guest-List/?event=02-05-2026-the-lago
 ```
 
 Auf der Startseite und im Admin-Tab gibt es eine Liste **Bestehende Events**. Dort können Admins den Freitag- oder Samstag-Event bewusst auswählen. Im laufenden UI führt der Button **Event wechseln** ebenfalls zur Event-Auswahl. Direkte Event-Links mit `?event=...` funktionieren weiterhin, werden aber nicht mehr als separates Eingabefeld in der Oberfläche angeboten.
@@ -184,7 +196,7 @@ Check-in Staff sieht bewusst nur den Check-in-Modus sowie `Event wechseln` und `
 2. Rolle `Admin` wählen.
 3. Globalen Admin-PIN eingeben.
 4. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder einzelne No Shows setzen.
-5. Bei riskanten Massenaktionen die aktuelle Event-ID eintippen, zum Beispiel beim Import mit Löschen.
+5. Bei riskanten Massenaktionen die aktuelle Event-Link ID eintippen, zum Beispiel beim Import mit Löschen.
 6. Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.
 7. Vor Eventstart unter `Export / Backup` Gäste-CSV und Audit-Log-CSV herunterladen.
 8. Event-Link und beide PINs extern sichern; PINs sind später nicht auslesbar.
@@ -217,7 +229,7 @@ Sicherheitsprüfungen beim Import:
 - Zeilen ohne Namen werden blockiert.
 - Doppelte `Guest ID` innerhalb der CSV werden blockiert.
 - Bei zusätzlichem Import werden `Guest ID`s blockiert, die bereits im Event existieren.
-- Bei vollständigem Neuimport kann `Vorhandene Gäste vor Import löschen` aktiviert werden. Vor dem Löschen muss die aktuelle Event-ID eingetippt werden.
+- Bei vollständigem Neuimport kann `Vorhandene Gäste vor Import löschen` aktiviert werden. Vor dem Löschen muss die aktuelle Event-Link ID eingetippt werden.
 
 CSV-Exporte werden als UTF-8 mit BOM und Semikolon-Trennzeichen erzeugt, damit sie in deutschem Excel einfacher geöffnet werden können. Der Admin-Bereich zeigt nach dem Export Dateiname, Anzahl und Uhrzeit als Backup-Hinweis. Zusätzlich kann der Admin das Audit Log als CSV exportieren.
 
