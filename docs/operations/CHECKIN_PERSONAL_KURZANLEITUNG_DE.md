@@ -3,7 +3,7 @@
 ## Konzepte für Check-in Staff
 
 - **Event-Link:** Du öffnest immer den vollständigen Link für deinen Event. Die App wählt nie automatisch nach Datum.
-- **Check-in-PIN:** Der PIN verbindet dich mit genau diesem Event. Er ist nicht der Admin-PIN.
+- **Check-in-PIN:** Der PIN verbindet dich mit genau diesem Event. Name/Position muss zum PIN passen. Er ist nicht der Admin-PIN.
 - **Event-Gültigkeit:** Der Check-in-Zugang ist nur im freigegebenen Zeitfenster aktiv. Wenn der Zugang noch nicht aktiv oder abgelaufen ist, muss ein Admin das Zeitfenster prüfen.
 - **Header:** Eventname, Datum und `Online` zeigen, ob du im richtigen und verbundenen Event arbeitest.
 - **Suche:** Suche nach Name oder Guest ID. Prüfe den richtigen Gast vor dem Check-in.

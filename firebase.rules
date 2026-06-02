@@ -123,20 +123,11 @@ service cloud.firestore {
         );
     }
 
-    function validCheckinPin(eventId, pinHash, pinNameHash) {
+    function validCheckinPin(eventId, pinNameHash) {
       return securityExists(eventId)
-        && (
-          securityData(eventId).checkinPinHash == pinHash
-          || (
-            securityData(eventId).keys().hasAny(['checkinPinHashes'])
-            && pinHash in securityData(eventId).checkinPinHashes
-          )
-          || (
-            pinNameHash is string
-            && securityData(eventId).keys().hasAny(['checkinNamedPinHashes'])
-            && pinNameHash in securityData(eventId).checkinNamedPinHashes
-          )
-        );
+        && pinNameHash is string
+        && securityData(eventId).keys().hasAny(['checkinNamedPinHashes'])
+        && pinNameHash in securityData(eventId).checkinNamedPinHashes;
     }
 
     function validPin(eventId, role, pinHash, pinNameHash, displayNameKey) {
@@ -146,7 +137,7 @@ service cloud.firestore {
         )
         || (
           role == 'checkin'
-          && validCheckinPin(eventId, pinHash, pinNameHash)
+          && validCheckinPin(eventId, pinNameHash)
         );
     }
 
@@ -265,18 +256,16 @@ service cloud.firestore {
     }
 
     function validSecurityData(data) {
-      return data.checkinPinHash is string
-        && (!data.keys().hasAny(['adminPinHash']) || data.adminPinHash is string)
+      return (!data.keys().hasAny(['adminPinHash']) || data.adminPinHash is string)
         && (!data.keys().hasAny(['adminPinHashes']) || (data.adminPinHashes is list && data.adminPinHashes.size() <= 1))
-        && (!data.keys().hasAny(['checkinPinHashes']) || (data.checkinPinHashes is list && data.checkinPinHashes.size() <= 1))
-        && (!data.keys().hasAny(['checkinPinValue']) || data.checkinPinValue is string)
         && (!data.keys().hasAny(['adminNamedPinHashes']) || (data.adminNamedPinHashes is list && data.adminNamedPinHashes.size() <= 50))
-        && (!data.keys().hasAny(['checkinNamedPinHashes']) || (data.checkinNamedPinHashes is list && data.checkinNamedPinHashes.size() <= 50))
+        && data.checkinNamedPinHashes is list
+        && data.checkinNamedPinHashes.size() <= 50
         && (!data.keys().hasAny(['adminNamedPins']) || (data.adminNamedPins is list && data.adminNamedPins.size() <= 50))
-        && (!data.keys().hasAny(['checkinNamedPins']) || (data.checkinNamedPins is list && data.checkinNamedPins.size() <= 50))
+        && data.checkinNamedPins is list
+        && data.checkinNamedPins.size() <= 50
         && data.keys().hasOnly([
-          'adminPinHash', 'checkinPinHash',
-          'adminPinHashes', 'checkinPinHashes', 'checkinPinValue',
+          'adminPinHash', 'adminPinHashes',
           'adminNamedPinHashes', 'checkinNamedPinHashes',
           'adminNamedPins', 'checkinNamedPins',
           'createdAt', 'updatedAt'
@@ -414,12 +403,10 @@ service cloud.firestore {
         ]);
     }
 
-    function guideReadAllowed(eventId, guideId) {
-      return isAdmin(eventId)
-        || (
-          isCheckin(eventId)
-          && (guideId == 'checkin' || guideId == 'emergency')
-        );
+    function globalGuideWriteAllowed(guideId) {
+      return validGuideId(guideId)
+        && adminSecurityExists()
+        && validMasterAdminForData(adminSecurityData());
     }
 
     function staffGuestUpdateAllowed(eventId) {
@@ -494,6 +481,15 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /appGuides/{guideId} {
+      allow get: if signedIn()
+        && validGuideId(guideId);
+      allow list: if false;
+      allow create, update: if globalGuideWriteAllowed(guideId)
+        && validGuideData(request.resource.data);
+      allow delete: if globalGuideWriteAllowed(guideId);
+    }
+
     match /events/{eventId} {
       // The event document intentionally contains only public event metadata.
       allow get: if true;
@@ -554,17 +550,6 @@ service cloud.firestore {
         allow create, update: if isAdmin(eventId)
           && validGuestAdminNoteData(request.resource.data);
         allow delete: if isAdmin(eventId);
-      }
-
-      match /guides/{guideId} {
-        allow get: if validGuideId(guideId)
-          && guideReadAllowed(eventId, guideId);
-        allow list: if isAdmin(eventId);
-        allow create, update: if validGuideId(guideId)
-          && isMasterAdmin(eventId)
-          && validGuideData(request.resource.data);
-        allow delete: if validGuideId(guideId)
-          && isMasterAdmin(eventId);
       }
 
       match /auditLog/{logId} {

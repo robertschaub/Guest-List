@@ -5,11 +5,15 @@
 ### Administrator-Rollen
 
 - **Anmeldung:** Admins melden sich mit Rolle `Admin`, Name und Admin-PIN an.
-- **Main:** Fester Hauptadmin-Name. `Main` plus Main-PIN ist immer ein Master Admin. Der Main-PIN sollte nur einer verantwortlichen Person bekannt sein.
-- **Benannter Admin:** Eigener Admin-Name plus eigener Admin-PIN. Name und PIN müssen zusammenpassen.
-- **Master Admin:** Darf Admin-Zugänge und Events vollständig verwalten.
-- **Admin ohne Master-Rechte:** Darf den aktuellen Event operativ betreiben: Gäste, Check-in-PINs, Zeitfenster, Korrekturen und Exporte.
+- **Admin:** Betreibt Events und verwaltet Zugänge.
 - **Check-in Staff:** Nutzt keinen Admin-PIN. Zugriff nur mit Check-in-PIN und nur innerhalb des Event-Zeitfensters.
+
+### Admin Logins
+
+1. Admins sind global, nicht pro Event.
+2. Admins betreiben Events operativ: Gäste, Check-in-PINs, Zeitfenster, Korrekturen und Exporte.
+3. Master Admins dürfen zusätzlich Admin-PINs verwalten, Events verstecken oder löschen und Master-Rechte vergeben oder entziehen.
+4. `Main` plus Main-PIN ist immer Master Admin. Der Main Admin soll nur im Notfall verwendet werden.
 
 ### Events und Gültigkeit
 
@@ -30,6 +34,13 @@ https://robertschaub.github.io/Guest-List/?event=02-05-2026-main-event
 
 Im Header müssen Eventname, Datum und Status `Online` passen.
 
+## Neuen Event erstellen
+
+1. Als Admin anmelden und Tab `Events` öffnen.
+2. Eventname, Datum und stabilen Event-Link Name setzen.
+3. Check-in Name und PIN setzen.
+4. Event erstellen und den offiziellen Event-Link kopieren.
+
 ## Event vorbereiten
 
 1. Event erstellen oder vorhandenen Event über den offiziellen Event-Link öffnen.
@@ -43,14 +54,13 @@ Im Header müssen Eventname, Datum und Status `Online` passen.
 9. Unter `Backup & Export` mindestens `Alle Gäste CSV` und `Audit Log CSV` herunterladen.
 10. Check-in mit zwei Geräten testen.
 
-## Logins definieren und informieren
+## Check-in Logins definieren und informieren
 
-1. Verantwortliche Master Admins festlegen. Den Main-PIN nur einer verantwortlichen Person bekannt geben.
-2. Benannte Admins anlegen, wenn mehrere Personen Admin-Rechte brauchen.
-3. Check-in-PINs für den Event festlegen: allgemeiner PIN oder benannte PINs pro Person/Position.
-4. Dem Check-in-Team nur diese Informationen geben: Event-Link, Rolle `Check-in Staff`, Name/Position, Check-in-PIN, Startzeit und Ansprechperson.
-5. Admin-PINs getrennt vom Check-in-Team halten.
-6. Kurz kommunizieren: richtigen Header prüfen, bei Problemen Admin holen.
+1. Check-in-Logins für den Event anlegen: Name/Position und PIN, z.B. `Check-in Team` oder `Eingang 1`.
+2. Check-in-Logins gelten immer nur für einen Event.
+3. Dem Check-in-Team nur diese Informationen geben: Event-Link, Rolle `Check-in Staff`, Name/Position, Check-in-PIN, Startzeit und Ansprechperson.
+4. Admin-PINs getrennt vom Check-in-Team halten.
+5. Kurz kommunizieren: richtigen Header prüfen, bei Problemen Admin holen.
 
 ## Vor dem Einlass
 

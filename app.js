@@ -41,12 +41,12 @@ const EVENT_PUBLIC_IDS = CONFIG.app?.publicEventIds || {};
 const GLOBAL_ADMIN_EVENT_ID = CONFIG.app?.globalAdminEventId || CONFIGURED_EVENTS[0]?.id || "";
 const ADMIN_SECURITY_COLLECTION = "appSecurity";
 const ADMIN_SECURITY_DOC_ID = "admin";
+const APP_GUIDES_COLLECTION = "appGuides";
 const ADMIN_PIN_SCOPE = "global-admin";
 const ADMIN_MASTER_NAMED_HASHES_FIELD = "adminMasterNamedPinHashes";
 const MAIN_ADMIN_NAME = "Main";
 const MAIN_ADMIN_NAME_KEY = "main";
 const MAIN_ADMIN_PIN_ID = "main-admin-pin";
-const GENERAL_CHECKIN_PIN_ID = "generic";
 const PIN_MIN_LENGTH = 4;
 const CHECKIN_UNDO_WINDOW_MS = 60 * 1000;
 
@@ -81,10 +81,20 @@ const GUIDE_DEFINITIONS = {
     label: "Admin-Anleitung",
     title: "Admin-Kurzanleitung für Vorbereitung und Einlass",
     body: `## Konzepte
-- Main plus Main-PIN ist immer ein Master Admin. Der Main-PIN sollte nur einer verantwortlichen Person bekannt sein.
-- Benannte Admins nutzen eigenen Namen plus eigenen Admin-PIN.
 - Check-in Staff nutzt keinen Admin-PIN und arbeitet nur im freigegebenen Event-Zeitfenster.
 - Import, Export, Übersicht und Check-in gelten immer für den Event im Header.
+
+## Admin Logins
+1. Admins sind global, nicht pro Event.
+2. Admins betreiben Events operativ: Gäste, Check-in-PINs, Zeitfenster, Korrekturen und Exporte.
+3. Master Admins dürfen zusätzlich Admin-PINs verwalten, Events verstecken oder löschen und Master-Rechte vergeben oder entziehen.
+4. Main plus Main-PIN ist immer ein Master Admin. Der Main Admin soll nur im Notfall verwendet werden.
+
+## Neuen Event erstellen
+1. Als Admin anmelden und Tab Events öffnen.
+2. Eventname, Datum und stabilen Event-Link Name setzen.
+3. Check-in Name und PIN setzen.
+4. Event erstellen und den offiziellen Event-Link kopieren.
 
 ## Event vorbereiten
 1. Offiziellen Event-Link öffnen.
@@ -95,11 +105,10 @@ const GUIDE_DEFINITIONS = {
 6. Backup exportieren.
 7. Check-in mit zwei Geräten testen.
 
-## Logins definieren und informieren
-1. Verantwortliche Master Admins festlegen.
-2. Benannte Admins anlegen, wenn mehrere Personen Admin-Rechte brauchen.
-3. Check-in-PINs für den Event festlegen.
-4. Check-in-Team über Event-Link, Rolle, Name/Position, PIN, Startzeit und Ansprechperson informieren.
+## Check-in Logins definieren und informieren
+1. Check-in-Logins für den Event anlegen: Name/Position und PIN, z.B. Check-in Team oder Eingang 1.
+2. Check-in-Logins gelten immer nur für einen Event.
+3. Check-in-Team über Event-Link, Rolle, Name/Position, PIN, Startzeit und Ansprechperson informieren.
 
 ## Einlassbetrieb
 - Übersicht regelmäßig kontrollieren.
@@ -117,7 +126,7 @@ const GUIDE_DEFINITIONS = {
     title: "Kurzanleitung Check-in-Personal",
     body: `## Konzepte
 - Öffne immer den vollständigen Event-Link.
-- Der Check-in-PIN gilt nur für diesen Event.
+- Der Check-in-PIN gilt nur für diesen Event. Name/Position muss zum PIN passen.
 - Eventname, Datum und Online-Status im Header müssen stimmen.
 - Suche nach Name oder Guest ID und prüfe den richtigen Gast vor dem Check-in.
 - Bei Warnungen oder Unsicherheit: Admin holen.
@@ -163,9 +172,8 @@ Wenn unklar ist, ob die App richtig synchronisiert: Check-in stoppen, Admin hole
 
 ## Gast nicht gefunden
 1. Mit 2-3 Buchstaben suchen.
-2. Guest ID suchen, falls vorhanden.
-3. Kategorie und Kommentar prüfen.
-4. Wenn weiterhin kein Treffer: Admin fragen.
+2. Kategorie und Kommentar prüfen.
+3. Wenn weiterhin kein Treffer: Admin fragen.
 
 ## Doppel-Check-in-Warnung
 Nicht erneut klicken. Admin entscheidet über Korrektur oder Ausnahme.
@@ -458,6 +466,11 @@ function renderEventSetupSections(options = {}) {
           </div>
         `}
         <div class="form-row">
+          <label for="setupCheckinName">Check-in Name / Position</label>
+          <input id="setupCheckinName" value="Check-in Team" required />
+          <p class="small">Dieser Name muss beim Check-in-Login zusammen mit dem PIN eingegeben werden.</p>
+        </div>
+        <div class="form-row">
           <label for="checkinPin">Check-in-PIN</label>
           <input id="checkinPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
         </div>
@@ -484,9 +497,6 @@ function bindEventSetupHandlers() {
   } else {
     bindKnownLinkCopyButtons();
     bindKnownEventButtons();
-  }
-  if (isAdmin() || getAdminSession()?.pin) {
-    void prefillSetupCheckinPinFromRecentEvent();
   }
   bindEventIdPreview();
   document.getElementById("createEventForm")?.addEventListener("submit", createEventFromForm);
@@ -517,49 +527,6 @@ function bindEventIdPreview() {
   updatePreview();
 }
 
-async function prefillSetupCheckinPinFromRecentEvent() {
-  const input = document.getElementById("checkinPin");
-  if (!input || input.value || input.dataset.prefillAttempted === "1") return;
-  input.dataset.prefillAttempted = "1";
-
-  const reusablePin = await findReusableCheckinPinValue();
-  if (!reusablePin?.pinValue) return;
-  const currentInput = document.getElementById("checkinPin");
-  if (!currentInput || currentInput.value) return;
-  currentInput.value = reusablePin.pinValue;
-  currentInput.dataset.prefilledFromEvent = reusablePin.eventId;
-  currentInput.dispatchEvent(new Event("input", { bubbles: true }));
-}
-
-async function findReusableCheckinPinValue() {
-  for (const eventId of recentCheckinPinSourceEventIds()) {
-    try {
-      const securitySnap = await getDoc(doc(appState.db, "events", eventId, "private", "security"));
-      if (!securitySnap.exists()) continue;
-      const pinValue = securitySnap.data()?.checkinPinValue;
-      if (typeof pinValue === "string" && pinValue.length >= PIN_MIN_LENGTH) {
-        return { eventId, pinValue };
-      }
-    } catch (error) {
-      if (!isPermissionError(error)) console.error(error);
-    }
-  }
-  return null;
-}
-
-function recentCheckinPinSourceEventIds() {
-  const candidates = [];
-  const addCandidate = (eventId) => {
-    const resolved = resolveEventId(eventId);
-    if (resolved && !candidates.includes(resolved)) candidates.push(resolved);
-  };
-  addCandidate(appState.eventId);
-  addCandidate(localStorage.getItem("guestlist:lastEventId") || "");
-  getKnownEvents().forEach((event) => addCandidate(event.id));
-  addCandidate(GLOBAL_ADMIN_EVENT_ID);
-  return candidates;
-}
-
 function renderEventSetup() {
   tabContent().innerHTML = renderEventSetupSections({ omitAdminPin: isAdmin() && Boolean(getAdminSession()?.pin) });
   bindEventSetupHandlers();
@@ -580,6 +547,7 @@ async function createEventFromForm(event) {
   const date = val("newEventDate").trim();
   const linkName = val("newEventLinkName").trim();
   const adminPin = val("adminPin") || (isAdmin() ? getAdminSession()?.pin || "" : "");
+  const checkinDisplayName = val("setupCheckinName").trim();
   const checkinPin = val("checkinPin");
   const displayName = val("setupName").trim() || MAIN_ADMIN_NAME;
   const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
@@ -595,6 +563,10 @@ async function createEventFromForm(event) {
 
   if (!eventId) {
     result.innerHTML = `<p class="notice error">Event-Link Name oder Eventdatum ist ungültig.</p>`;
+    return;
+  }
+  if (!checkinDisplayName) {
+    result.innerHTML = `<p class="notice error">Check-in Name / Position ist Pflicht.</p>`;
     return;
   }
   if (adminPin.length < PIN_MIN_LENGTH || checkinPin.length < PIN_MIN_LENGTH) {
@@ -617,7 +589,7 @@ async function createEventFromForm(event) {
       return;
     }
 
-    const checkinPinHash = await hashPin(eventId, "checkin", checkinPin);
+    const checkinPinEntry = await namedPinEntry(eventId, "checkin", checkinPin, checkinDisplayName);
     const adminAuth = await adminMemberAuthFields(adminPin, displayName);
 
     await setDoc(targetEventRef, {
@@ -633,11 +605,8 @@ async function createEventFromForm(event) {
     });
 
     await setDoc(doc(appState.db, "events", eventId, "private", "security"), {
-      checkinPinHash,
-      checkinPinHashes: [checkinPinHash],
-      checkinPinValue: checkinPin,
-      checkinNamedPinHashes: [],
-      checkinNamedPins: [],
+      checkinNamedPinHashes: [checkinPinEntry.pinNameHash],
+      checkinNamedPins: [checkinPinEntry],
       createdAt: serverTimestamp()
     });
 
@@ -727,11 +696,11 @@ function renderRolePinSections() {
         <div class="form-row">
           <label for="memberPin">PIN</label>
           <input id="memberPin" type="password" minlength="${PIN_MIN_LENGTH}" required autocomplete="off" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
-          <p class="field-help">Admin: Main-PIN mit Name Main oder persönlicher Admin-PIN. Check-in Staff: Event-spezifischer Check-in-PIN.</p>
+          <p class="field-help">Admin: Main-PIN mit Name Main oder persönlicher Admin-PIN. Check-in Staff: Name/Position und Event-PIN müssen zusammenpassen.</p>
         </div>
         <div class="form-row">
           <label for="memberName">Name</label>
-          <input id="memberName" value="${escapeHtml(displayName)}" required placeholder="Admin: Main / Check-in: Eingang 1" />
+          <input id="memberName" value="${escapeHtml(displayName)}" required placeholder="Admin: Main / Check-in: Check-in Team" />
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" id="joinSubmitBtn" type="submit" disabled>Anmelden</button>
@@ -830,12 +799,13 @@ function renderCheckinPinSection() {
   return `
     <section class="card">
       <h2>Check-in-PINs</h2>
-      <p class="small">Gilt nur für <strong>${escapeHtml(appState.event?.name || appState.eventId || "aktueller Event")}</strong>. Andere Events behalten ihren eigenen Check-in-PIN.</p>
+      <p class="small">Gilt nur für <strong>${escapeHtml(appState.event?.name || appState.eventId || "aktueller Event")}</strong>. Andere Events behalten ihre eigenen Check-in-PINs.</p>
       <form id="checkinPinForm" class="grid two">
         <input id="checkinPinEditId" type="hidden" />
         <div class="form-row">
-          <label for="checkinPinName">Name Mitarbeiter:in</label>
-          <input id="checkinPinName" autocomplete="name" placeholder="frei lassen für allgemeinen PIN" />
+          <label for="checkinPinName">Name / Position</label>
+          <input id="checkinPinName" autocomplete="name" placeholder="z.B. Check-in Team" required />
+          <p class="small">Name und PIN müssen beim Check-in-Login zusammenpassen.</p>
         </div>
         <div class="form-row">
           <label for="checkinPinNew">Check-in-PIN</label>
@@ -2605,12 +2575,13 @@ function bindCheckinPinForm() {
 }
 
 function updateCheckinPinButtonState() {
+  const nameInput = document.getElementById("checkinPinName");
   const pinInput = document.getElementById("checkinPinNew");
   const saveButton = document.getElementById("checkinPinSaveBtn");
-  if (!pinInput || !saveButton) return;
+  if (!nameInput || !pinInput || !saveButton) return;
 
   const pin = pinInput.value;
-  saveButton.disabled = pin.length < PIN_MIN_LENGTH;
+  saveButton.disabled = !nameInput.value.trim() || pin.length < PIN_MIN_LENGTH;
   saveButton.textContent = "PIN speichern";
 }
 
@@ -2633,7 +2604,7 @@ function startCheckinPinEdit(pin) {
   if (!editInput || !nameInput || !pinInput) return;
 
   editInput.value = namedPinEditKey(pin);
-  nameInput.value = pin.kind === "generic" ? "" : (pin.displayName || pin.displayNameKey || "");
+  nameInput.value = pin.displayName || pin.displayNameKey || "";
   pinInput.value = "";
   cancelButton?.classList.remove("hidden");
   updateCheckinPinButtonState();
@@ -2911,7 +2882,7 @@ async function renderEventDeleteSection() {
   target.innerHTML = `
     <section class="card danger-section event-delete-card">
       <h2>Event löschen</h2>
-      <p class="notice error"><strong>Master-only:</strong> Löscht dieses Event inklusive Gäste, Admin-Notizen, Anleitungen, aktiver Anmeldungen, Event-PINs und Audit Log.</p>
+      <p class="notice error"><strong>Master-only:</strong> Löscht dieses Event inklusive Gäste, Admin-Notizen, aktiver Anmeldungen, Event-PINs und Audit Log. Die globalen Anleitungen bleiben erhalten.</p>
       ${isAuthorizingEvent ? `<p class="notice warning">Dieses Event ist aktuell das Haupt-Admin-Anker-Event.${replacement ? ` Vor dem Löschen wird der Anker auf <strong>${escapeHtml(replacement.name || replacement.id)}</strong> umgestellt.` : " Lege zuerst ein anderes Event an, bevor dieses Event gelöscht werden kann."}</p>` : ""}
       <div class="actions">
         <button class="btn-danger" id="deleteEventBtn" type="button" ${cannotDeleteAuthorizingEvent ? "disabled" : ""}>Event endgültig löschen</button>
@@ -2935,7 +2906,7 @@ async function deleteCurrentEvent() {
   const eventName = appState.event?.name || eventId;
   if (!eventId) return;
 
-  if (!confirmByTypingEventId(`Du löschst das Event "${eventName}" inklusive Gäste, Admin-Notizen, Anleitungen, aktiven Anmeldungen, Event-PINs und Audit Log.`)) return;
+  if (!confirmByTypingEventId(`Du löschst das Event "${eventName}" inklusive Gäste, Admin-Notizen, aktiven Anmeldungen, Event-PINs und Audit Log. Die globalen Anleitungen bleiben erhalten.`)) return;
   const typed = window.prompt(`Letzte Bestätigung für "${eventName}".\nBitte exakt eingeben:\nEVENT LÖSCHEN`);
   if (typed === null) return;
   if (typed.trim() !== "EVENT LÖSCHEN") {
@@ -2958,12 +2929,11 @@ async function deleteCurrentEvent() {
     const updateStatus = (label, count) => {
       counts[label] = count;
       if (result) {
-        result.innerHTML = `<p class="notice info">Löscht… Gäste: ${counts.guests || 0}, Admin-Notizen: ${counts.guestAdminNotes || 0}, Anleitungen: ${counts.guides || 0}, Anmeldungen: ${counts.members || 0}, Audit: ${counts.auditLog || 0}</p>`;
+        result.innerHTML = `<p class="notice info">Löscht… Gäste: ${counts.guests || 0}, Admin-Notizen: ${counts.guestAdminNotes || 0}, Anmeldungen: ${counts.members || 0}, Audit: ${counts.auditLog || 0}</p>`;
       }
     };
 
     counts.auditLog = await deleteEventCollectionInChunks(eventId, "auditLog", (count) => updateStatus("auditLog", count));
-    counts.guides = await deleteEventCollectionInChunks(eventId, "guides", (count) => updateStatus("guides", count));
     counts.guestAdminNotes = await deleteEventCollectionInChunks(eventId, "guestAdminNotes", (count) => updateStatus("guestAdminNotes", count));
     counts.guests = await deleteEventCollectionInChunks(eventId, "guests", (count) => updateStatus("guests", count));
     await deleteDoc(doc(appState.db, "events", eventId, "private", "security"));
@@ -3395,30 +3365,13 @@ async function saveCheckinPinFromForm(event) {
     notify(`Check-in-PIN muss mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
     return;
   }
-  if (editId && editId !== GENERAL_CHECKIN_PIN_ID && !displayName) {
+  if (!displayName) {
     notify("Name ist Pflicht.", "warning");
-    return;
-  }
-  if (editId === GENERAL_CHECKIN_PIN_ID && displayName) {
-    notify("Für den allgemeinen Check-in-PIN das Namensfeld leer lassen.", "warning");
     return;
   }
 
   try {
-    const isGeneralPin = editId === GENERAL_CHECKIN_PIN_ID || !displayName;
-    if (isGeneralPin) {
-      const securityRef = doc(appState.db, "events", appState.eventId, "private", "security");
-      const securitySnap = await getDoc(securityRef);
-      if (!securitySnap.exists()) throw new Error("Security-Dokument fehlt.");
-      const checkinPinHash = await hashPin(appState.eventId, "checkin", pin);
-      await updateDoc(securityRef, {
-        checkinPinHash,
-        checkinPinHashes: [checkinPinHash],
-        checkinPinValue: pin,
-        updatedAt: serverTimestamp()
-      });
-      await addAudit("pins_reset", { name: "Check-in-PIN" }, { scope: "current_event", mode: "general" });
-    } else if (editId) {
+    if (editId) {
       await replaceNamedPinInEvent(appState.eventId, "checkin", editId, pin, displayName);
       await addAudit("pins_reset", { name: "Check-in-PIN" }, { scope: "current_event", mode: "edit_named", displayName });
     } else {
@@ -3428,9 +3381,7 @@ async function saveCheckinPinFromForm(event) {
 
     resetCheckinPinForm();
     await renderNamedPinList("checkin");
-    const message = isGeneralPin
-      ? "Allgemeiner Check-in-PIN gespeichert."
-      : (editId ? "Benannter Check-in-PIN geändert." : "Benannter Check-in-PIN gespeichert.");
+    const message = editId ? "Benannter Check-in-PIN geändert." : "Benannter Check-in-PIN gespeichert.";
     if (result) result.innerHTML = `<p class="notice success">${escapeHtml(message)}</p>`;
     notify(message, "success");
   } catch (error) {
@@ -3608,11 +3559,13 @@ async function appendNamedPinToEvent(eventId, role, pin, displayName, pinId = cr
   const targetRef = role === "admin"
     ? adminSecurityRef()
     : doc(appState.db, "events", eventId, "private", "security");
-  await updateDoc(targetRef, {
+  const update = {
     [hashField]: arrayUnion(entry.pinNameHash),
     [listField]: arrayUnion(entry),
     updatedAt: serverTimestamp()
-  });
+  };
+  if (role === "checkin") Object.assign(update, legacyCheckinPinDeleteFields());
+  await updateDoc(targetRef, update);
   return entry;
 }
 
@@ -3649,6 +3602,7 @@ async function replaceNamedPinInEvent(eventId, role, editId, pin, displayName) {
     [config.hashField]: nextHashes,
     updatedAt: serverTimestamp()
   };
+  if (role === "checkin") Object.assign(update, legacyCheckinPinDeleteFields());
 
   if (role === "admin") {
     const existingMasterHashes = Array.isArray(data[ADMIN_MASTER_NAMED_HASHES_FIELD]) ? data[ADMIN_MASTER_NAMED_HASHES_FIELD] : [];
@@ -3736,7 +3690,7 @@ async function renderNamedPinList(role) {
           ${canEditCheckinPins ? `<button class="btn-secondary" type="button" data-edit-checkin-pin="${listIndex}">PIN ändern</button>` : ""}
           ${canEditAdminPins ? `<button class="btn-secondary" type="button" data-edit-named-admin-pin="${listIndex}">PIN ändern</button>` : ""}
           ${canEditAdminPins && pin.kind !== "main" ? `<button class="${pin.masterAdmin ? "btn-warning" : "btn-secondary"}" type="button" data-toggle-named-admin-master="${listIndex}">${pin.masterAdmin ? "Master entziehen" : "Master berechtigen"}</button>` : ""}
-          ${pin.kind === "generic" || pin.kind === "main" ? "" : `<button class="btn-danger" type="button" data-delete-named-pin="${escapeHtml(role)}" data-pin-index="${listIndex}">PIN löschen</button>`}
+          ${pin.kind === "main" ? "" : `<button class="btn-danger" type="button" data-delete-named-pin="${escapeHtml(role)}" data-pin-index="${listIndex}">PIN löschen</button>`}
         </span>
       </div>
     `).join("") : `<p class="small">${config.empty}</p>`;
@@ -3814,18 +3768,7 @@ function namedPinEditKey(pin) {
 }
 
 function checkinPinsFromSecurity(data) {
-  const pins = [];
-  pins.push({
-    kind: "generic",
-    id: GENERAL_CHECKIN_PIN_ID,
-    displayName: "Allgemeiner Check-in-PIN",
-    displayNameKey: "",
-    pinNameHash: "",
-    pinValue: typeof data?.checkinPinValue === "string" ? data.checkinPinValue : "",
-    index: -1
-  });
-  pins.push(...namedPinsFromSecurity(data, "checkin").map((pin) => ({ ...pin, kind: "named" })));
-  return pins;
+  return namedPinsFromSecurity(data, "checkin").map((pin) => ({ ...pin, kind: "named" }));
 }
 
 function checkinPinDisplayValue(pin) {
@@ -3840,7 +3783,7 @@ async function copyCheckinPinForStaff(pin) {
   }
 
   const text = [
-    `Name: ${pin.kind === "generic" ? "frei wählbar" : (pin.displayName || pin.displayNameKey || "")}`,
+    `Name: ${pin.displayName || pin.displayNameKey || ""}`,
     `PIN: ${pin.pinValue}`
   ].join("\n");
 
@@ -4032,6 +3975,7 @@ async function removeNamedPinFromEvent(eventId, role, pinToRemove) {
     [config.hashField]: remainingHashes,
     updatedAt: serverTimestamp()
   };
+  if (role === "checkin") Object.assign(update, legacyCheckinPinDeleteFields());
 
   if (role === "admin") {
     const existingMasterHashes = Array.isArray(data[ADMIN_MASTER_NAMED_HASHES_FIELD]) ? data[ADMIN_MASTER_NAMED_HASHES_FIELD] : [];
@@ -4044,6 +3988,14 @@ async function removeNamedPinFromEvent(eventId, role, pinToRemove) {
   }
 
   await updateDoc(securityRef, update);
+}
+
+function legacyCheckinPinDeleteFields() {
+  return {
+    checkinPinHash: deleteField(),
+    checkinPinHashes: deleteField(),
+    checkinPinValue: deleteField()
+  };
 }
 
 function sameNamedPin(left, right) {
@@ -4414,8 +4366,8 @@ async function renderGuides() {
     <section class="card">
       <h2>Anleitungen</h2>
       <p class="small">${canEdit
-        ? "Master Admins können die Texte für diesen Event bearbeiten."
-        : "Diese Texte gelten für den aktuell geöffneten Event."}</p>
+        ? "Master Admins können die globalen Texte für alle Events bearbeiten."
+        : "Diese Texte gelten global für alle Events."}</p>
     </section>
     ${guides.map((guide) => renderGuideCard(guide, canEdit)).join("")}
   `;
@@ -4550,7 +4502,7 @@ async function saveGuideFromForm(event) {
       updatedByName: appState.member?.displayName || ""
     });
     await addAudit("guide_update", { name: title }, { guide: guideId });
-    notify("Anleitung gespeichert.", "success");
+    notify("Anleitung global gespeichert.", "success");
     await renderGuides();
   } catch (error) {
     console.error(error);
@@ -5021,7 +4973,7 @@ function eventRef() {
 }
 
 function guideRef(guideId) {
-  return doc(appState.db, "events", appState.eventId, "guides", guideId);
+  return doc(appState.db, APP_GUIDES_COLLECTION, guideId);
 }
 
 function adminSecurityRef() {

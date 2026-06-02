@@ -22,9 +22,8 @@ Wenn unklar ist, ob die App richtig synchronisiert: **Check-in stoppen, Admin od
 ## Gast nicht gefunden
 
 1. 2-3 Buchstaben des Namens suchen.
-2. Guest ID suchen, falls vorhanden.
-3. Kategorie und Kommentar prüfen.
-4. Wenn weiterhin kein Treffer: Admin oder verantwortliche Person fragen.
+2. Kategorie und Kommentar prüfen.
+3. Wenn weiterhin kein Treffer: Admin oder verantwortliche Person fragen.
 
 ## Doppel-Check-in-Warnung
 

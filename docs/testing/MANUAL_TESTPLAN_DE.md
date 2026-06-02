@@ -76,8 +76,8 @@ Prüfen:
 - Als benannter Master Admin: eigenen Admin-PIN löschen versuchen und prüfen, dass die App dies blockiert.
 - Wenn bereits angemeldet: im Tab `Anmeldung` erneut anmelden, Dialog `Zuerst abmelden und dann neu anmelden?` bestätigen und prüfen, dass die neue Anmeldung aktiv ist.
 - Ohne Event-Link: Admin-Login öffnet ein bekanntes bestehendes Event, auch wenn es vergangen ist.
-- Im Event-Tab: allgemeinen Check-in-PIN über `PIN ändern` in der PIN-Liste ändern; im gemeinsamen Formular bleibt der Name leer.
-- Im Event-Tab: benannten Check-in-PIN mit Name erstellen, über `PIN ändern` ändern und direkt aus der Liste kopieren.
+- Im Event-Tab: benannten Check-in-PIN mit Name oder Position erstellen, über `PIN ändern` ändern und direkt aus der Liste kopieren.
+- Prüfen, dass Check-in Staff nur mit passendem Name/PIN-Paar verbinden kann.
 
 ## Test 4 — Check-in Staff Login
 

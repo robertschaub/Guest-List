@@ -20,7 +20,7 @@ Statische Web-App für Event-Gästeliste, Check-in auf mehreren Mobile-/Tablet-G
 - Status: Offen, Eingecheckt, No Show
 - Kategorie-Listen mit Summen
 - CSV-Import und CSV-Export
-- In-App-Anleitungen getrennt für Admins und Check-in Staff, pro Event durch Master Admins editierbar
+- Globale In-App-Anleitungen getrennt für Admins und Check-in Staff, durch Master Admins editierbar
 - Audit Log für Check-in, Check-in rückgängig, Doppel-Check-in-Versuch, Kommentar, Gaständerung, Import, Export, No Show, Audit-Export und PIN-Reset
 
 ## Technischer Stack
@@ -127,10 +127,10 @@ Dann:
 1. Eventname eingeben, z.B. `Main Event`.
 2. Event-Link Name stabil halten und ohne Artist, Line-up oder Sponsor wählen, z.B. `Main Event`.
 3. Globalen Admin-PIN eingeben.
-4. Check-in-PIN für dieses Event setzen.
+4. Check-in Name und PIN für dieses Event setzen.
 5. Kategorien prüfen.
 6. Event erstellen.
-7. Check-in-PIN sicher speichern.
+7. Check-in Name und PIN sicher speichern.
 
 Danach erzeugt die App einen Event-Link:
 
@@ -138,7 +138,7 @@ Danach erzeugt die App einen Event-Link:
 https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=02-05-2026-main-event
 ```
 
-Diesen Link gibst du an die Check-in-Geräte weiter. Die Mitarbeiter:innen brauchen zusätzlich den Check-in-PIN.
+Diesen Link gibst du an die Check-in-Geräte weiter. Die Mitarbeiter:innen brauchen zusätzlich ihren Check-in-Namen bzw. ihre Position und den passenden Check-in-PIN.
 
 ### Mehrere Events und Event-Wechsel
 
@@ -178,13 +178,27 @@ docs/operations/EVENTTAG_NOTFALLKARTE_DE.md
 
 Die README bleibt technische Referenz und Setup-Dokumentation. Für den Einlass sollten die kurzen Operations-Dokumente verwendet werden.
 
-In der App gibt es zusätzlich den Tab `Anleitung`. Check-in Staff sieht die Check-in-Anleitung und Notfallkarte. Admins sehen zusätzlich die Admin-Anleitung. Master Admins können diese Texte pro Event direkt in der App bearbeiten.
+In der App gibt es zusätzlich den Tab `Anleitung`. Check-in Staff sieht die Check-in-Anleitung und Notfallkarte. Admins sehen zusätzlich die Admin-Anleitung. Master Admins können diese globalen Texte direkt in der App bearbeiten; sie gelten für alle Events.
 
 ### Grundkonzepte
 
-**Administrator-Rollen:** Admins melden sich mit Rolle `Admin`, Name und Admin-PIN an. `Main` ist der feste Hauptadmin-Name; `Main` plus Main-PIN ist immer Master Admin. Der Main-PIN sollte nur einer verantwortlichen Person bekannt sein. Benannte Admins nutzen ihren eigenen Namen plus eigenen Admin-PIN. Master Admins dürfen Admin-Zugänge und Events vollständig verwalten. Admins ohne Master-Rechte betreiben den aktuellen Event operativ.
+**Administrator-Rollen:** Admins melden sich mit Rolle `Admin`, Name und Admin-PIN an. Check-in Staff nutzt keinen Admin-PIN.
 
 **Events und Gültigkeit:** Jedes Event hat eine eigene Event-Link ID, eigene Gästeliste und eigene Check-in-PINs. Der sichtbare Eventname darf sich ändern, die Event-Link ID bleibt stabil. Check-in Staff hat nur im freigegebenen Zeitfenster Zugriff. Admins können Events auch außerhalb dieses Zeitfensters öffnen und bearbeiten.
+
+### Admin Logins
+
+1. Admins sind global, nicht pro Event.
+2. Admins betreiben Events operativ: Gäste, Check-in-PINs, Zeitfenster, Korrekturen und Exporte.
+3. Master Admins dürfen zusätzlich Admin-PINs verwalten, Events verstecken oder löschen und Master-Rechte vergeben oder entziehen.
+4. `Main` plus Main-PIN ist immer Master Admin. Der Main Admin soll nur im Notfall verwendet werden.
+
+### Neuen Event erstellen
+
+1. Als Admin anmelden und Tab `Events` öffnen.
+2. Eventname, Datum und stabilen Event-Link Name setzen.
+3. Check-in Name und PIN setzen.
+4. Event erstellen und den offiziellen Event-Link kopieren.
 
 ### Event vorbereiten
 
@@ -196,13 +210,12 @@ In der App gibt es zusätzlich den Tab `Anleitung`. Check-in Staff sieht die Che
 6. `Alle Gäste CSV` und `Audit Log CSV` exportieren.
 7. Check-in mit zwei Geräten testen.
 
-### Logins definieren und informieren
+### Check-in Logins definieren und informieren
 
-1. Master Admins festlegen; den Main-PIN nur einer verantwortlichen Person bekannt geben.
-2. Benannte Admins anlegen, wenn mehrere Personen Admin-Rechte brauchen.
-3. Check-in-PINs pro Event definieren: allgemeiner PIN oder benannte PINs pro Person/Position.
-4. Check-in-Team informieren: Event-Link, Rolle `Check-in Staff`, Name/Position, Check-in-PIN, Startzeit und Ansprechperson.
-5. Admin-PINs nicht an Check-in Staff weitergeben.
+1. Check-in-Logins für den Event anlegen: Name/Position und PIN, z.B. `Check-in Team` oder `Eingang 1`.
+2. Check-in-Logins gelten immer nur für einen Event.
+3. Check-in-Team informieren: Event-Link, Rolle `Check-in Staff`, Name/Position, Check-in-PIN, Startzeit und Ansprechperson.
+4. Admin-PINs nicht an Check-in Staff weitergeben.
 
 ### Check-in Staff
 
@@ -225,7 +238,7 @@ Check-in Staff sieht Check-in, Übersicht und Anmeldung. Admin-Bereiche wie Impo
 5. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder einzelne No Shows setzen.
 6. Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.
 7. Vor Eventstart unter `Backup & Export` Gäste-CSV und Audit-Log-CSV herunterladen.
-8. Event-Link und beide PINs extern sichern; PINs sind später nicht auslesbar.
+8. Event-Link und benötigte Admin-/Check-in-PINs extern sichern.
 9. Bei Geräteproblemen: Seite hart neu laden (`Ctrl+F5`), Event-Link neu öffnen, PIN erneut eingeben.
 
 ## CSV-Import
