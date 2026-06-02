@@ -781,6 +781,63 @@ tr:last-child td { border-bottom: 0; }
   word-break: break-word;
 }
 
+.guide-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.guide-card-header h2 {
+  margin-bottom: 4px;
+}
+
+.guide-body {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.guide-body h3,
+.guide-body h4,
+.guide-body p,
+.guide-body ul,
+.guide-body ol {
+  margin: 0;
+}
+
+.guide-body h3 {
+  margin-top: 8px;
+  font-size: 1.08rem;
+}
+
+.guide-body h4 {
+  margin-top: 6px;
+  font-size: 1rem;
+}
+
+.guide-list {
+  padding-left: 22px;
+}
+
+.guide-list li {
+  margin: 4px 0;
+}
+
+.guide-editor {
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+  padding-top: 12px;
+}
+
+.guide-edit-form {
+  margin-top: 12px;
+}
+
+.guide-textarea {
+  min-height: 260px;
+}
+
 @media (max-width: 820px) {
   .grid.two, .grid.three, .grid.four, .summary-grid {
     grid-template-columns: 1fr 1fr;

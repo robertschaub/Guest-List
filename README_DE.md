@@ -20,6 +20,7 @@ Statische Web-App für Event-Gästeliste, Check-in auf mehreren Mobile-/Tablet-G
 - Status: Offen, Eingecheckt, No Show
 - Kategorie-Listen mit Summen
 - CSV-Import und CSV-Export
+- In-App-Anleitungen getrennt für Admins und Check-in Staff, pro Event durch Master Admins editierbar
 - Audit Log für Check-in, Check-in rückgängig, Doppel-Check-in-Versuch, Kommentar, Gaständerung, Import, Export, No Show, Audit-Export und PIN-Reset
 
 ## Technischer Stack
@@ -81,15 +82,12 @@ window.GUESTLIST_APP_CONFIG = {
   },
   app: {
     defaultEventName: "Event Gästeliste",
-    globalAdminEventId: "the-garden-w-blondish",
+    globalAdminEventId: "01-05-2026-main-event",
     eventAliases: {
-      "the-garden-w-dj-prospa": "the-garden-w-blondish",
-      "01-05-2026-the-garden": "the-garden-w-blondish",
-      "02-05-2026-the-lago": "the-garden-w-me"
+      "alter-event-link": "01-05-2026-main-event"
     },
     publicEventIds: {
-      "the-garden-w-blondish": "01-05-2026-the-garden",
-      "the-garden-w-me": "02-05-2026-the-lago"
+      "01-05-2026-main-event": "01-05-2026-main-event"
     },
     categories: ["GA", "Member GA", "Member VIP", "On Stage", "Mitarbeiter"],
     statuses: ["open", "checked_in", "no_show"]
@@ -126,8 +124,8 @@ https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?setup=1
 
 Dann:
 
-1. Eventname eingeben, z.B. `THE LAGO w/Adriatique`.
-2. Event-Link Name ohne Artist, Line-up oder Sponsor prüfen, z.B. `THE LAGO`.
+1. Eventname eingeben, z.B. `Main Event`.
+2. Event-Link Name stabil halten und ohne Artist, Line-up oder Sponsor wählen, z.B. `Main Event`.
 3. Globalen Admin-PIN eingeben.
 4. Check-in-PIN für dieses Event setzen.
 5. Kategorien prüfen.
@@ -137,7 +135,7 @@ Dann:
 Danach erzeugt die App einen Event-Link:
 
 ```text
-https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=02-05-2026-the-lago
+https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=02-05-2026-main-event
 ```
 
 Diesen Link gibst du an die Check-in-Geräte weiter. Die Mitarbeiter:innen brauchen zusätzlich den Check-in-PIN.
@@ -148,35 +146,63 @@ Jedes Event hat eine eigene Event-Link ID und damit eine eigene Gästeliste. Tec
 
 Der Admin-PIN ist global und gilt für alle Events. Beim Erstellen eines neuen Events wird dieser globale Admin-PIN geprüft und danach automatisch als Admin-PIN des neuen Events verwendet. Check-in-PINs bleiben pro Event separat.
 
-Neue Events verwenden als Event-Link ID das Format `TT-MM-JJJJ-event-name`, zum Beispiel `02-05-2026-the-lago`. Der Event-Link Name soll stabil bleiben und keine Artists, Line-ups, Sponsoren oder temporäre Mottos enthalten. Der sichtbare Eventname kann später geändert werden, die Event-Link ID bleibt gleich.
+Neue Events verwenden als Event-Link ID das Format `TT-MM-JJJJ-event-name`, zum Beispiel `02-05-2026-main-event`. Der Event-Link Name soll stabil bleiben und keine Artists, Line-ups, Sponsoren oder temporäre Mottos enthalten. Der sichtbare Eventname kann später geändert werden, die Event-Link ID bleibt gleich.
 
-Bestehende vorbereitete Events nutzen ab sofort saubere öffentliche Event-Link IDs. Die alten Links bleiben als Alias kompatibel.
+Bestehende vorbereitete Events nutzen ab sofort saubere offizielle Event-Link IDs. Die alten Links bleiben als Alias kompatibel.
 
 ```text
-1. Mai / BLOND:ISH:
-https://robertschaub.github.io/Guest-List/?event=01-05-2026-the-garden
-
-2. Mai / Adriatique:
-https://robertschaub.github.io/Guest-List/?event=02-05-2026-the-lago
+Beispiele:
+https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=01-05-2026-main-event
+https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=02-05-2026-main-event
 ```
 
-Auf der Startseite und im Admin-Tab gibt es eine Liste **Bestehende Events**. Dort können Admins den Freitag- oder Samstag-Event bewusst auswählen. Im laufenden UI führt der Button **Event wechseln** ebenfalls zur Event-Auswahl. Direkte Event-Links mit `?event=...` funktionieren weiterhin, werden aber nicht mehr als separates Eingabefeld in der Oberfläche angeboten.
+Auf der Startseite und im Admin-Tab gibt es eine Liste **Bestehende Events**. Dort können Admins den gewünschten Event bewusst auswählen. Im laufenden UI führt der Button **Event wechseln** ebenfalls zur Event-Auswahl. Direkte Event-Links mit `?event=...` funktionieren weiterhin, werden aber nicht mehr als separates Eingabefeld in der Oberfläche angeboten.
 
 Wenn ein Admin in derselben Browser-Session den Event wechselt, verbindet die App automatisch mit dem Ziel-Event. Nach Reload, neuem Tab oder neuem Gerät muss der globale Admin-PIN erneut eingegeben werden.
 
-Die App wählt **niemals automatisch nach Datum**. Das ist wichtig, weil ein Freitag-Event nach Mitternacht am 1. Mai sonst versehentlich auf Samstag wechseln könnte. Ein Door-Terminal bleibt immer auf dem Event, dessen vollständiger Link geöffnet wurde.
+Die App wählt **niemals automatisch nach Datum**. Das ist wichtig, weil ein Event nach Mitternacht sonst versehentlich auf einen anderen Tag wechseln könnte. Ein Check-in-Gerät bleibt immer auf dem Event, dessen vollständiger Link geöffnet wurde.
 
-Die Basis-URL ohne `?event=...` öffnet kein Event automatisch. Dadurch wird verhindert, dass ein Gerät aus Versehen das zuletzt verwendete Freitag-Event am Samstag wieder öffnet.
+Die Basis-URL ohne `?event=...` öffnet kein Event automatisch. Dadurch wird verhindert, dass ein Gerät aus Versehen einen falschen Event wieder öffnet.
 
-CSV-Import und CSV-Export gelten immer nur für das aktuell geöffnete Event. Für zwei Eventtage werden daher zwei separate CSV-Dateien empfohlen, z.B. `the-garden-freitag.csv` und `the-garden-samstag.csv`.
+CSV-Import und CSV-Export gelten immer nur für das aktuell geöffnete Event. Für mehrere Eventtage werden separate CSV-Dateien empfohlen, z.B. `event-tag-1.csv` und `event-tag-2.csv`.
 
 ## Nutzung am Event
 
-Separate Einweisung für Check-in-Personal:
+Kurze operative Dokumente für den Eventtag:
 
 ```text
+docs/operations/ADMIN_EVENTTAG_KURZANLEITUNG_DE.md
 docs/operations/CHECKIN_PERSONAL_KURZANLEITUNG_DE.md
+docs/operations/EVENTTAG_NOTFALLKARTE_DE.md
 ```
+
+Die README bleibt technische Referenz und Setup-Dokumentation. Für den Einlass sollten die kurzen Operations-Dokumente verwendet werden.
+
+In der App gibt es zusätzlich den Tab `Anleitung`. Check-in Staff sieht die Check-in-Anleitung und Notfallkarte. Admins sehen zusätzlich die Admin-Anleitung. Master Admins können diese Texte pro Event direkt in der App bearbeiten.
+
+### Grundkonzepte
+
+**Administrator-Rollen:** Admins melden sich mit Rolle `Admin`, Name und Admin-PIN an. `Main` ist der feste Hauptadmin-Name; `Main` plus Main-PIN ist immer Master Admin. Der Main-PIN sollte nur einer verantwortlichen Person bekannt sein. Benannte Admins nutzen ihren eigenen Namen plus eigenen Admin-PIN. Master Admins dürfen Admin-Zugänge und Events vollständig verwalten. Admins ohne Master-Rechte betreiben den aktuellen Event operativ.
+
+**Events und Gültigkeit:** Jedes Event hat eine eigene Event-Link ID, eigene Gästeliste und eigene Check-in-PINs. Der sichtbare Eventname darf sich ändern, die Event-Link ID bleibt stabil. Check-in Staff hat nur im freigegebenen Zeitfenster Zugriff. Admins können Events auch außerhalb dieses Zeitfensters öffnen und bearbeiten.
+
+### Event vorbereiten
+
+1. Event erstellen oder vorhandenen Event über den offiziellen Event-Link öffnen.
+2. Eventname, Datum, Event-Link ID und Status `Online` prüfen.
+3. `Event-Zugang für Check-in Staff` setzen; Start und Ende müssen Testphase und Einlass abdecken.
+4. Gäste-CSV für genau diesen Event importieren.
+5. Stichprobe suchen und Übersicht prüfen.
+6. `Alle Gäste CSV` und `Audit Log CSV` exportieren.
+7. Check-in mit zwei Geräten testen.
+
+### Logins definieren und informieren
+
+1. Master Admins festlegen; den Main-PIN nur einer verantwortlichen Person bekannt geben.
+2. Benannte Admins anlegen, wenn mehrere Personen Admin-Rechte brauchen.
+3. Check-in-PINs pro Event definieren: allgemeiner PIN oder benannte PINs pro Person/Position.
+4. Check-in-Team informieren: Event-Link, Rolle `Check-in Staff`, Name/Position, Check-in-PIN, Startzeit und Ansprechperson.
+5. Admin-PINs nicht an Check-in Staff weitergeben.
 
 ### Check-in Staff
 
@@ -188,17 +214,17 @@ docs/operations/CHECKIN_PERSONAL_KURZANLEITUNG_DE.md
 6. Gast einchecken.
 7. Support-Kommentar bei Bedarf ergänzen.
 
-Check-in Staff sieht bewusst nur den Check-in-Modus sowie `Event wechseln` und `Rolle/PIN wechseln`. Übersicht, Listen, Admin und Log sind Admin-only.
+Check-in Staff sieht Check-in, Übersicht und Anmeldung. Admin-Bereiche wie Import, Export, PINs und Audit Log sind Admin-only.
 
 ### Admin
 
 1. Event-Link öffnen.
 2. Rolle `Admin` wählen.
 3. Globalen Admin-PIN eingeben.
-4. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder einzelne No Shows setzen.
-5. Bei riskanten Massenaktionen die aktuelle Event-Link ID eintippen, zum Beispiel beim Import mit Löschen.
+4. Im Tab `Event verwalten` den `Event-Zugang für Check-in Staff` prüfen.
+5. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder einzelne No Shows setzen.
 6. Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.
-7. Vor Eventstart unter `Export / Backup` Gäste-CSV und Audit-Log-CSV herunterladen.
+7. Vor Eventstart unter `Backup & Export` Gäste-CSV und Audit-Log-CSV herunterladen.
 8. Event-Link und beide PINs extern sichern; PINs sind später nicht auslesbar.
 9. Bei Geräteproblemen: Seite hart neu laden (`Ctrl+F5`), Event-Link neu öffnen, PIN erneut eingeben.
 

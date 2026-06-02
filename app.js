@@ -67,6 +67,114 @@ const INFO_LABELS = {
   staffToAll: "Check-in-Notiz"
 };
 
+const GUIDE_IDS = {
+  admin: "admin",
+  checkin: "checkin",
+  emergency: "emergency"
+};
+
+const ADMIN_GUIDE_IDS = [GUIDE_IDS.admin, GUIDE_IDS.checkin, GUIDE_IDS.emergency];
+const CHECKIN_GUIDE_IDS = [GUIDE_IDS.checkin, GUIDE_IDS.emergency];
+
+const GUIDE_DEFINITIONS = {
+  admin: {
+    label: "Admin-Anleitung",
+    title: "Admin-Kurzanleitung für Vorbereitung und Einlass",
+    body: `## Konzepte
+- Main plus Main-PIN ist immer ein Master Admin. Der Main-PIN sollte nur einer verantwortlichen Person bekannt sein.
+- Benannte Admins nutzen eigenen Namen plus eigenen Admin-PIN.
+- Check-in Staff nutzt keinen Admin-PIN und arbeitet nur im freigegebenen Event-Zeitfenster.
+- Import, Export, Übersicht und Check-in gelten immer für den Event im Header.
+
+## Event vorbereiten
+1. Offiziellen Event-Link öffnen.
+2. Eventname, Datum und Online-Status prüfen.
+3. Event-Zugang für Check-in Staff setzen.
+4. Gäste-CSV importieren.
+5. Stichprobe suchen und Übersicht prüfen.
+6. Backup exportieren.
+7. Check-in mit zwei Geräten testen.
+
+## Logins definieren und informieren
+1. Verantwortliche Master Admins festlegen.
+2. Benannte Admins anlegen, wenn mehrere Personen Admin-Rechte brauchen.
+3. Check-in-PINs für den Event festlegen.
+4. Check-in-Team über Event-Link, Rolle, Name/Position, PIN, Startzeit und Ansprechperson informieren.
+
+## Einlassbetrieb
+- Übersicht regelmäßig kontrollieren.
+- Bei Problemen Gast über Name oder Guest ID suchen.
+- Falsche Check-ins bewusst korrigieren.
+- Falls Check-in Staff sich nicht anmelden kann: Event-Zugang prüfen.
+
+## Nach dem Einlass
+1. Alle Gäste CSV exportieren.
+2. Audit Log CSV exportieren.
+3. Dateien außerhalb der App sichern.`
+  },
+  checkin: {
+    label: "Check-in-Anleitung",
+    title: "Kurzanleitung Check-in-Personal",
+    body: `## Konzepte
+- Öffne immer den vollständigen Event-Link.
+- Der Check-in-PIN gilt nur für diesen Event.
+- Eventname, Datum und Online-Status im Header müssen stimmen.
+- Suche nach Name oder Guest ID und prüfe den richtigen Gast vor dem Check-in.
+- Bei Warnungen oder Unsicherheit: Admin holen.
+
+## Start am Gerät
+1. Richtigen Event-Link öffnen.
+2. Header prüfen.
+3. Rolle Check-in Staff wählen.
+4. Check-in-PIN eingeben.
+5. Namen oder Position eintragen.
+
+## Gast einchecken
+1. Name oder Guest ID suchen.
+2. Richtigen Gast anhand Name, Guest ID und Kategorie prüfen.
+3. Einchecken nur einmal tippen.
+4. Bei versehentlichem Check-in sofort Rückgängig nutzen, solange die App es anbietet.
+
+## Problemfälle
+- Gast nicht gefunden
+- falscher Event im Header
+- falsche Kategorie
+- Gast ist bereits eingecheckt
+- App zeigt Offline
+
+Bei diesen Fällen Admin oder verantwortliche Person fragen.`
+  },
+  emergency: {
+    label: "Notfallkarte",
+    title: "Eventtag-Notfallkarte",
+    body: `## Sofortregel
+Wenn unklar ist, ob die App richtig synchronisiert: Check-in stoppen, Admin holen, keine Mehrfachklicks.
+
+## App zeigt Offline
+1. Check-in auf diesem Gerät stoppen.
+2. Verbindung prüfen.
+3. Seite neu laden.
+4. Eventname, Datum und Online-Status erneut prüfen.
+
+## Falscher Event im Header
+1. Nicht weiter einchecken.
+2. Richtigen offiziellen Event-Link öffnen.
+3. Admin informieren, falls bereits Check-ins passiert sind.
+
+## Gast nicht gefunden
+1. Mit 2-3 Buchstaben suchen.
+2. Guest ID suchen, falls vorhanden.
+3. Kategorie und Kommentar prüfen.
+4. Wenn weiterhin kein Treffer: Admin fragen.
+
+## Doppel-Check-in-Warnung
+Nicht erneut klicken. Admin entscheidet über Korrektur oder Ausnahme.
+
+## Backup
+Bei längerem Ausfall entscheidet der Admin, ob mit CSV- oder Papier-Backup weitergearbeitet wird.`
+  }
+};
+
 const GUEST_EXPORT_HEADERS = [
   "Guest ID",
   "Name",
@@ -1132,6 +1240,7 @@ function visibleTabs() {
     return [
       ...baseTabs,
       { id: "overview", label: "Übersicht" },
+      { id: "guides", label: "Anleitung" },
       { id: "admin", label: "Event verwalten" },
       { id: "setup", label: "Events" },
       { id: "role", label: "Anmeldung" },
@@ -1144,6 +1253,7 @@ function visibleTabs() {
     return [
       ...baseTabs,
       { id: "overview", label: "Übersicht" },
+      { id: "guides", label: "Anleitung" },
       { id: "role", label: "Anmeldung" }
     ];
   }
@@ -1216,7 +1326,7 @@ function updateFooterStatus() {
 
 function adminMobileTabs(tabs) {
   if (!isAdmin()) return [];
-  const primaryTabIds = new Set(["checkin", "overview", "role"]);
+  const primaryTabIds = new Set(["checkin", "overview", "guides", "role"]);
   return tabs.filter((tab) => !primaryTabIds.has(tab.id));
 }
 
@@ -1228,6 +1338,7 @@ function renderActiveTab() {
   ensureCurrentTabVisible();
   if (appState.currentTab === "checkin") renderCheckin();
   else if (appState.currentTab === "overview") renderOverview();
+  else if (appState.currentTab === "guides") renderGuides();
   else if (appState.currentTab === "admin") renderAdmin();
   else if (appState.currentTab === "setup") renderEventSetup();
   else if (appState.currentTab === "role") renderRolePinTab();
@@ -2800,7 +2911,7 @@ async function renderEventDeleteSection() {
   target.innerHTML = `
     <section class="card danger-section event-delete-card">
       <h2>Event löschen</h2>
-      <p class="notice error"><strong>Master-only:</strong> Löscht dieses Event inklusive Gäste, Admin-Notizen, aktiver Anmeldungen, Event-PINs und Audit Log.</p>
+      <p class="notice error"><strong>Master-only:</strong> Löscht dieses Event inklusive Gäste, Admin-Notizen, Anleitungen, aktiver Anmeldungen, Event-PINs und Audit Log.</p>
       ${isAuthorizingEvent ? `<p class="notice warning">Dieses Event ist aktuell das Haupt-Admin-Anker-Event.${replacement ? ` Vor dem Löschen wird der Anker auf <strong>${escapeHtml(replacement.name || replacement.id)}</strong> umgestellt.` : " Lege zuerst ein anderes Event an, bevor dieses Event gelöscht werden kann."}</p>` : ""}
       <div class="actions">
         <button class="btn-danger" id="deleteEventBtn" type="button" ${cannotDeleteAuthorizingEvent ? "disabled" : ""}>Event endgültig löschen</button>
@@ -2824,7 +2935,7 @@ async function deleteCurrentEvent() {
   const eventName = appState.event?.name || eventId;
   if (!eventId) return;
 
-  if (!confirmByTypingEventId(`Du löschst das Event "${eventName}" inklusive Gäste, Admin-Notizen, aktiven Anmeldungen, Event-PINs und Audit Log.`)) return;
+  if (!confirmByTypingEventId(`Du löschst das Event "${eventName}" inklusive Gäste, Admin-Notizen, Anleitungen, aktiven Anmeldungen, Event-PINs und Audit Log.`)) return;
   const typed = window.prompt(`Letzte Bestätigung für "${eventName}".\nBitte exakt eingeben:\nEVENT LÖSCHEN`);
   if (typed === null) return;
   if (typed.trim() !== "EVENT LÖSCHEN") {
@@ -2847,11 +2958,12 @@ async function deleteCurrentEvent() {
     const updateStatus = (label, count) => {
       counts[label] = count;
       if (result) {
-        result.innerHTML = `<p class="notice info">Löscht… Gäste: ${counts.guests || 0}, Admin-Notizen: ${counts.guestAdminNotes || 0}, Anmeldungen: ${counts.members || 0}, Audit: ${counts.auditLog || 0}</p>`;
+        result.innerHTML = `<p class="notice info">Löscht… Gäste: ${counts.guests || 0}, Admin-Notizen: ${counts.guestAdminNotes || 0}, Anleitungen: ${counts.guides || 0}, Anmeldungen: ${counts.members || 0}, Audit: ${counts.auditLog || 0}</p>`;
       }
     };
 
     counts.auditLog = await deleteEventCollectionInChunks(eventId, "auditLog", (count) => updateStatus("auditLog", count));
+    counts.guides = await deleteEventCollectionInChunks(eventId, "guides", (count) => updateStatus("guides", count));
     counts.guestAdminNotes = await deleteEventCollectionInChunks(eventId, "guestAdminNotes", (count) => updateStatus("guestAdminNotes", count));
     counts.guests = await deleteEventCollectionInChunks(eventId, "guests", (count) => updateStatus("guests", count));
     await deleteDoc(doc(appState.db, "events", eventId, "private", "security"));
@@ -4206,6 +4318,8 @@ function auditSummary(entry) {
         return { subject: entry.guestName || "Event", detail: details.hidden ? "Event versteckt" : "Event wieder sichtbar" };
       }
       return { subject: entry.guestName || "Event", detail: "Eventname geändert" };
+    case "guide_update":
+      return { subject, detail: `Anleitung: ${GUIDE_DEFINITIONS[details.guide]?.label || details.guide || ""}` };
     case "member_login":
       return { subject, detail: `${ROLE_META[details.role] || details.role || "Rolle"} angemeldet${details.deviceLabel ? ` · ${details.deviceLabel}` : ""}` };
     case "member_logout":
@@ -4278,10 +4392,246 @@ function auditActionOptions() {
     .join("");
 }
 
+async function renderGuides() {
+  if (!hasActiveEventAccess()) {
+    tabContent().innerHTML = `<section class="card"><h2>Anleitung</h2><p class="notice warning">Bitte zuerst mit Rolle und PIN anmelden.</p></section>`;
+    return;
+  }
+
+  const content = tabContent();
+  const guideIds = isAdmin() ? ADMIN_GUIDE_IDS : CHECKIN_GUIDE_IDS;
+  const canEdit = isAdmin() ? await refreshMasterAdminState({ rerender: false }) : false;
+
+  content.innerHTML = `
+    <section class="card">
+      <h2>Anleitungen</h2>
+      <p class="small">Lädt…</p>
+    </section>
+  `;
+
+  const guides = await Promise.all(guideIds.map(loadGuide));
+  content.innerHTML = `
+    <section class="card">
+      <h2>Anleitungen</h2>
+      <p class="small">${canEdit
+        ? "Master Admins können die Texte für diesen Event bearbeiten."
+        : "Diese Texte gelten für den aktuell geöffneten Event."}</p>
+    </section>
+    ${guides.map((guide) => renderGuideCard(guide, canEdit)).join("")}
+  `;
+
+  if (canEdit) bindGuideEditorHandlers();
+}
+
+async function loadGuide(guideId) {
+  const fallback = defaultGuide(guideId);
+  try {
+    const guideSnap = await getDoc(guideRef(guideId));
+    if (!guideSnap.exists()) return fallback;
+    const data = guideSnap.data();
+    return {
+      ...fallback,
+      title: String(data.title || fallback.title).trim() || fallback.title,
+      body: String(data.body || fallback.body).trim() || fallback.body,
+      updatedAt: data.updatedAt || null,
+      updatedByName: String(data.updatedByName || "").trim(),
+      saved: true
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      ...fallback,
+      loadError: "Gespeicherte Anleitung konnte nicht geladen werden. Zeige Standardtext."
+    };
+  }
+}
+
+function defaultGuide(guideId) {
+  const definition = GUIDE_DEFINITIONS[guideId] || GUIDE_DEFINITIONS.checkin;
+  return {
+    id: guideId,
+    label: definition.label,
+    title: definition.title,
+    body: definition.body,
+    updatedAt: null,
+    updatedByName: "",
+    saved: false,
+    loadError: ""
+  };
+}
+
+function renderGuideCard(guide, canEdit) {
+  const updated = guide.updatedAt
+    ? `${formatTimestamp(guide.updatedAt)}${guide.updatedByName ? ` · ${escapeHtml(guide.updatedByName)}` : ""}`
+    : "Standardtext";
+
+  return `
+    <section class="card guide-card">
+      <div class="guide-card-header">
+        <span>
+          <h2>${escapeHtml(guide.title)}</h2>
+          <p class="small">${escapeHtml(guide.label)} · ${updated}</p>
+        </span>
+      </div>
+      ${guide.loadError ? `<p class="notice warning">${escapeHtml(guide.loadError)}</p>` : ""}
+      ${renderGuideBody(guide.body)}
+      ${canEdit ? renderGuideEditor(guide) : ""}
+    </section>
+  `;
+}
+
+function renderGuideEditor(guide) {
+  return `
+    <details class="guide-editor">
+      <summary class="details-summary">Anleitung bearbeiten</summary>
+      <form class="grid guide-edit-form" data-guide-form="${escapeHtml(guide.id)}">
+        <div class="form-row">
+          <label for="guideTitle-${escapeHtml(guide.id)}">Titel</label>
+          <input id="guideTitle-${escapeHtml(guide.id)}" name="title" value="${escapeHtml(guide.title)}" required />
+        </div>
+        <div class="form-row">
+          <label for="guideBody-${escapeHtml(guide.id)}">Text</label>
+          <textarea id="guideBody-${escapeHtml(guide.id)}" name="body" class="guide-textarea" required>${escapeHtml(guide.body)}</textarea>
+          <p class="field-help">Unterstützt einfache Überschriften mit <code>##</code>, Listen mit <code>-</code> oder <code>1.</code>. HTML wird nicht übernommen.</p>
+        </div>
+        <div class="actions">
+          <button class="btn-primary" type="submit">Anleitung speichern</button>
+          <button class="btn-secondary" type="button" data-reset-guide="${escapeHtml(guide.id)}">Standardtext einsetzen</button>
+        </div>
+      </form>
+    </details>
+  `;
+}
+
+function bindGuideEditorHandlers() {
+  document.querySelectorAll("[data-guide-form]").forEach((form) => {
+    form.addEventListener("submit", saveGuideFromForm);
+  });
+  document.querySelectorAll("[data-reset-guide]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const guideId = button.getAttribute("data-reset-guide") || "";
+      const guide = defaultGuide(guideId);
+      const form = document.querySelector(`[data-guide-form="${cssEscape(guideId)}"]`);
+      if (!form) return;
+      const title = form.querySelector('[name="title"]');
+      const body = form.querySelector('[name="body"]');
+      if (title) title.value = guide.title;
+      if (body) body.value = guide.body;
+    });
+  });
+}
+
+async function saveGuideFromForm(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const guideId = form?.getAttribute("data-guide-form") || "";
+  if (!GUIDE_DEFINITIONS[guideId]) return;
+  if (!requireOnline("Anleitung speichern")) return;
+  if (!(await requireMasterAdmin("Anleitung bearbeiten"))) return;
+
+  const title = String(form.querySelector('[name="title"]')?.value || "").trim();
+  const body = String(form.querySelector('[name="body"]')?.value || "").trim();
+  if (!title || !body) {
+    notify("Titel und Text sind Pflichtfelder.", "warning");
+    return;
+  }
+
+  const button = form.querySelector('button[type="submit"]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Speichert…";
+  }
+
+  try {
+    await setDoc(guideRef(guideId), {
+      title,
+      body,
+      updatedAt: serverTimestamp(),
+      updatedByName: appState.member?.displayName || ""
+    });
+    await addAudit("guide_update", { name: title }, { guide: guideId });
+    notify("Anleitung gespeichert.", "success");
+    await renderGuides();
+  } catch (error) {
+    console.error(error);
+    notify(`Anleitung konnte nicht gespeichert werden: ${error.message || error}`, "error");
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Anleitung speichern";
+    }
+  }
+}
+
+function renderGuideBody(body) {
+  const lines = String(body || "").split(/\r?\n/);
+  let html = "";
+  let listType = "";
+  const closeList = () => {
+    if (!listType) return;
+    html += `</${listType}>`;
+    listType = "";
+  };
+  const openList = (type) => {
+    if (listType === type) return;
+    closeList();
+    listType = type;
+    html += `<${type} class="guide-list">`;
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      closeList();
+      return;
+    }
+
+    if (trimmed.startsWith("### ")) {
+      closeList();
+      html += `<h4>${formatGuideInline(trimmed.slice(4))}</h4>`;
+      return;
+    }
+    if (trimmed.startsWith("## ")) {
+      closeList();
+      html += `<h3>${formatGuideInline(trimmed.slice(3))}</h3>`;
+      return;
+    }
+    if (trimmed.startsWith("# ")) {
+      closeList();
+      html += `<h3>${formatGuideInline(trimmed.slice(2))}</h3>`;
+      return;
+    }
+
+    const bullet = trimmed.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      openList("ul");
+      html += `<li>${formatGuideInline(bullet[1])}</li>`;
+      return;
+    }
+
+    const numbered = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (numbered) {
+      openList("ol");
+      html += `<li>${formatGuideInline(numbered[1])}</li>`;
+      return;
+    }
+
+    closeList();
+    html += `<p>${formatGuideInline(trimmed)}</p>`;
+  });
+  closeList();
+
+  return `<div class="guide-body">${html || `<p class="small">Noch kein Anleitungstext vorhanden.</p>`}</div>`;
+}
+
+function formatGuideInline(value) {
+  return escapeHtml(value).replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
 function auditActionValues() {
   return [
     "event_create",
     "event_update",
+    "guide_update",
     "member_login",
     "member_logout",
     "member_device_update",
@@ -4317,6 +4667,7 @@ function labelForAction(action) {
     guest_import: "CSV Import",
     guest_export: "CSV Export",
     audit_export: "Audit Log Export",
+    guide_update: "Anleitung geändert",
     duplicate_check_in_attempt: "Doppel-Check-in verhindert",
     bulk_no_show: "Bulk No Show",
     pins_reset: "Check-in-PIN neu gesetzt",
@@ -4667,6 +5018,10 @@ function setConnectionStatus(text, mode = "ok") {
 
 function eventRef() {
   return doc(appState.db, "events", appState.eventId);
+}
+
+function guideRef(guideId) {
+  return doc(appState.db, "events", appState.eventId, "guides", guideId);
 }
 
 function adminSecurityRef() {

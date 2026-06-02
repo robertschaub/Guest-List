@@ -396,6 +396,32 @@ service cloud.firestore {
         ]);
     }
 
+    function validGuideId(guideId) {
+      return guideId == 'admin' || guideId == 'checkin' || guideId == 'emergency';
+    }
+
+    function validGuideData(data) {
+      return data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 120
+        && data.body is string
+        && data.body.size() > 0
+        && data.body.size() <= 20000
+        && data.updatedAt == request.time
+        && data.updatedByName is string
+        && data.keys().hasOnly([
+          'title', 'body', 'updatedAt', 'updatedByName'
+        ]);
+    }
+
+    function guideReadAllowed(eventId, guideId) {
+      return isAdmin(eventId)
+        || (
+          isCheckin(eventId)
+          && (guideId == 'checkin' || guideId == 'emergency')
+        );
+    }
+
     function staffGuestUpdateAllowed(eventId) {
       return isCheckin(eventId) && (
         (
@@ -528,6 +554,17 @@ service cloud.firestore {
         allow create, update: if isAdmin(eventId)
           && validGuestAdminNoteData(request.resource.data);
         allow delete: if isAdmin(eventId);
+      }
+
+      match /guides/{guideId} {
+        allow get: if validGuideId(guideId)
+          && guideReadAllowed(eventId, guideId);
+        allow list: if isAdmin(eventId);
+        allow create, update: if validGuideId(guideId)
+          && isMasterAdmin(eventId)
+          && validGuideData(request.resource.data);
+        allow delete: if validGuideId(guideId)
+          && isMasterAdmin(eventId);
       }
 
       match /auditLog/{logId} {

@@ -1,4 +1,4 @@
-# Deployment-Checkliste für morgen
+# Deployment-Checkliste für den Eventtag
 
 ## Firebase
 
@@ -16,20 +16,34 @@
 - [ ] GitHub Pages auf `main / root` aktiviert
 - [ ] GitHub-Pages-URL erreichbar
 
-## Event Setup
+## Event vorbereiten
 
 - [ ] URL `?setup=1` geöffnet
 - [ ] Event erstellt
+- [ ] Eventname, Datum und Event-Link ID geprüft
 - [ ] Globaler Admin-PIN gespeichert
 - [ ] Check-in-PIN gespeichert
 - [ ] Event-Link kopiert
+- [ ] `Event-Zugang für Check-in Staff` im Tab `Event verwalten` geprüft
+- [ ] In-App-Anleitungen im Tab `Anleitung` geprüft und bei Bedarf angepasst
+- [ ] Admin-Kurzanleitung, Check-in-Kurzanleitung und Notfallkarte bereitgelegt
+
+## Logins definieren und informieren
+
+- [ ] Master Admins festgelegt
+- [ ] Benannte Admins angelegt, falls nötig
+- [ ] Check-in-PINs pro Event definiert
+- [ ] Check-in-Team über Event-Link, Rolle, Name/Position und Check-in-PIN informiert
+- [ ] Ansprechperson für Problemfälle kommuniziert
+- [ ] Admin-PINs getrennt vom Check-in-Team gehalten
 
 ## Gästeliste
 
 - [ ] CSV mit 1200 Gästen vorbereitet
-- [ ] 30er-Test CSV importiert
-- [ ] Semikolon-Test CSV importiert
-- [ ] 1200er CSV importiert
+- [ ] 30er-Test CSV in Test-Event importiert
+- [ ] Semikolon-Test CSV in Test-Event geprüft
+- [ ] Vor finalem 1200er Import Testdaten bewusst ersetzt oder separater Live-Event verwendet
+- [ ] 1200er CSV im Live-Event importiert
 - [ ] Duplicate-Guest-ID-Schutz getestet
 - [ ] Kategorien geprüft
 - [ ] Summen geprüft
@@ -43,12 +57,10 @@
 - [ ] Gerät 2 mit Check-in-PIN verbunden
 - [ ] Testgast eingecheckt
 - [ ] Doppel-Check-in getestet
-- [ ] Doppel-Check-in parallel mit zwei Fenstern getestet
 - [ ] Support-Kommentar getestet
 - [ ] Admin-Übersicht geprüft
 - [ ] Export geprüft
 - [ ] Leeres Event zeigt 0-Gäste-Warnung
-- [ ] Import mit Löschen verlangt Event-Link ID als Bestätigung
 
 ## Event-Tag Backup
 

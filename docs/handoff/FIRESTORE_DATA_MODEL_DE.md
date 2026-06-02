@@ -9,6 +9,7 @@ appSecurity/admin
 events/{eventId}
 events/{eventId}/private/security
 events/{eventId}/members/{uid}
+events/{eventId}/guides/{guideId}
 events/{eventId}/guests/{guestDocId}
 events/{eventId}/guestAdminNotes/{guestDocId}
 events/{eventId}/auditLog/{logId}
@@ -78,6 +79,23 @@ Erwartete Felder:
 - `createdAt`
 - `updatedAt`
 
+## events/{eventId}/guides/{guideId}
+
+Eventbezogene Anleitungstexte für die In-App-Anleitung.
+
+Erlaubte Dokument-IDs:
+
+- `admin`: Anleitung für Administratoren
+- `checkin`: Anleitung für Check-in Staff
+- `emergency`: Notfallkarte
+
+Erwartete Felder:
+
+- `title`
+- `body`: einfacher Text mit optionalen Überschriften und Listen; HTML wird durch die App nicht übernommen
+- `updatedAt`
+- `updatedByName`
+
 ## events/{eventId}/guests/{guestDocId}
 
 Erwartete Felder:
@@ -133,6 +151,7 @@ Erwartete Felder:
 - Doppel-Check-in-Schutz muss per Firestore Transaction geschehen.
 - Check-in Staff darf Status auf `checked_in` setzen, eigene Check-ins während 1 Minute wieder auf den vorherigen Nicht-Check-in-Status zurücksetzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen. Die App hält eigene rückgängig machbare Check-ins während dieses Zeitfensters in der Check-in-Liste sichtbar, auch wenn Suche, Status- oder Kategorie-Filter sie sonst ausblenden würden.
 - Check-in Staff darf nur innerhalb des Firestore-geprüften Zeitfensters `checkinAccessStartsAt` bis `checkinAccessEndsAt` lesen und schreiben. Admins können dieses Zeitfenster pro Event ändern, um Test- oder Demo-Events kontrolliert weiterzuverwenden.
+- Check-in Staff darf die In-App-Anleitungen `checkin` und `emergency` lesen. Admins dürfen alle Anleitungen lesen. Nur Master Admins dürfen Anleitungstexte erstellen, ändern oder löschen.
 - Admin darf Import, Export, PIN-Reset und Korrekturen durchführen.
 - Admin darf auch vergangene und versteckte Events über die Eventliste oder direkte Event-Links öffnen und bearbeiten.
 - Admin darf Event-Metadaten auflisten, damit aktive, vergangene und inaktive/versteckte Events im Adminbereich zum Bearbeiten auswählbar sind.
