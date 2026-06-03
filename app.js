@@ -500,10 +500,6 @@ function renderCreateEventForm(options = {}) {
           <input id="setupName" value="${escapeHtml(setupNameVisible)}" ${setupNameRequired} />
         </div>
       `}
-      <div class="form-row" style="grid-column:1/-1">
-        <label for="categoryList">Kategorien, eine pro Zeile</label>
-        <textarea id="categoryList">${DEFAULT_CATEGORIES.map(escapeHtml).join("\n")}</textarea>
-      </div>
       <div class="actions" style="grid-column:1/-1">
         <button class="btn-primary" type="submit">Event erstellen</button>
       </div>
@@ -631,7 +627,7 @@ async function createEventFromForm(event) {
   const fallbackDisplayName = isAdmin() ? getAdminSession()?.displayName || appState.member?.displayName || "" : "";
   const displayName = typedDisplayName || fallbackDisplayName;
   const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
-  const categories = val("categoryList").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  const categories = [...DEFAULT_CATEGORIES];
 
   if (!name || !date || !linkName) {
     result.innerHTML = `<p class="notice error">Eventname und Datum sind Pflichtfelder.</p>`;
@@ -2592,15 +2588,19 @@ function renderAdmin() {
     ${appState.ui.adminCreateEventOpen ? renderAdminCreateEventDialog() : ""}
 
     <section class="card">
-      <h2>Aktueller Event</h2>
+      <h2>Event Daten ändern</h2>
       <p class="small">Diese Einstellungen ändern nur den aktuell geöffneten Event.</p>
       <form id="eventNameForm" class="grid">
         <div class="form-row">
           <label for="eventNameInput">Aktueller Eventname</label>
           <input id="eventNameInput" value="${escapeHtml(appState.event?.name || "")}" required />
         </div>
+        <div class="form-row" style="grid-column:1/-1">
+          <label for="eventCategoryList">Kategorien, eine pro Zeile</label>
+          <textarea id="eventCategoryList">${eventCategoriesForForm().map(escapeHtml).join("\n")}</textarea>
+        </div>
         <div class="actions" style="grid-column:1/-1">
-          <button class="btn-primary" id="eventNameSaveBtn" type="submit" disabled>Eventname speichern</button>
+          <button class="btn-primary" id="eventNameSaveBtn" type="submit" disabled>Event-Daten speichern</button>
         </div>
       </form>
     </section>
@@ -2693,16 +2693,21 @@ function renderAdminEventPickerOnly() {
 function bindEventNameForm() {
   const form = document.getElementById("eventNameForm");
   const input = document.getElementById("eventNameInput");
+  const categoryInput = document.getElementById("eventCategoryList");
   const button = document.getElementById("eventNameSaveBtn");
-  if (!form || !input || !button) return;
+  if (!form || !input || !categoryInput || !button) return;
 
   const originalName = appState.event?.name || "";
+  const originalCategoriesText = categoryListText(eventCategoriesForForm());
   const updateButtonState = () => {
-    button.disabled = input.value.trim() === originalName || !input.value.trim();
+    const hasNameChange = input.value.trim() !== originalName;
+    const hasCategoryChange = categoryListText(parseCategoryList(categoryInput.value)) !== originalCategoriesText;
+    button.disabled = (!hasNameChange && !hasCategoryChange) || !input.value.trim();
   };
 
   updateButtonState();
   input.addEventListener("input", updateButtonState);
+  categoryInput.addEventListener("input", updateButtonState);
   form.addEventListener("submit", updateEventNameFromForm);
 }
 
@@ -2862,39 +2867,54 @@ function updateCheckinPinVisibilityButton() {
 
 async function updateEventNameFromForm(event) {
   event.preventDefault();
-  if (!requireOnline("Eventname speichern")) return;
+  if (!requireOnline("Event-Daten speichern")) return;
   if (!isAdmin()) {
-    notify("Nur Admins dürfen den Eventnamen ändern.", "warning");
+    notify("Nur Admins dürfen Event-Daten ändern.", "warning");
     return;
   }
 
   const name = val("eventNameInput").trim();
+  const categories = parseCategoryList(val("eventCategoryList"));
   if (!name) {
     notify("Eventname darf nicht leer sein.", "warning");
     return;
   }
+  if (!categories.length) {
+    notify("Mindestens eine Kategorie ist Pflicht.", "warning");
+    return;
+  }
 
   const oldName = appState.event?.name || "";
-  if (name === oldName) {
-    notify("Eventname ist unverändert.", "info");
+  const oldCategories = eventCategoriesForForm();
+  const nameChanged = name !== oldName;
+  const categoriesChanged = categoryListText(categories) !== categoryListText(oldCategories);
+  if (!nameChanged && !categoriesChanged) {
+    notify("Event-Daten sind unverändert.", "info");
     return;
   }
 
   try {
     await updateDoc(eventRef(), {
       name,
+      categories,
       updatedAt: serverTimestamp()
     });
-    appState.event = { ...appState.event, name };
+    appState.event = { ...appState.event, name, categories };
     els.eventTitle.textContent = name;
     setEventMeta();
     saveKnownEvent(appState.event);
-    await addAudit("event_update", { name }, { field: "name", oldName, newName: name });
+    await addAudit("event_update", { name }, {
+      field: "eventData",
+      oldName,
+      newName: name,
+      oldCategories,
+      newCategories: categories
+    });
     renderAdmin();
-    notify("Eventname gespeichert.", "success");
+    notify("Event-Daten gespeichert.", "success");
   } catch (error) {
     console.error(error);
-    notify(`Eventname konnte nicht gespeichert werden: ${error.message || error}`, "error");
+    notify(`Event-Daten konnten nicht gespeichert werden: ${error.message || error}`, "error");
   }
 }
 
@@ -5084,6 +5104,23 @@ function getCategories() {
   const fromEvent = Array.isArray(appState.event?.categories) ? appState.event.categories : [];
   const fromGuests = Array.from(new Set(appState.guests.map((g) => g.category).filter(Boolean)));
   return Array.from(new Set([...fromEvent, ...DEFAULT_CATEGORIES, ...fromGuests]));
+}
+
+function eventCategoriesForForm() {
+  const categories = Array.isArray(appState.event?.categories) ? appState.event.categories : DEFAULT_CATEGORIES;
+  return parseCategoryList(categories.join("\n"));
+}
+
+function parseCategoryList(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item, index, list) => list.findIndex((candidate) => normalizeForSearch(candidate) === normalizeForSearch(item)) === index);
+}
+
+function categoryListText(categories) {
+  return parseCategoryList((categories || []).join("\n")).join("\n");
 }
 
 function buildGuestRecord(input) {

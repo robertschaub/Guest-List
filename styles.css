@@ -207,6 +207,7 @@ details .grid {
 .form-row {
   display: grid;
   gap: 7px;
+  align-content: start;
 }
 
 .form-row label {
