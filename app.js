@@ -2386,10 +2386,6 @@ function renderOverview() {
   content.innerHTML = `
     ${renderSummaryCards()}
     <section class="card">
-      <h2>Summen nach Kategorie</h2>
-      ${renderCategoryStatsTable()}
-    </section>
-    <section class="card">
       <h2>Letzte Check-ins</h2>
       ${renderRecentCheckins()}
     </section>
@@ -2400,17 +2396,29 @@ function renderOverview() {
 
 function renderSummaryCards() {
   const stats = calculateStats();
+  const percent = stats.total ? Math.round((stats.checkedIn / stats.total) * 100) : 0;
   return `
-    <section class="summary-grid">
-      <div class="metric"><span>Total</span><strong>${stats.total}</strong></div>
-      <div class="metric"><span>Eingecheckt</span><strong>${stats.checkedIn}</strong></div>
-      <div class="metric"><span>Offen</span><strong>${stats.open}</strong></div>
-      <div class="metric"><span>No Show</span><strong>${stats.noShow}</strong></div>
+    <section class="card overview-summary-card">
+      <div class="overview-summary-header">
+        <div>
+          <h2>Alle Gäste</h2>
+          <p class="small">Eingecheckt / Total</p>
+        </div>
+        <strong class="overview-summary-count">${stats.checkedIn}/${stats.total}<span>${percent}%</span></strong>
+      </div>
+      <div class="overview-progress" aria-label="Check-in Fortschritt">
+        <span style="width: ${percent}%"></span>
+      </div>
+      <div class="overview-status-row" aria-label="Statusübersicht">
+        <span><strong>${stats.open}</strong> Offen</span>
+        <span><strong>${stats.noShow}</strong> No Show</span>
+      </div>
+      ${renderCategoryStatsList()}
     </section>
   `;
 }
 
-function renderCategoryStatsTable() {
+function renderCategoryStatsList() {
   const categories = getCategories();
   const rows = categories.map((category) => {
     const guests = appState.guests.filter((g) => (g.category || "") === category);
@@ -2418,25 +2426,41 @@ function renderCategoryStatsTable() {
     const checked = guests.filter((g) => g.status === "checked_in").length;
     const open = guests.filter((g) => (g.status || "open") === "open").length;
     const noShow = guests.filter((g) => g.status === "no_show").length;
+    const details = total ? [
+      open ? `${open} offen` : "",
+      noShow ? `${noShow} No Show` : ""
+    ].filter(Boolean).join(" · ") || "Keine offenen Gäste" : "Keine Gäste";
     return `
-      <tr>
-        <td><strong>${escapeHtml(category)}</strong></td>
-        <td>${total}</td>
-        <td>${checked}</td>
-        <td>${open}</td>
-        <td>${noShow}</td>
-      </tr>
+      <div class="category-summary-row">
+        <span class="category-token ${categoryToneClass(category)}" aria-hidden="true">${escapeHtml(categoryInitial(category))}</span>
+        <span class="category-summary-name">
+          <strong>${escapeHtml(category)}</strong>
+          <small>${escapeHtml(details)}</small>
+        </span>
+        <strong class="category-summary-count" aria-label="${checked} von ${total} eingecheckt">${checked}/${total}</strong>
+      </div>
     `;
   }).join("");
 
   return `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Kategorie</th><th>Total</th><th>Eingecheckt</th><th>Offen</th><th>No Show</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+    <div class="category-summary-list" aria-label="Summen nach Kategorie">
+      ${rows}
     </div>
   `;
+}
+
+function categoryInitial(category) {
+  const match = String(category || "").trim().match(/[0-9a-zäöü]/i);
+  return (match?.[0] || "?").toLocaleLowerCase("de-CH");
+}
+
+function categoryToneClass(category) {
+  const key = normalizeForSearch(category || "");
+  if (key.includes("vip")) return "tone-vip";
+  if (key.includes("stage")) return "tone-stage";
+  if (key.includes("mitarbeiter")) return "tone-staff";
+  if (key.includes("member")) return "tone-member";
+  return "tone-default";
 }
 
 function renderRecentCheckins() {
