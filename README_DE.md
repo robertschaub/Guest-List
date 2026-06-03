@@ -146,7 +146,7 @@ Jedes Event hat eine eigene Event-Link ID und damit eine eigene Gästeliste. Tec
 
 Der Admin-PIN ist global und gilt für alle Events. Beim Erstellen eines neuen Events wird dieser globale Admin-PIN geprüft und danach automatisch als Admin-PIN des neuen Events verwendet. Check-in-PINs bleiben pro Event separat.
 
-Neue Events verwenden als Event-Link ID das Format `TT-MM-JJJJ-event-name`, zum Beispiel `02-05-2026-main-event`. Der Event-Link Name soll stabil bleiben und keine Artists, Line-ups, Sponsoren oder temporäre Mottos enthalten. Der sichtbare Eventname kann später geändert werden, die Event-Link ID bleibt gleich.
+Neue Events verwenden als Event-Link ID das Format `TT-MM-JJJJ-event-name`, zum Beispiel `02-05-2026-main-event`. Die App erzeugt die ID aus Datum und Eventname. Der sichtbare Eventname kann später geändert werden, die Event-Link ID bleibt gleich.
 
 Bestehende vorbereitete Events nutzen ab sofort saubere offizielle Event-Link IDs. Die alten Links bleiben als Alias kompatibel.
 
@@ -156,7 +156,7 @@ https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=01-05-2026-main-event
 https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?event=02-05-2026-main-event
 ```
 
-Auf der Startseite und im Admin-Tab gibt es eine Liste **Bestehende Events**. Dort können Admins den gewünschten Event bewusst auswählen. Im laufenden UI führt der Button **Event wechseln** ebenfalls zur Event-Auswahl. Direkte Event-Links mit `?event=...` funktionieren weiterhin, werden aber nicht mehr als separates Eingabefeld in der Oberfläche angeboten.
+Auf der Startseite gibt es eine Liste **Bestehende Events**. Im laufenden UI führt der Tab **Events** zur Event-Auswahl. Direkte Event-Links mit `?event=...` funktionieren weiterhin, werden aber nicht mehr als separates Eingabefeld in der Oberfläche angeboten.
 
 Wenn ein Admin in derselben Browser-Session den Event wechselt, verbindet die App automatisch mit dem Ziel-Event. Nach Reload, neuem Tab oder neuem Gerät muss der globale Admin-PIN erneut eingegeben werden.
 
@@ -187,9 +187,10 @@ Für den Einlass gibt es in der App den Tab `Anleitung`. Check-in Staff sieht di
 ### Neuen Event erstellen
 
 1. Als Admin anmelden und Tab `Events` öffnen.
-2. Eventname, Datum und stabilen Event-Link Name setzen.
-3. Check-in Name und PIN setzen.
+2. Button `Neues Event erstellen` öffnen.
+3. Eventname und Datum setzen.
 4. Event erstellen und den offiziellen Event-Link kopieren.
+5. Check-in-PINs im neuen Event festlegen.
 
 ### Event vorbereiten
 
@@ -223,7 +224,7 @@ Check-in Staff sieht Check-in, Übersicht und Anmeldung. Admin-Bereiche wie Impo
 
 1. Event-Link öffnen.
 2. Admin-Name und Admin-PIN eingeben.
-3. Im Tab `Event verwalten` den `Event-Zugang für Check-in Staff` prüfen.
+3. Im Tab `Events` den `Event-Zugang für Check-in Staff` prüfen.
 4. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder einzelne No Shows setzen.
 5. Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.
 6. Vor Eventstart unter `Backup & Export` Gäste-CSV und Audit-Log-CSV herunterladen.

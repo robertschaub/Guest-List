@@ -24,7 +24,7 @@
 - [ ] Globaler Admin-PIN gespeichert
 - [ ] Check-in-PIN gespeichert
 - [ ] Event-Link kopiert
-- [ ] `Event-Zugang für Check-in Staff` im Tab `Event verwalten` geprüft
+- [ ] `Event-Zugang für Check-in Staff` im Tab `Events` geprüft
 - [ ] In-App-Anleitungen im Tab `Anleitung` geprüft und bei Bedarf angepasst
 
 ## Logins definieren und informieren

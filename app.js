@@ -90,9 +90,10 @@ const GUIDE_DEFINITIONS = {
 
 ## Neuen Event erstellen
 1. Als Admin anmelden und Tab Events öffnen.
-2. Eventname, Datum und stabilen Event-Link Name setzen.
-3. Check-in Name und PIN setzen.
+2. Button Neues Event erstellen öffnen.
+3. Eventname und Datum setzen.
 4. Event erstellen und den offiziellen Event-Link kopieren.
+5. Check-in-PINs im neuen Event festlegen.
 
 ## Event vorbereiten
 1. Offiziellen Event-Link öffnen.
@@ -242,6 +243,7 @@ const appState = {
     masterAdmin: null,
     masterAdminKind: "",
     showCheckinPins: false,
+    adminCreateEventOpen: false,
     lastBackupMessage: ""
   }
 };
@@ -422,12 +424,7 @@ function renderWelcome() {
 function renderEventSetupSections(options = {}) {
   const knownEvents = getKnownEvents();
   const visibleKnownEvents = knownEvents.filter((event) => isAdmin() || !isEventHidden(event));
-  const showEventDirectory = isAdmin() || visibleKnownEvents.length;
-  const omitAdminPin = Boolean(options.omitAdminPin);
-  const setupName = getAdminSession()?.displayName || appState.member?.displayName || "";
-  const setupNameVisible = isMainAdminName(setupName) ? "" : setupName;
-  const setupNameRequired = setupNameVisible || !isAdmin() ? "required" : "";
-  const defaultEventName = CONFIG.app?.defaultEventName || "Event Gästeliste";
+  const showEventDirectory = !options.omitEventDirectory && (isAdmin() || visibleKnownEvents.length);
   return `
     ${showEventDirectory ? `
       <section class="card">
@@ -437,20 +434,36 @@ function renderEventSetupSections(options = {}) {
         </div>
       </section>
     ` : ""}
-    <section class="card">
+    <section class="card create-event-card">
       <h2>Neues Event erstellen</h2>
-      <form id="createEventForm" class="grid two">
-        <div class="form-row">
-          <label for="newEventName">Eventname</label>
-          <input id="newEventName" value="${escapeHtml(defaultEventName)}" required />
-        </div>
-        <div class="form-row">
-          <label for="newEventDate">Datum</label>
-          <input id="newEventDate" type="date" required />
-        </div>
+      ${renderCreateEventForm(options)}
+    </section>
+  `;
+}
+
+function renderCreateEventForm(options = {}) {
+  const omitAdminPin = Boolean(options.omitAdminPin);
+  const omitAdminName = Boolean(options.omitAdminName);
+  const omitCheckinLogin = Boolean(options.omitCheckinLogin);
+  const omitEventLinkFields = Boolean(options.omitEventLinkFields);
+  const setupName = getAdminSession()?.displayName || appState.member?.displayName || "";
+  const setupNameVisible = isMainAdminName(setupName) ? "" : setupName;
+  const setupNameRequired = setupNameVisible || !isAdmin() ? "required" : "";
+
+  return `
+    <form id="createEventForm" class="grid two">
+      <div class="form-row">
+        <label for="newEventName">Neuer Eventname</label>
+        <input id="newEventName" value="" required />
+      </div>
+      <div class="form-row">
+        <label for="newEventDate">Datum</label>
+        <input id="newEventDate" type="date" required />
+      </div>
+      ${omitEventLinkFields ? "" : `
         <div class="form-row">
           <label for="newEventLinkName">Event-Link Name</label>
-          <input id="newEventLinkName" value="${escapeHtml(suggestEventLinkName(defaultEventName))}" required />
+          <input id="newEventLinkName" value="" required />
           <p class="small">Stabiler Eventname ohne Artist, Line-up oder Sponsor.</p>
         </div>
         <div class="form-row">
@@ -458,12 +471,14 @@ function renderEventSetupSections(options = {}) {
           <input id="newEventLinkPreview" readonly aria-label="Event-Link Vorschau" />
           <p class="small">Format: TT-MM-JJJJ-Eventname, z.B. <code>02-05-2026-the-lago</code>.</p>
         </div>
-        ${omitAdminPin ? "" : `
-          <div class="form-row">
-            <label for="adminPin">Admin-PIN</label>
-            <input id="adminPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
-          </div>
-        `}
+      `}
+      ${omitAdminPin ? "" : `
+        <div class="form-row">
+          <label for="adminPin">Admin-PIN</label>
+          <input id="adminPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
+        </div>
+      `}
+      ${omitCheckinLogin ? "" : `
         <div class="form-row">
           <label for="setupCheckinName">Check-in Name / Position</label>
           <input id="setupCheckinName" value="Check-in Team" required />
@@ -473,20 +488,44 @@ function renderEventSetupSections(options = {}) {
           <label for="checkinPin">Check-in-PIN</label>
           <input id="checkinPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
         </div>
+      `}
+      ${omitAdminName ? "" : `
         <div class="form-row">
           <label for="setupName">Admin-Name</label>
           <input id="setupName" value="${escapeHtml(setupNameVisible)}" ${setupNameRequired} />
         </div>
-        <div class="form-row" style="grid-column:1/-1">
-          <label for="categoryList">Kategorien, eine pro Zeile</label>
-          <textarea id="categoryList">${DEFAULT_CATEGORIES.map(escapeHtml).join("\n")}</textarea>
+      `}
+      <div class="form-row" style="grid-column:1/-1">
+        <label for="categoryList">Kategorien, eine pro Zeile</label>
+        <textarea id="categoryList">${DEFAULT_CATEGORIES.map(escapeHtml).join("\n")}</textarea>
+      </div>
+      <div class="actions" style="grid-column:1/-1">
+        <button class="btn-primary" type="submit">Event erstellen</button>
+      </div>
+    </form>
+    <div id="setupResult"></div>
+  `;
+}
+
+function renderAdminCreateEventDialog() {
+  return `
+    <div class="modal-backdrop" id="createEventDialog" role="presentation">
+      <section class="modal-panel create-event-dialog" role="dialog" aria-modal="true" aria-labelledby="createEventDialogTitle">
+        <div class="modal-header">
+          <span>
+            <h2 id="createEventDialogTitle">Neues Event erstellen</h2>
+            <p class="small">Eventname und Datum setzen. Check-in-Logins danach im neuen Event anlegen.</p>
+          </span>
+          <button class="btn-secondary modal-close-btn" id="closeCreateEventDialogBtn" type="button" aria-label="Dialog schließen">Schließen</button>
         </div>
-        <div class="actions" style="grid-column:1/-1">
-          <button class="btn-primary" type="submit">Event erstellen</button>
-        </div>
-      </form>
-      <div id="setupResult"></div>
-    </section>
+        ${renderCreateEventForm({
+          omitAdminPin: isAdmin() && Boolean(getAdminSession()?.pin),
+          omitAdminName: true,
+          omitCheckinLogin: true,
+          omitEventLinkFields: true
+        })}
+      </section>
+    </div>
   `;
 }
 
@@ -499,6 +538,33 @@ function bindEventSetupHandlers() {
   }
   bindEventIdPreview();
   document.getElementById("createEventForm")?.addEventListener("submit", createEventFromForm);
+}
+
+function bindAdminCreateEventToggle() {
+  const closeDialog = () => {
+    appState.ui.adminCreateEventOpen = false;
+    document.body.classList.remove("modal-open");
+    renderAdmin();
+    window.setTimeout(() => document.getElementById("openCreateEventDialogBtn")?.focus(), 0);
+  };
+
+  document.getElementById("openCreateEventDialogBtn")?.addEventListener("click", () => {
+    appState.ui.adminCreateEventOpen = true;
+    document.body.classList.add("modal-open");
+    renderAdmin();
+    window.setTimeout(() => document.getElementById("newEventName")?.focus(), 0);
+  });
+
+  document.getElementById("closeCreateEventDialogBtn")?.addEventListener("click", closeDialog);
+  document.getElementById("createEventDialog")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closeDialog();
+  });
+  document.getElementById("createEventDialog")?.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeDialog();
+    }
+  });
 }
 
 function bindEventIdPreview() {
@@ -541,21 +607,27 @@ async function createEventFromForm(event) {
   event.preventDefault();
   const result = document.getElementById("setupResult");
   result.innerHTML = `<p class="notice info">Event wird erstellt…</p>`;
+  const createdFromAdminEventsTab = isAdmin() && appState.currentTab === "admin" && Boolean(document.getElementById("createEventDialog"));
 
   const name = val("newEventName").trim();
   const date = val("newEventDate").trim();
-  const linkName = val("newEventLinkName").trim();
+  const linkNameInput = document.getElementById("newEventLinkName");
+  const checkinNameInput = document.getElementById("setupCheckinName");
+  const checkinPinInput = document.getElementById("checkinPin");
+  const adminNameInput = document.getElementById("setupName");
+  const linkName = (linkNameInput ? val("newEventLinkName").trim() : suggestEventLinkName(name));
   const adminPin = val("adminPin") || (isAdmin() ? getAdminSession()?.pin || "" : "");
-  const checkinDisplayName = val("setupCheckinName").trim();
-  const checkinPin = val("checkinPin");
-  const typedDisplayName = val("setupName").trim();
+  const checkinLoginRequired = Boolean(checkinNameInput || checkinPinInput);
+  const checkinDisplayName = checkinLoginRequired ? val("setupCheckinName").trim() : "";
+  const checkinPin = checkinLoginRequired ? val("checkinPin") : "";
+  const typedDisplayName = adminNameInput ? val("setupName").trim() : "";
   const fallbackDisplayName = isAdmin() ? getAdminSession()?.displayName || appState.member?.displayName || "" : "";
   const displayName = typedDisplayName || fallbackDisplayName;
   const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
   const categories = val("categoryList").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 
   if (!name || !date || !linkName) {
-    result.innerHTML = `<p class="notice error">Eventname, Datum und Event-Link Name sind Pflichtfelder.</p>`;
+    result.innerHTML = `<p class="notice error">Eventname und Datum sind Pflichtfelder.</p>`;
     return;
   }
 
@@ -563,10 +635,10 @@ async function createEventFromForm(event) {
   const checkinAccessWindow = checkinAccessWindowForDate(date);
 
   if (!eventId) {
-    result.innerHTML = `<p class="notice error">Event-Link Name oder Eventdatum ist ungültig.</p>`;
+    result.innerHTML = `<p class="notice error">Eventname oder Eventdatum ist ungültig.</p>`;
     return;
   }
-  if (!checkinDisplayName) {
+  if (checkinLoginRequired && !checkinDisplayName) {
     result.innerHTML = `<p class="notice error">Check-in Name / Position ist Pflicht.</p>`;
     return;
   }
@@ -578,7 +650,7 @@ async function createEventFromForm(event) {
     result.innerHTML = `<p class="notice error">Dieser Admin-Name ist reserviert. Bitte persönlichen Admin-Namen verwenden.</p>`;
     return;
   }
-  if (adminPin.length < PIN_MIN_LENGTH || checkinPin.length < PIN_MIN_LENGTH) {
+  if (adminPin.length < PIN_MIN_LENGTH || (checkinLoginRequired && checkinPin.length < PIN_MIN_LENGTH)) {
     result.innerHTML = `<p class="notice error">PINs müssen mindestens ${PIN_MIN_LENGTH} Zeichen haben.</p>`;
     return;
   }
@@ -598,7 +670,9 @@ async function createEventFromForm(event) {
       return;
     }
 
-    const checkinPinEntry = await namedPinEntry(eventId, "checkin", checkinPin, checkinDisplayName);
+    const checkinPinEntry = checkinLoginRequired
+      ? await namedPinEntry(eventId, "checkin", checkinPin, checkinDisplayName)
+      : null;
     const adminAuth = await adminMemberAuthFields(adminPin, displayName);
 
     await setDoc(targetEventRef, {
@@ -614,8 +688,8 @@ async function createEventFromForm(event) {
     });
 
     await setDoc(doc(appState.db, "events", eventId, "private", "security"), {
-      checkinNamedPinHashes: [checkinPinEntry.pinNameHash],
-      checkinNamedPins: [checkinPinEntry],
+      checkinNamedPinHashes: checkinPinEntry ? [checkinPinEntry.pinNameHash] : [],
+      checkinNamedPins: checkinPinEntry ? [checkinPinEntry] : [],
       createdAt: serverTimestamp()
     });
 
@@ -633,6 +707,20 @@ async function createEventFromForm(event) {
 
     await addAuditForEvent(eventId, "event_create", { name }, { eventId, date }, { displayName, deviceLabel });
     saveKnownEvent({ id: eventId, name, date });
+
+    if (createdFromAdminEventsTab) {
+      result.innerHTML = `
+        <div class="notice success">
+          Event erstellt. Der neue Event wird geöffnet.
+        </div>
+      `;
+      appState.ui.adminCreateEventOpen = false;
+      document.body.classList.remove("modal-open");
+      appState.currentTab = "admin";
+      await activateKnownEvent(eventId);
+      notify("Event erstellt und geöffnet.", "success");
+      return;
+    }
 
     result.innerHTML = `
       <div class="notice success">
@@ -1021,6 +1109,7 @@ async function joinAdminFromCredentials(pin, displayName, deviceLabel) {
 
     const memberSnap = await getDoc(memberRef(appState.user.uid));
     appState.member = { id: memberSnap.id, ...memberSnap.data() };
+    appState.currentTab = "admin";
     await addAudit("member_login", { name: displayName }, { role: "admin", deviceLabel });
     await promptForDuplicateNamedMemberLogout(appState.eventId, appState.member);
     loadMainApp();
@@ -1247,11 +1336,10 @@ function visibleTabs() {
       ...baseTabs,
       { id: "overview", label: "Übersicht" },
       { id: "guides", label: "Anleitung" },
-      { id: "admin", label: "Event verwalten" },
-      { id: "setup", label: "Events" },
-      { id: "role", label: "Anmeldung" },
-      { id: "adminSettings", label: "Admin" },
-      { id: "log", label: "Audit" }
+      { id: "admin", label: "Events" },
+      { id: "adminSettings", label: "Admins" },
+      { id: "log", label: "Audit" },
+      { id: "role", label: "Anmeldung" }
     ];
   }
 
@@ -1352,7 +1440,6 @@ function renderActiveTab() {
   else if (appState.currentTab === "overview") renderOverview();
   else if (appState.currentTab === "guides") renderGuides();
   else if (appState.currentTab === "admin") renderAdmin();
-  else if (appState.currentTab === "setup") renderEventSetup();
   else if (appState.currentTab === "role") renderRolePinTab();
   else if (appState.currentTab === "adminSettings") renderAdminSettings();
   else if (appState.currentTab === "log") renderAuditLog();
@@ -2405,26 +2492,33 @@ function renderAdmin() {
     return;
   }
 
+  if (!appState.eventId || !appState.event) {
+    renderAdminEventPickerOnly();
+    return;
+  }
+
   const content = tabContent();
   const categories = getCategories();
   const exportDisabled = appState.adminNotesLoaded ? "" : "disabled";
   content.innerHTML = `
     <section class="card">
       <h2>Event wechseln</h2>
-      <p class="small">Zeigt alle Events aus Firebase, inklusive vergangener und versteckter Events. Gäste, Import und Export bleiben pro Event getrennt.</p>
+      <p class="small">Zeigt alle bekannten Events, inklusive vergangener und versteckter Events. Gäste, Import und Export bleiben pro Event getrennt.</p>
+      <div class="actions admin-create-event-actions">
+        <button class="btn-primary" id="openCreateEventDialogBtn" type="button" ${appState.ui.adminCreateEventOpen ? "disabled" : ""}>Neues Event erstellen</button>
+      </div>
       <div id="adminEventDirectory"><p class="small">Events werden geladen…</p></div>
     </section>
 
+    ${appState.ui.adminCreateEventOpen ? renderAdminCreateEventDialog() : ""}
+
     <section class="card">
-      <h2>Event-Einstellungen</h2>
-      <form id="eventNameForm" class="grid two">
+      <h2>Aktueller Event</h2>
+      <p class="small">Diese Einstellungen ändern nur den aktuell geöffneten Event.</p>
+      <form id="eventNameForm" class="grid">
         <div class="form-row">
-          <label for="eventNameInput">Eventname</label>
+          <label for="eventNameInput">Aktueller Eventname</label>
           <input id="eventNameInput" value="${escapeHtml(appState.event?.name || "")}" required />
-        </div>
-        <div class="form-row">
-          <label>Event-Link ID</label>
-          <input value="${escapeHtml(eventUrlId(appState.eventId) || "")}" readonly />
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" id="eventNameSaveBtn" type="submit" disabled>Eventname speichern</button>
@@ -2482,6 +2576,8 @@ function renderAdmin() {
     <div id="eventDeleteSection"></div>
   `;
 
+  bindEventSetupHandlers();
+  bindAdminCreateEventToggle();
   bindEventNameForm();
   bindCheckinAccessForm();
   bindCheckinPinForm();
@@ -2494,6 +2590,26 @@ function renderAdmin() {
   void renderAdminEventDirectory();
   void renderEventVisibilitySection();
   void renderEventDeleteSection();
+}
+
+function renderAdminEventPickerOnly() {
+  const content = tabContent();
+  content.innerHTML = `
+    <section class="card">
+      <h2>Events</h2>
+      <p class="small">Zeigt alle bekannten Events. Öffne einen Event oder erstelle einen neuen.</p>
+      <div class="actions admin-create-event-actions">
+        <button class="btn-primary" id="openCreateEventDialogBtn" type="button" ${appState.ui.adminCreateEventOpen ? "disabled" : ""}>Neues Event erstellen</button>
+      </div>
+      <div id="adminEventDirectory"><p class="small">Events werden geladen…</p></div>
+    </section>
+
+    ${appState.ui.adminCreateEventOpen ? renderAdminCreateEventDialog() : ""}
+  `;
+
+  bindEventSetupHandlers();
+  bindAdminCreateEventToggle();
+  void renderAdminEventDirectory();
 }
 
 function bindEventNameForm() {
@@ -2964,7 +3080,6 @@ async function deleteCurrentEvent() {
   }
   if (result) result.innerHTML = `<p class="notice info">Event-Löschung wird vorbereitet…</p>`;
 
-  let eventWasDeleted = false;
   try {
     const replacement = await prepareAdminSecurityForEventDelete(eventId);
     const counts = {};
@@ -2991,9 +3106,8 @@ async function deleteCurrentEvent() {
     }
 
     notify(`Event gelöscht: ${eventName}.`, "success");
-    if (result) result.innerHTML = `<p class="notice success">Event gelöscht. Du wirst weitergeleitet…</p>`;
-    eventWasDeleted = true;
-    window.location.href = replacement ? urlWithEvent(replacement.id) : `${urlWithoutParams()}?setup=1`;
+    if (result) result.innerHTML = `<p class="notice success">Event gelöscht. Öffne Event-Übersicht…</p>`;
+    await openEventsTabAfterDelete(eventId, replacement);
   } catch (error) {
     console.error(error);
     if (button) {
@@ -3004,6 +3118,34 @@ async function deleteCurrentEvent() {
     if (result) result.innerHTML = `<p class="notice error">Event konnte nicht gelöscht werden: ${escapeHtml(message)}</p>`;
     notify(`Event konnte nicht gelöscht werden: ${message}`, "error");
   }
+}
+
+async function openEventsTabAfterDelete(deletedEventId, preferredReplacement = null) {
+  const nextEvent = preferredReplacement || await findReplacementAuthorizingEvent(deletedEventId);
+  appState.currentTab = "admin";
+  appState.ui.adminCreateEventOpen = false;
+  document.body.classList.remove("modal-open");
+
+  if (nextEvent?.id) {
+    await activateKnownEvent(nextEvent.id);
+    notify("Event gelöscht. Events geöffnet.", "success");
+    return;
+  }
+
+  unsubscribeAll();
+  appState.eventId = "";
+  appState.event = null;
+  appState.guests = [];
+  appState.guestsLoaded = false;
+  appState.adminNotes = {};
+  appState.adminNotesLoaded = false;
+  appState.auditEntries = [];
+  localStorage.removeItem("guestlist:lastEventId");
+  window.history.replaceState(null, "", urlWithoutParams());
+  els.eventTitle.textContent = "Gästeliste Check-in";
+  setHeaderMeta([]);
+  renderShell();
+  notify("Event gelöscht. Kein weiterer Event gefunden.", "success");
 }
 
 async function prepareAdminSecurityForEventDelete(eventId) {
@@ -5494,7 +5636,7 @@ function checkinStaffAccessMessage(event = appState.event, now = new Date()) {
     return `Check-in Staff Zugriff ist erst ab ${formatTimestamp(accessWindow.start)} aktiv.`;
   }
   if (now >= accessWindow.end) {
-    return `Check-in Staff Zugriff ist seit ${formatTimestamp(accessWindow.end)} abgelaufen. Admin kann das Zeitfenster im Tab "Event verwalten" anpassen.`;
+    return `Check-in Staff Zugriff ist seit ${formatTimestamp(accessWindow.end)} abgelaufen. Admin kann das Zeitfenster im Tab "Events" anpassen.`;
   }
   return `Check-in Staff Zugriff ist bis ${formatTimestamp(accessWindow.end)} aktiv.`;
 }
@@ -5918,7 +6060,7 @@ function removeMissingKnownEvent(eventId, error) {
   const message = String(error?.message || error || "");
   if (!message.includes("wurde nicht gefunden")) return;
   removeStoredKnownEvent(eventId);
-  if (appState.currentTab === "setup" || appState.currentTab === "admin") {
+  if (appState.currentTab === "admin") {
     renderActiveTab();
   }
 }
