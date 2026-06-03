@@ -39,21 +39,20 @@ Prüfen:
 ## Test 2 — Setup Flow
 
 **Gegeben** App wird mit `?setup=1` geöffnet.  
-**Wenn** Eventname, Main-PIN mit Admin-Name `Main` und Check-in-PIN gesetzt werden.
+**Wenn** Eventname, Admin-PIN mit Admin-Name und Check-in-PIN gesetzt werden.
 **Dann** wird ein Event erstellt und ein Event-Link angezeigt.
 
 Prüfen:
 
 - Event-Link enthält `?event=...`.
 - Event-Link-Vorschau folgt `TT-MM-JJJJ-event-name`, z.B. `02-05-2026-the-lago`; Artist/Line-up steht nur im Eventnamen, nicht in der Event-Link ID.
-- Main-PIN und Check-in-PIN sicher notieren.
-- Als eingeloggter Admin: Check-in-PIN wird aus einem bestehenden Event vorbefüllt und kann vor dem Speichern überschrieben werden.
+- Admin-PIN und Check-in-PIN sicher notieren.
 - Kategorien enthalten GA, Member GA, Member VIP, On Stage, Mitarbeiter.
 
 ## Test 3 — Admin Login
 
 **Gegeben** Event-Link ist geöffnet.  
-**Wenn** Rolle Admin, Name `Main` und Main-PIN eingegeben werden.
+**Wenn** Rolle Admin, persönlicher Admin-Name und Admin-PIN eingegeben werden.
 **Dann** sind Admin-Funktionen sichtbar.
 
 Prüfen:
@@ -63,20 +62,19 @@ Prüfen:
 - Gast hinzufügen sichtbar.
 - Gast bearbeiten in der Check-in-Liste sichtbar.
 - Einzelne Statuskorrekturen in der Check-in-Liste sichtbar.
-- Als Haupt-Admin: Login mit Main-PIN nur mit Name `Main` erlauben; anderer Name wird abgewiesen.
-- Als Haupt-Admin: in der Admin-PIN-Liste `Main` sehen; dort darf nur `PIN ändern` sichtbar sein.
-- Als Haupt-Admin: im gemeinsamen Admin-PIN-Formular Name `Main` eintragen, Main-PIN ändern und direkt danach `Admin-Zugang kopieren` prüfen.
-- Als Haupt-Admin: im gemeinsamen Admin-PIN-Formular anderen Namen eintragen, benannten Admin-PIN erstellen und direkt danach `Admin-Zugang kopieren` prüfen.
-- Als Haupt-Admin: prüfen, dass ein benannter Admin-PIN nicht denselben PIN wie `Main` verwenden darf und dass der Main-PIN nicht auf einen bereits benannten PIN gesetzt werden darf.
-- Als Haupt-Admin: bestehenden benannten Admin-PIN über `PIN ändern` im gleichen Formular ändern; Autorisierung mit altem PIN des Eintrags oder Main-PIN prüfen.
-- Als Haupt-Admin: benannten Admin über `Master berechtigen` zum zusätzlichen Master Admin machen, mit diesem Admin anmelden und Master-only Aktion ohne zusätzliche PIN-Abfrage sehen.
+- Als Master Admin: neuen persönlichen Admin-PIN erstellen und direkt danach `Admin-Zugang kopieren` prüfen.
+- Als Master Admin: prüfen, dass der reservierte Admin-Name nicht über das UI erstellt werden kann.
+- Als Master Admin: PIN eines Nicht-Master-Admins über `PIN ändern` ändern; Autorisierung mit eigenem Master-Admin-PIN prüfen.
+- Als Master Admin: prüfen, dass `PIN ändern` und `PIN löschen` bei anderen Master Admins nicht erlaubt sind.
+- Als Master Admin: Admin über `Master berechtigen` zum zusätzlichen Master Admin machen, mit diesem Admin anmelden und Master-only Aktion ohne zusätzliche PIN-Abfrage sehen.
+- Wenn nur ein Master Admin vorhanden ist: `PIN löschen` und `Master entziehen` sind nicht erlaubt.
 - Als Master Admin: zusätzliche Master-Berechtigung über `Master entziehen` wieder entfernen und prüfen, dass die Master-only Bereiche danach ausgeblendet sind.
-- Als benannter Admin ohne Master-Recht: Master-only Bereiche und Aktionen sind nicht sichtbar.
-- Als benannter Master Admin: eigenen Admin-PIN ändern und prüfen, dass die Sitzung danach weiter funktioniert und der neue Zugang direkt kopiert werden kann.
-- Als benannter Master Admin: eigenen Admin-PIN löschen versuchen und prüfen, dass die App dies blockiert.
+- Als Admin ohne Master-Recht: Master-only Bereiche und Aktionen sind nicht sichtbar.
+- Als Master Admin: eigenen Admin-PIN ändern und prüfen, dass die Sitzung danach weiter funktioniert und der neue Zugang direkt kopiert werden kann.
+- Als Master Admin: eigenen Admin-PIN löschen versuchen und prüfen, dass die App dies blockiert.
 - Wenn bereits angemeldet: im Tab `Anmeldung` erneut anmelden, Dialog `Zuerst abmelden und dann neu anmelden?` bestätigen und prüfen, dass die neue Anmeldung aktiv ist.
 - Ohne Event-Link: Admin-Login öffnet ein bekanntes bestehendes Event, auch wenn es vergangen ist.
-- Im Event-Tab: benannten Check-in-PIN mit Name oder Position erstellen, über `PIN ändern` ändern und direkt aus der Liste kopieren.
+- Im Event-Tab: Check-in-PIN mit Name oder Position erstellen, über `PIN ändern` ändern und direkt aus der Liste kopieren.
 - Prüfen, dass Check-in Staff nur mit passendem Name/PIN-Paar verbinden kann.
 
 ## Test 4 — Check-in Staff Login

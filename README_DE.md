@@ -124,8 +124,8 @@ https://DEIN-GITHUB-USER.github.io/DEIN-REPO/?setup=1
 
 Dann:
 
-1. Eventname eingeben, z.B. `Main Event`.
-2. Event-Link Name stabil halten und ohne Artist, Line-up oder Sponsor wählen, z.B. `Main Event`.
+1. Eventname eingeben, z.B. `Club Event`.
+2. Event-Link Name stabil halten und ohne Artist, Line-up oder Sponsor wählen, z.B. `Club Event`.
 3. Globalen Admin-PIN eingeben.
 4. Check-in Name und PIN für dieses Event setzen.
 5. Kategorien prüfen.
@@ -168,17 +168,9 @@ CSV-Import und CSV-Export gelten immer nur für das aktuell geöffnete Event. F�
 
 ## Nutzung am Event
 
-Kurze operative Dokumente für den Eventtag:
+Die README bleibt technische Referenz und Setup-Dokumentation.
 
-```text
-docs/operations/ADMIN_EVENTTAG_KURZANLEITUNG_DE.md
-docs/operations/CHECKIN_PERSONAL_KURZANLEITUNG_DE.md
-docs/operations/EVENTTAG_NOTFALLKARTE_DE.md
-```
-
-Die README bleibt technische Referenz und Setup-Dokumentation. Für den Einlass sollten die kurzen Operations-Dokumente verwendet werden.
-
-In der App gibt es zusätzlich den Tab `Anleitung`. Check-in Staff sieht die Check-in-Anleitung und Notfallkarte. Admins sehen zusätzlich die Admin-Anleitung. Master Admins können diese globalen Texte direkt in der App bearbeiten; sie gelten für alle Events.
+Für den Einlass gibt es in der App den Tab `Anleitung`. Check-in Staff sieht die Check-in-Anleitung und Notfallkarte. Admins sehen zusätzlich die Admin-Anleitung. Master Admins können diese globalen Texte direkt in der App bearbeiten; sie gelten für alle Events.
 
 ### Grundkonzepte
 
@@ -190,8 +182,7 @@ In der App gibt es zusätzlich den Tab `Anleitung`. Check-in Staff sieht die Che
 
 1. Admins sind global, nicht pro Event.
 2. Admins betreiben Events operativ: Gäste, Check-in-PINs, Zeitfenster, Korrekturen und Exporte.
-3. Master Admins dürfen zusätzlich Admin-PINs verwalten, Events verstecken oder löschen und Master-Rechte vergeben oder entziehen.
-4. `Main` plus Main-PIN ist immer Master Admin. Der Main Admin soll nur im Notfall verwendet werden.
+3. Master Admins dürfen zusätzlich Events verstecken oder löschen, Master-Rechte vergeben oder entziehen und PINs von Nicht-Master-Admins verwalten.
 
 ### Neuen Event erstellen
 

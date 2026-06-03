@@ -46,7 +46,6 @@ const ADMIN_PIN_SCOPE = "global-admin";
 const ADMIN_MASTER_NAMED_HASHES_FIELD = "adminMasterNamedPinHashes";
 const MAIN_ADMIN_NAME = "Main";
 const MAIN_ADMIN_NAME_KEY = "main";
-const MAIN_ADMIN_PIN_ID = "main-admin-pin";
 const PIN_MIN_LENGTH = 4;
 const CHECKIN_UNDO_WINDOW_MS = 60 * 1000;
 
@@ -87,8 +86,7 @@ const GUIDE_DEFINITIONS = {
 ## Admin Logins
 1. Admins sind global, nicht pro Event.
 2. Admins betreiben Events operativ: Gäste, Check-in-PINs, Zeitfenster, Korrekturen und Exporte.
-3. Master Admins dürfen zusätzlich Admin-PINs verwalten, Events verstecken oder löschen und Master-Rechte vergeben oder entziehen.
-4. Main plus Main-PIN ist immer ein Master Admin. Der Main Admin soll nur im Notfall verwendet werden.
+3. Master Admins dürfen zusätzlich Events verstecken oder löschen, Master-Rechte vergeben oder entziehen und PINs von Nicht-Master-Admins verwalten.
 
 ## Neuen Event erstellen
 1. Als Admin anmelden und Tab Events öffnen.
@@ -427,7 +425,9 @@ function renderEventSetupSections(options = {}) {
   const visibleKnownEvents = knownEvents.filter((event) => isAdmin() || !isEventHidden(event));
   const showEventDirectory = isAdmin() || visibleKnownEvents.length;
   const omitAdminPin = Boolean(options.omitAdminPin);
-  const setupName = getAdminSession()?.displayName || appState.member?.displayName || MAIN_ADMIN_NAME;
+  const setupName = getAdminSession()?.displayName || appState.member?.displayName || "";
+  const setupNameVisible = isMainAdminName(setupName) ? "" : setupName;
+  const setupNameRequired = setupNameVisible || !isAdmin() ? "required" : "";
   const defaultEventName = CONFIG.app?.defaultEventName || "Event Gästeliste";
   return `
     ${showEventDirectory ? `
@@ -461,7 +461,7 @@ function renderEventSetupSections(options = {}) {
         </div>
         ${omitAdminPin ? "" : `
           <div class="form-row">
-            <label for="adminPin">Main-PIN</label>
+            <label for="adminPin">Admin-PIN</label>
             <input id="adminPin" type="password" minlength="${PIN_MIN_LENGTH}" required placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
           </div>
         `}
@@ -476,7 +476,7 @@ function renderEventSetupSections(options = {}) {
         </div>
         <div class="form-row">
           <label for="setupName">Admin-Name</label>
-          <input id="setupName" value="${escapeHtml(setupName)}" required />
+          <input id="setupName" value="${escapeHtml(setupNameVisible)}" ${setupNameRequired} />
         </div>
         <div class="form-row" style="grid-column:1/-1">
           <label for="categoryList">Kategorien, eine pro Zeile</label>
@@ -549,7 +549,9 @@ async function createEventFromForm(event) {
   const adminPin = val("adminPin") || (isAdmin() ? getAdminSession()?.pin || "" : "");
   const checkinDisplayName = val("setupCheckinName").trim();
   const checkinPin = val("checkinPin");
-  const displayName = val("setupName").trim() || MAIN_ADMIN_NAME;
+  const typedDisplayName = val("setupName").trim();
+  const fallbackDisplayName = isAdmin() ? getAdminSession()?.displayName || appState.member?.displayName || "" : "";
+  const displayName = typedDisplayName || fallbackDisplayName;
   const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
   const categories = val("categoryList").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 
@@ -567,6 +569,14 @@ async function createEventFromForm(event) {
   }
   if (!checkinDisplayName) {
     result.innerHTML = `<p class="notice error">Check-in Name / Position ist Pflicht.</p>`;
+    return;
+  }
+  if (!displayName) {
+    result.innerHTML = `<p class="notice error">Admin-Name ist Pflicht.</p>`;
+    return;
+  }
+  if (typedDisplayName && isMainAdminName(typedDisplayName)) {
+    result.innerHTML = `<p class="notice error">Dieser Admin-Name ist reserviert. Bitte persönlichen Admin-Namen verwenden.</p>`;
     return;
   }
   if (adminPin.length < PIN_MIN_LENGTH || checkinPin.length < PIN_MIN_LENGTH) {
@@ -669,9 +679,11 @@ function renderRolePinTab() {
 
 function renderRolePinSections() {
   const currentRole = appState.member?.role || "checkin";
-  const displayName = appState.member?.displayName || localStorage.getItem("guestlist:memberName") || "";
+  const storedDisplayName = appState.member?.displayName || localStorage.getItem("guestlist:memberName") || "";
+  const displayName = isMainAdminName(storedDisplayName) ? "" : storedDisplayName;
   const linked = hasLinkedRole();
   const roleLabel = roleDisplayLabel(appState.member?.role);
+  const linkedName = visibleMemberName(appState.member);
   const accessNotice = appState.member?.role === "checkin" && !isActiveCheckinStaff()
     ? `<p class="notice warning">${escapeHtml(checkinStaffAccessMessage())}</p>`
     : "";
@@ -683,7 +695,7 @@ function renderRolePinSections() {
     <section class="card">
       <h2>Anmelden</h2>
       ${eventContext}
-      ${linked ? `<p class="notice success">Angemeldet als <strong>${escapeHtml(roleLabel)}</strong>: ${escapeHtml(appState.member?.displayName || "")}${appState.member?.deviceLabel ? ` · ${escapeHtml(appState.member.deviceLabel)}` : ""}</p>` : `<p class="notice info">Melde dich an, um Gäste zu suchen und einzuchecken. Admins sehen zusätzlich Import, Backup, PINs und aktive Zugänge.</p>`}
+      ${linked ? `<p class="notice success">Angemeldet als <strong>${escapeHtml(roleLabel)}</strong>${linkedName ? `: ${escapeHtml(linkedName)}` : ""}${appState.member?.deviceLabel ? ` · ${escapeHtml(appState.member.deviceLabel)}` : ""}</p>` : `<p class="notice info">Melde dich an, um Gäste zu suchen und einzuchecken. Admins sehen zusätzlich Import, Backup, PINs und aktive Zugänge.</p>`}
       ${accessNotice}
       <form id="joinForm" class="grid two role-pin-form">
         <div class="form-row">
@@ -696,11 +708,11 @@ function renderRolePinSections() {
         <div class="form-row">
           <label for="memberPin">PIN</label>
           <input id="memberPin" type="password" minlength="${PIN_MIN_LENGTH}" required autocomplete="off" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
-          <p class="field-help">Admin: Main-PIN mit Name Main oder persönlicher Admin-PIN. Check-in Staff: Name/Position und Event-PIN müssen zusammenpassen.</p>
+          <p class="field-help">Admin: persönlicher Admin-PIN. Check-in Staff: Name/Position und Event-PIN müssen zusammenpassen.</p>
         </div>
         <div class="form-row">
           <label for="memberName">Name</label>
-          <input id="memberName" value="${escapeHtml(displayName)}" required placeholder="Admin: Main / Check-in: Check-in Team" />
+          <input id="memberName" value="${escapeHtml(displayName)}" required placeholder="Admin-Name / Check-in-Position" />
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" id="joinSubmitBtn" type="submit" disabled>Anmelden</button>
@@ -747,12 +759,12 @@ function renderAdminPinSection(isMaster = false) {
       <form id="adminPinForm" class="grid two">
         <input id="adminPinEditId" type="hidden" />
         <div class="form-row">
-          <label for="adminPinAuthPin">Bisheriger PIN oder Main-PIN</label>
-          <input id="adminPinAuthPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="alter PIN oder Main-PIN" />
+          <label for="adminPinAuthPin">Dein Master-Admin-PIN</label>
+          <input id="adminPinAuthPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="Master-Admin-PIN" />
         </div>
         <div class="form-row">
           <label for="adminPinName">Name Administrator:in</label>
-          <input id="adminPinName" autocomplete="name" placeholder="Main oder z.B. Robert" />
+          <input id="adminPinName" autocomplete="name" placeholder="Admin-Name" required />
         </div>
         <div class="form-row">
           <label for="adminPinNew">Neuer Admin-PIN</label>
@@ -904,6 +916,10 @@ function resetAdminPinForm() {
 
 function startAdminPinEdit(pin) {
   if (!pin) return;
+  if (isOtherVisibleMasterAdmin(pin)) {
+    notify(otherMasterPinGuardMessage(), "warning");
+    return;
+  }
   const editInput = document.getElementById("adminPinEditId");
   const authInput = document.getElementById("adminPinAuthPin");
   const nameInput = document.getElementById("adminPinName");
@@ -937,17 +953,21 @@ async function joinEventFromForm(event) {
 
   const role = val("memberRole");
   const pin = val("memberPin");
-  const displayName = val("memberName").trim() || (role === "admin" ? MAIN_ADMIN_NAME : "Check-in");
+  const displayName = val("memberName").trim() || (role === "admin" ? "" : "Check-in");
   const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
 
   if (pin.length < PIN_MIN_LENGTH) {
     result.innerHTML = `<p class="notice warning">PIN ist zu kurz. Bitte den vollständigen PIN mit mindestens ${PIN_MIN_LENGTH} Zeichen eingeben.</p>`;
     return;
   }
+  if (role === "admin" && !displayName) {
+    result.innerHTML = `<p class="notice warning">Admin-Name ist Pflicht.</p>`;
+    return;
+  }
 
   if (hasLinkedRole()) {
     const currentRole = roleDisplayLabel(appState.member?.role) || "Rolle";
-    const currentName = appState.member?.displayName || "";
+    const currentName = visibleMemberName(appState.member);
     const confirmed = window.confirm(`Dieses Gerät ist bereits als ${currentRole}${currentName ? `: ${currentName}` : ""} angemeldet.\n\nZuerst abmelden und dann neu anmelden?`);
     if (!confirmed) {
       result.innerHTML = `<p class="notice info">Anmeldung abgebrochen. Dieses Gerät bleibt angemeldet.</p>`;
@@ -1127,7 +1147,7 @@ async function verifyGlobalAdminPin(pin, displayName, deviceLabel, fallbackAutho
   if (!securitySnap?.exists()) return;
   if ((await mainAdminPinInputMatchesSecurity(securitySnap.data(), pin)) && !isMainAdminName(displayName)) {
     await removeCurrentMemberFromEvents(connectedEventIds);
-    throw new Error('Für den Main-PIN muss als Name "Main" eingegeben werden.');
+    throw new Error("Admin-Name passt nicht zu diesem PIN.");
   }
 }
 
@@ -1146,7 +1166,7 @@ async function ensureGlobalAdminSecurity(pin, displayName, deviceLabel, fallback
     throw new Error("Globales Admin-Security-Dokument fehlt und kein bestehender Admin-Event ist konfiguriert.");
   }
   if (!isMainAdminName(displayName)) {
-    throw new Error('Für den Main-PIN muss als Name "Main" eingegeben werden.');
+    throw new Error("Globale Admin-Konfiguration fehlt. Bitte initialen Admin-Zugang technisch einrichten.");
   }
   await connectLegacyAdminToEvent(authorizingEventId, pin, displayName, deviceLabel);
 
@@ -1177,7 +1197,7 @@ async function removeCurrentMemberFromEvents(eventIds) {
 function setupErrorMessage(error) {
   const message = String(error?.message || error || "");
   if (/permission|insufficient/i.test(message)) {
-    return "Main-PIN ist falsch oder die Firebase-Regeln blockieren die Prüfung.";
+    return "Admin-PIN ist falsch oder die Firebase-Regeln blockieren die Prüfung.";
   }
   return message || "Unbekannter Fehler.";
 }
@@ -1291,7 +1311,13 @@ function renderShell() {
 function updateFooterStatus() {
   if (!els.footerText) return;
   const role = roleDisplayLabel(appState.member?.role) || "User";
-  els.footerText.textContent = `${role} · ${appState.member?.displayName || ""} · ${appState.member?.deviceLabel || ""} · Event: ${eventUrlId(appState.eventId) || "-"}`;
+  const parts = [
+    role,
+    visibleMemberName(appState.member),
+    appState.member?.deviceLabel || "",
+    `Event: ${eventUrlId(appState.eventId) || "-"}`
+  ].filter(Boolean);
+  els.footerText.textContent = parts.join(" · ");
 }
 
 function adminMobileTabs(tabs) {
@@ -2754,7 +2780,7 @@ async function renderEventVisibilitySection() {
       <p class="notice ${hidden ? "warning" : "info"}">
         <strong>${hidden ? "Versteckt" : "Sichtbar"}:</strong>
         ${hidden
-          ? "Dieses Event ist aus normalen Eventlisten ausgeblendet. Nur Haupt-Admins können es wieder sichtbar machen."
+          ? "Dieses Event ist aus normalen Eventlisten ausgeblendet. Nur Master Admins können es wieder sichtbar machen."
           : "Dieses Event ist in normalen Eventlisten sichtbar."}
       </p>
       <div class="actions">
@@ -2789,7 +2815,7 @@ async function toggleCurrentEventVisibility() {
   const hidden = isEventHidden(appState.event);
   const eventName = appState.event?.name || appState.eventId;
   const nextHidden = !hidden;
-  if (nextHidden && !window.confirm(`Event "${eventName}" aus normalen Eventlisten verstecken? Nur Haupt-Admins können es wieder sichtbar machen.`)) {
+  if (nextHidden && !window.confirm(`Event "${eventName}" aus normalen Eventlisten verstecken? Nur Master Admins können es wieder sichtbar machen.`)) {
     return;
   }
 
@@ -2883,7 +2909,7 @@ async function renderEventDeleteSection() {
     <section class="card danger-section event-delete-card">
       <h2>Event löschen</h2>
       <p class="notice error"><strong>Master-only:</strong> Löscht dieses Event inklusive Gäste, Admin-Notizen, aktiver Anmeldungen, Event-PINs und Audit Log. Die globalen Anleitungen bleiben erhalten.</p>
-      ${isAuthorizingEvent ? `<p class="notice warning">Dieses Event ist aktuell das Haupt-Admin-Anker-Event.${replacement ? ` Vor dem Löschen wird der Anker auf <strong>${escapeHtml(replacement.name || replacement.id)}</strong> umgestellt.` : " Lege zuerst ein anderes Event an, bevor dieses Event gelöscht werden kann."}</p>` : ""}
+      ${isAuthorizingEvent ? `<p class="notice warning">Dieses Event ist aktuell das globale Admin-Anker-Event.${replacement ? ` Vor dem Löschen wird der Anker auf <strong>${escapeHtml(replacement.name || replacement.id)}</strong> umgestellt.` : " Lege zuerst ein anderes Event an, bevor dieses Event gelöscht werden kann."}</p>` : ""}
       <div class="actions">
         <button class="btn-danger" id="deleteEventBtn" type="button" ${cannotDeleteAuthorizingEvent ? "disabled" : ""}>Event endgültig löschen</button>
       </div>
@@ -2971,7 +2997,7 @@ async function prepareAdminSecurityForEventDelete(eventId) {
 
   const replacement = await findReplacementAuthorizingEvent(eventId);
   if (!replacement) {
-    throw new Error("Dieses Event ist das Haupt-Admin-Anker-Event. Lege oder öffne zuerst ein anderes Event, bevor du dieses Event löschst.");
+    throw new Error("Dieses Event ist das globale Admin-Anker-Event. Lege oder öffne zuerst ein anderes Event, bevor du dieses Event löschst.");
   }
 
   const session = getAdminSession();
@@ -2979,13 +3005,13 @@ async function prepareAdminSecurityForEventDelete(eventId) {
   let memberSnap = await getMemberSnapForEvent(replacement.id);
   if (!memberSnap.exists()) {
     if (!reconnectPin) {
-      throw new Error("Für das Ersatz-Event ist eine erneute Haupt-Admin-Anmeldung nötig.");
+      throw new Error("Für das Ersatz-Event ist eine erneute Master-Admin-Anmeldung nötig.");
     }
     await connectAdminToEvent(replacement.id, reconnectPin, session?.displayName || appState.member?.displayName || MAIN_ADMIN_NAME, appState.member?.deviceLabel || "");
     memberSnap = await getMemberSnapForEvent(replacement.id);
   }
   if (!memberSnap.exists() || !adminMasterHashMatches(data, memberSnap.data()?.pinHash, memberSnap.data()?.pinNameHash)) {
-    throw new Error("Das Ersatz-Event hat keine gültige Haupt-Admin-Sitzung.");
+    throw new Error("Das Ersatz-Event hat keine gültige Master-Admin-Sitzung.");
   }
 
   await updateDoc(adminSecurityRef(), {
@@ -3323,7 +3349,7 @@ function auditEntryToCsvRow(entry) {
     "Guest ID": entry.guestId || "",
     "Gast": entry.guestName || "",
     "Kategorie": entry.category || "",
-    "Mitarbeiter": entry.actorName || "",
+    "Mitarbeiter": visibleActorName(entry.actorName),
     "Gerät": entry.deviceLabel || "",
     "Details": entry.details ? JSON.stringify(entry.details) : ""
   };
@@ -3381,7 +3407,7 @@ async function saveCheckinPinFromForm(event) {
 
     resetCheckinPinForm();
     await renderNamedPinList("checkin");
-    const message = editId ? "Benannter Check-in-PIN geändert." : "Benannter Check-in-PIN gespeichert.";
+    const message = editId ? "Check-in-PIN geändert." : "Check-in-PIN gespeichert.";
     if (result) result.innerHTML = `<p class="notice success">${escapeHtml(message)}</p>`;
     notify(message, "success");
   } catch (error) {
@@ -3408,19 +3434,13 @@ async function saveAdminPinFromForm(event) {
   const newPinConfirm = val("adminPinConfirm");
   const editId = val("adminPinEditId");
   const isEdit = Boolean(editId);
-  const isMainEdit = editId === MAIN_ADMIN_PIN_ID;
   const isMainName = normalizedAdminName === MAIN_ADMIN_NAME_KEY;
-  const isMainTarget = isMainName && (!isEdit || isMainEdit);
   if (!normalizedAdminName) {
-    notify('Name ist Pflicht. Für den Main-PIN bitte "Main" eingeben.', "warning");
+    notify("Name ist Pflicht.", "warning");
     return;
   }
-  if (isMainEdit && !isMainName) {
-    notify('Für den Main-PIN muss der Name "Main" bleiben.', "warning");
-    return;
-  }
-  if (isEdit && !isMainEdit && isMainName) {
-    notify('"Main" ist für den Main-PIN reserviert. Bitte abbrechen oder einen anderen Namen verwenden.', "warning");
+  if (isMainName) {
+    notify("Dieser Admin-Name ist reserviert. Bitte persönlichen Admin-Namen verwenden.", "warning");
     return;
   }
   if (authPin.length < PIN_MIN_LENGTH || newPin.length < PIN_MIN_LENGTH) {
@@ -3431,8 +3451,6 @@ async function saveAdminPinFromForm(event) {
     notify("Neuer Admin-PIN und Wiederholung stimmen nicht überein.", "warning");
     return;
   }
-  const displayName = appState.member?.displayName || MAIN_ADMIN_NAME;
-  const deviceLabel = appState.member?.deviceLabel || "";
   try {
     if (result) result.innerHTML = `<p class="notice info">Admin-PIN wird geprüft…</p>`;
 
@@ -3444,57 +3462,11 @@ async function saveAdminPinFromForm(event) {
     const securityData = securitySnap.data();
     const mainPinMatches = await mainAdminPinInputMatchesSecurity(securityData, authPin);
     const namedAdminPins = namedPinsFromSecurity(securityData, "admin");
-
-    if (isMainTarget) {
-      if (!mainPinMatches) {
-        const message = "Bisheriger Main-PIN ist falsch.";
-        notify(message, "warning");
-        if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
-        return;
-      }
-      if (authPin === newPin) {
-        const message = "Der neue Main-PIN muss anders sein.";
-        notify(message, "warning");
-        if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
-        return;
-      }
-      const collidingNamedPin = await findNamedAdminPinUsingLiteralPin(namedAdminPins, newPin);
-      if (collidingNamedPin) {
-        const message = adminPinCollisionMessage(collidingNamedPin);
-        notify(message, "warning");
-        if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
-        return;
-      }
-
-      const adminPinHash = await hashAdminPin(newPin);
-      const anchorEventId = securityData.authorizingEventId || GLOBAL_ADMIN_EVENT_ID || appState.eventId;
-      await updateDoc(adminSecurityRef(), {
-        adminPinHash,
-        adminPinHashes: [adminPinHash],
-        updatedAt: serverTimestamp()
-      });
-      for (const eventId of uniqueEventIds([anchorEventId, appState.eventId])) {
-        await connectAdminToEvent(eventId, newPin, MAIN_ADMIN_NAME, deviceLabel);
-      }
-
-      saveAdminSession(newPin, MAIN_ADMIN_NAME);
-      const memberSnap = await getMemberSnapForEvent(appState.eventId);
-      if (memberSnap.exists()) appState.member = { id: memberSnap.id, ...memberSnap.data() };
-      appState.ui.masterAdmin = await currentAdminIsMasterAdmin();
-      updateFooterStatus();
-      await addAudit("admin_pin_reset", { name: "Admin-PIN" }, { scope: "global_admin" });
-      resetAdminPinForm();
-      renderImmediateAdminAccessCopy(result, {
-        message: "Main-PIN gespeichert.",
-        displayName: MAIN_ADMIN_NAME,
-        pin: newPin
-      });
-      notify("Main-PIN gespeichert.", "success");
-      return;
-    }
+    const currentAdminPinMatches = mainPinMatches
+      || await currentNamedAdminPinInputMatches(namedAdminPins, authPin);
 
     if (await mainAdminPinInputMatchesSecurity(securityData, newPin)) {
-      const message = "Dieser PIN ist bereits der Main-PIN. Bitte einen anderen PIN wählen.";
+      const message = "Dieser PIN ist bereits für einen anderen Admin-Zugang reserviert. Bitte einen anderen PIN wählen.";
       notify(message, "warning");
       if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
       return;
@@ -3510,10 +3482,16 @@ async function saveAdminPinFromForm(event) {
     let existingNamedPin = null;
     if (isEdit) {
       existingNamedPin = namedAdminPins.find((pin) => namedPinEditKey(pin) === editId);
-      if (!existingNamedPin) throw new Error("Der benannte Admin-PIN wurde nicht gefunden.");
-      const oldNamedPinMatches = await namedAdminPinInputMatchesPin(existingNamedPin, authPin);
-      if (!mainPinMatches && !oldNamedPinMatches) {
-        const message = "Bisheriger Admin-PIN oder Main-PIN ist falsch.";
+      if (!existingNamedPin) throw new Error("Der Admin-PIN wurde nicht gefunden.");
+      if (isOtherVisibleMasterAdmin(existingNamedPin)) {
+        const message = otherMasterPinGuardMessage();
+        notify(message, "warning");
+        if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
+        await renderNamedPinList("admin");
+        return;
+      }
+      if (!currentAdminPinMatches) {
+        const message = "Dein Master-Admin-PIN ist falsch.";
         notify(message, "warning");
         if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
         return;
@@ -3524,8 +3502,8 @@ async function saveAdminPinFromForm(event) {
         await reconnectNamedAdminSessionAfterPinChange(securityData, newPin, namedDisplayName);
       }
     } else {
-      if (!mainPinMatches) {
-        const message = "Zum Erstellen bitte den Main-PIN eingeben.";
+      if (!currentAdminPinMatches) {
+        const message = "Zum Erstellen bitte deinen Master-Admin-PIN eingeben.";
         notify(message, "warning");
         if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
         return;
@@ -3540,11 +3518,11 @@ async function saveAdminPinFromForm(event) {
     resetAdminPinForm();
     await renderNamedPinList("admin");
     renderImmediateAdminAccessCopy(result, {
-      message: isEdit ? "Benannter Admin-PIN geändert." : "Benannter Admin-PIN gespeichert.",
+      message: isEdit ? "Admin-PIN geändert." : "Admin-PIN gespeichert.",
       displayName: namedDisplayName,
       pin: newPin
     });
-    notify(isEdit ? "Benannter Admin-PIN geändert." : "Benannter Admin-PIN gespeichert.", "success");
+    notify(isEdit ? "Admin-PIN geändert." : "Admin-PIN gespeichert.", "success");
   } catch (error) {
     console.error(error);
     notify(`Admin-PIN konnte nicht gespeichert werden: ${error.message || error}`, "error");
@@ -3581,7 +3559,7 @@ async function replaceNamedPinInEvent(eventId, role, editId, pin, displayName) {
   const data = securitySnap.data();
   const pins = namedPinsFromSecurity(data, role);
   const existing = pins.find((existingPin) => namedPinEditKey(existingPin) === editId);
-  if (!existing) throw new Error("Der benannte PIN wurde nicht gefunden.");
+  if (!existing) throw new Error("Der PIN wurde nicht gefunden.");
 
   const entry = await namedPinEntry(scopeId, role, pin, displayName, existing.id || createNamedPinId());
   if (role === "admin" && existing.masterAdmin === true) entry.masterAdmin = true;
@@ -3678,22 +3656,38 @@ async function renderNamedPinList(role) {
       : adminPinsFromSecurity(securityData);
     const canEditAdminPins = role === "admin" && appState.ui.masterAdmin === true;
     const canEditCheckinPins = role === "checkin" && isAdmin();
-    target.innerHTML = pins.length ? pins.map((pin, listIndex) => `
-      <div class="pin-list-row">
-        <span>
-          <strong>${escapeHtml(pin.displayName || pin.displayNameKey || "Ohne Name")}</strong>
-          ${role === "checkin" ? `<span class="small pin-value">${escapeHtml(checkinPinDisplayValue(pin))}</span>` : ""}
-          ${role === "admin" && pin.masterAdmin ? `<span class="badge info">Master Admin</span>` : ""}
-        </span>
-        <span class="pin-list-actions">
-          ${role === "checkin" ? `<button class="btn-secondary" type="button" data-copy-checkin-pin="${listIndex}" ${pin.pinValue ? "" : "disabled"}>Kopieren</button>` : ""}
-          ${canEditCheckinPins ? `<button class="btn-secondary" type="button" data-edit-checkin-pin="${listIndex}">PIN ändern</button>` : ""}
-          ${canEditAdminPins ? `<button class="btn-secondary" type="button" data-edit-named-admin-pin="${listIndex}">PIN ändern</button>` : ""}
-          ${canEditAdminPins && pin.kind !== "main" ? `<button class="${pin.masterAdmin ? "btn-warning" : "btn-secondary"}" type="button" data-toggle-named-admin-master="${listIndex}">${pin.masterAdmin ? "Master entziehen" : "Master berechtigen"}</button>` : ""}
-          ${pin.kind === "main" ? "" : `<button class="btn-danger" type="button" data-delete-named-pin="${escapeHtml(role)}" data-pin-index="${listIndex}">PIN löschen</button>`}
-        </span>
-      </div>
-    `).join("") : `<p class="small">${config.empty}</p>`;
+    target.innerHTML = pins.length ? pins.map((pin, listIndex) => {
+      const protectsLastMaster = role === "admin" && isLastVisibleMasterAdmin(pin, pins);
+      const protectsOtherMasterPin = role === "admin" && isOtherVisibleMasterAdmin(pin);
+      const protectsMasterPinDelete = role === "admin" && pin.masterAdmin;
+      const protectsCurrentAdminDelete = role === "admin" && isCurrentNamedAdminPin(pin);
+      const lastMasterAttrs = disabledButtonAttrs(protectsLastMaster, lastMasterGuardMessage());
+      const editAdminAttrs = disabledButtonAttrs(protectsOtherMasterPin, otherMasterPinGuardMessage());
+      const deleteAdminAttrs = disabledButtonAttrs(
+        protectsLastMaster || protectsCurrentAdminDelete || protectsMasterPinDelete,
+        protectsLastMaster
+          ? lastMasterGuardMessage()
+          : protectsCurrentAdminDelete
+            ? currentAdminPinDeleteGuardMessage()
+            : masterAdminPinDeleteGuardMessage()
+      );
+      return `
+        <div class="pin-list-row">
+          <span>
+            <strong>${escapeHtml(pin.displayName || pin.displayNameKey || "Ohne Name")}</strong>
+            ${role === "checkin" ? `<span class="small pin-value">${escapeHtml(checkinPinDisplayValue(pin))}</span>` : ""}
+            ${role === "admin" && pin.masterAdmin ? `<span class="badge info">Master Admin</span>` : ""}
+          </span>
+          <span class="pin-list-actions">
+            ${role === "checkin" ? `<button class="btn-secondary" type="button" data-copy-checkin-pin="${listIndex}" ${pin.pinValue ? "" : "disabled"}>Kopieren</button>` : ""}
+            ${canEditCheckinPins ? `<button class="btn-secondary" type="button" data-edit-checkin-pin="${listIndex}">PIN ändern</button>` : ""}
+            ${canEditAdminPins ? `<button class="btn-secondary" type="button" data-edit-named-admin-pin="${listIndex}" ${editAdminAttrs}>PIN ändern</button>` : ""}
+            ${canEditAdminPins && pin.kind !== "main" ? `<button class="${pin.masterAdmin ? "btn-warning" : "btn-secondary"}" type="button" data-toggle-named-admin-master="${listIndex}" ${pin.masterAdmin ? lastMasterAttrs : ""}>${pin.masterAdmin ? "Master entziehen" : "Master berechtigen"}</button>` : ""}
+            ${pin.kind === "main" ? "" : `<button class="btn-danger" type="button" data-delete-named-pin="${escapeHtml(role)}" data-pin-index="${listIndex}" ${role === "admin" ? deleteAdminAttrs : ""}>PIN löschen</button>`}
+          </span>
+        </div>
+      `;
+    }).join("") : `<p class="small">${config.empty}</p>`;
 
     target.querySelectorAll("[data-copy-checkin-pin]").forEach((button) => {
       const pin = pins[Number(button.dataset.copyCheckinPin)];
@@ -3725,18 +3719,47 @@ async function renderNamedPinList(role) {
 }
 
 function adminPinsFromSecurity(data) {
-  return [
-    {
-      kind: "main",
-      id: MAIN_ADMIN_PIN_ID,
-      displayName: MAIN_ADMIN_NAME,
-      displayNameKey: MAIN_ADMIN_NAME_KEY,
-      pinNameHash: "",
-      index: -1,
-      masterAdmin: true
-    },
-    ...namedPinsFromSecurity(data, "admin").map((pin) => ({ ...pin, kind: "named" }))
-  ];
+  return namedPinsFromSecurity(data, "admin").map((pin) => ({ ...pin, kind: "named" }));
+}
+
+function visibleMasterAdminCount(pins) {
+  return pins.filter((pin) => pin?.masterAdmin).length;
+}
+
+function isLastVisibleMasterAdmin(pin, pins) {
+  return Boolean(pin?.masterAdmin)
+    && visibleMasterAdminCount(pins) <= 1
+    && pins.some((candidate) => sameNamedPin(candidate, pin));
+}
+
+function isOtherVisibleMasterAdmin(pin) {
+  return Boolean(pin?.masterAdmin) && !isCurrentNamedAdminPin(pin);
+}
+
+async function isLastVisibleMasterAdminInSecurity(pin) {
+  const securitySnap = await getDoc(adminSecurityRef());
+  const pins = securitySnap.exists() ? adminPinsFromSecurity(securitySnap.data()) : [];
+  return isLastVisibleMasterAdmin(pin, pins);
+}
+
+function lastMasterGuardMessage() {
+  return "Mindestens ein Master Admin muss bestehen bleiben.";
+}
+
+function otherMasterPinGuardMessage() {
+  return "PINs anderer Master Admins können nicht geändert werden.";
+}
+
+function masterAdminPinDeleteGuardMessage() {
+  return "PINs von Master Admins können nicht gelöscht werden. Entziehe zuerst die Master-Berechtigung.";
+}
+
+function currentAdminPinDeleteGuardMessage() {
+  return "Den aktuell verwendeten Admin-PIN kannst du nicht löschen.";
+}
+
+function disabledButtonAttrs(disabled, message = "") {
+  return disabled ? `disabled title="${escapeHtml(message)}"` : "";
 }
 
 function namedPinsFromSecurity(data, role) {
@@ -3832,6 +3855,11 @@ function isCurrentNamedAdminPin(pin) {
   return appState.member?.pinNameHash === pin.pinNameHash;
 }
 
+async function currentNamedAdminPinInputMatches(namedAdminPins, pin) {
+  const currentNamedPin = namedAdminPins.find((entry) => isCurrentNamedAdminPin(entry));
+  return currentNamedPin ? namedAdminPinInputMatchesPin(currentNamedPin, pin) : false;
+}
+
 async function reconnectNamedAdminSessionAfterPinChange(securityData, newPin, displayName) {
   const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
   const eventIds = uniqueEventIds([
@@ -3854,12 +3882,19 @@ async function toggleNamedAdminMaster(pin) {
   if (!pin) return;
   const name = pin.displayName || pin.displayNameKey || "diesen Admin";
   const nextMaster = !pin.masterAdmin;
+  const result = document.getElementById("adminPinResult");
+  if (!nextMaster && await isLastVisibleMasterAdminInSecurity(pin)) {
+    const message = lastMasterGuardMessage();
+    notify(message, "warning");
+    if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
+    await renderNamedPinList("admin");
+    return;
+  }
   const message = nextMaster
     ? `${name} als zusätzlichen Master Admin berechtigen?`
     : `${name} die Master-Admin-Berechtigung entziehen?`;
   if (!window.confirm(message)) return;
 
-  const result = document.getElementById("adminPinResult");
   if (!(await requireMasterAdmin(nextMaster ? "Master-Admin berechtigen" : "Master-Admin entziehen"))) return;
 
   try {
@@ -3892,7 +3927,10 @@ async function setNamedAdminMasterStatus(pinToUpdate, masterAdmin) {
   const data = securitySnap.data();
   const pins = namedPinsFromSecurity(data, "admin");
   const target = pins.find((pin) => sameNamedPin(pin, pinToUpdate));
-  if (!target) throw new Error("Der benannte Admin-PIN wurde nicht gefunden.");
+  if (!target) throw new Error("Der Admin-PIN wurde nicht gefunden.");
+  if (!masterAdmin && isLastVisibleMasterAdmin(target, pins)) {
+    throw new Error(lastMasterGuardMessage());
+  }
 
   const nextPins = pins.map((pin) => {
     const { index, ...pinData } = pin;
@@ -3921,20 +3959,34 @@ async function setNamedAdminMasterStatus(pinToUpdate, masterAdmin) {
 async function deleteNamedPin(role, pin) {
   if (!pin) return;
   const config = namedPinConfig(role);
+  const result = document.getElementById(config.resultId);
+  if (role === "admin" && !(await requireMasterAdmin("Admin-PIN löschen"))) return;
+  if (role === "admin" && await isLastVisibleMasterAdminInSecurity(pin)) {
+    const message = lastMasterGuardMessage();
+    notify(message, "warning");
+    if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
+    await renderNamedPinList("admin");
+    return;
+  }
+  if (role === "admin" && isCurrentNamedAdminPin(pin)) {
+    const message = currentAdminPinDeleteGuardMessage();
+    notify(message, "warning");
+    if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
+    await renderNamedPinList("admin");
+    return;
+  }
+  if (role === "admin" && pin.masterAdmin) {
+    const message = masterAdminPinDeleteGuardMessage();
+    notify(message, "warning");
+    if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
+    await renderNamedPinList("admin");
+    return;
+  }
   const name = pin.displayName || pin.displayNameKey || "diesen Namen";
   const confirmed = window.confirm(`${config.label} für "${name}" löschen?`);
   if (!confirmed) return;
 
-  const result = document.getElementById(config.resultId);
-  if (role === "admin" && !(await requireMasterAdmin("Benannten Admin-PIN löschen"))) return;
-
   try {
-    if (role === "admin" && isCurrentNamedAdminPin(pin)) {
-      const message = "Den aktuell verwendeten Admin-PIN kannst du nicht löschen. Melde dich zuerst mit einem anderen Master Admin an.";
-      notify(message, "warning");
-      if (result) result.innerHTML = `<p class="notice warning">${escapeHtml(message)}</p>`;
-      return;
-    }
     await removeNamedPinFromEvent(appState.eventId, role, pin);
     await addAudit(role === "admin" ? "admin_pin_reset" : "pins_reset", { name: config.label }, {
       mode: "delete_named",
@@ -3963,6 +4015,12 @@ async function removeNamedPinFromEvent(eventId, role, pinToRemove) {
   const pins = namedPinsFromSecurity(data, role);
   const removed = pins.filter((pin) => sameNamedPin(pin, pinToRemove));
   if (!removed.length) return;
+  if (role === "admin" && removed.some((pin) => isLastVisibleMasterAdmin(pin, pins))) {
+    throw new Error(lastMasterGuardMessage());
+  }
+  if (role === "admin" && removed.some((pin) => pin.masterAdmin)) {
+    throw new Error(masterAdminPinDeleteGuardMessage());
+  }
 
   const removedHashes = new Set(removed.map((pin) => pin.pinNameHash));
   const remainingPins = pins
@@ -4031,7 +4089,7 @@ async function renderLoggedInMembersList() {
       return `
         <div class="pin-list-row">
           <span>
-            <strong>${escapeHtml(member.displayName || "Ohne Name")}</strong>
+            <strong>${escapeHtml(memberListDisplayName(member))}</strong>
             <span class="small">${escapeHtml(details)}</span>
           </span>
           <span class="pin-list-actions member-device-actions">
@@ -4134,7 +4192,7 @@ async function promptForDuplicateNamedMemberLogout(eventId, member) {
   }
   if (!duplicates.length) return;
 
-  const name = member.displayName || member.displayNameKey;
+  const name = memberListDisplayName(member);
   const deviceText = `${duplicates.length} ${duplicates.length === 1 ? "anderes Gerät" : "andere Geräte"}`;
   let shouldLogout = window.confirm(`${name} ist bereits auf ${deviceText} angemeldet.\n\nAndere Geräte jetzt abmelden?\n\nOK = abmelden`);
 
@@ -4242,7 +4300,7 @@ function renderAuditLine(entry) {
   return `
     <div class="log-line">
       <strong>${escapeHtml(labelForAction(entry.action))}</strong>
-      <div class="small">${formatTimestamp(entry.createdAt)} · ${escapeHtml(entry.actorName || "")} · ${escapeHtml(entry.deviceLabel || "")}</div>
+      <div class="small">${formatTimestamp(entry.createdAt)} · ${escapeHtml(visibleActorName(entry.actorName))} · ${escapeHtml(entry.deviceLabel || "")}</div>
       ${summary.subject ? `<div>${escapeHtml(summary.subject)}</div>` : ""}
       ${summary.detail ? `<div class="small log-details">${escapeHtml(summary.detail)}</div>` : ""}
     </div>
@@ -4251,7 +4309,8 @@ function renderAuditLine(entry) {
 
 function auditSummary(entry) {
   const details = entry.details && typeof entry.details === "object" ? entry.details : {};
-  const subject = entry.guestName || details.displayName || details.name || "";
+  const rawSubject = entry.guestName || details.displayName || details.name || "";
+  const subject = shouldHideReservedAdminNameInAudit(entry.action) ? visibleActorName(rawSubject) : rawSubject;
   const statusLabel = (value) => STATUS_META[value]?.label || value || "";
   const filterLabel = (value) => value === "all" ? "Alle" : (STATUS_META[value]?.label || value || "");
   const changed = (...items) => items.filter(Boolean).join(", ");
@@ -4323,9 +4382,16 @@ function auditSummary(entry) {
   }
 }
 
+function shouldHideReservedAdminNameInAudit(action) {
+  return String(action || "").startsWith("member_")
+    || action === "admin_pin_reset"
+    || action === "guide_update";
+}
+
 function pinAuditDetail(details) {
-  if (details.mode === "named") return `Benannter PIN gespeichert${details.displayName ? `: ${details.displayName}` : ""}`;
-  if (details.mode === "delete_named") return `Benannter PIN gelöscht${details.displayName ? `: ${details.displayName}` : ""}`;
+  const displayName = visibleActorName(details.displayName || "");
+  if (details.mode === "named") return `PIN gespeichert${displayName ? `: ${displayName}` : ""}`;
+  if (details.mode === "delete_named") return `PIN gelöscht${displayName ? `: ${displayName}` : ""}`;
   return "PIN geändert";
 }
 
@@ -4414,7 +4480,7 @@ function defaultGuide(guideId) {
 
 function renderGuideCard(guide, canEdit) {
   const updated = guide.updatedAt
-    ? `${formatTimestamp(guide.updatedAt)}${guide.updatedByName ? ` · ${escapeHtml(guide.updatedByName)}` : ""}`
+    ? `${formatTimestamp(guide.updatedAt)}${guide.updatedByName ? ` · ${escapeHtml(visibleActorName(guide.updatedByName))}` : ""}`
     : "Standardtext";
 
   return `
@@ -5119,9 +5185,28 @@ function adminPinCollisionMessage(pin) {
   return `Dieser PIN wird bereits für ${name} verwendet. Bitte einen anderen PIN wählen.`;
 }
 
+function isMainAdminIdentity(member) {
+  return member?.role === "admin"
+    && (isMainAdminName(member.displayName) || normalizeDisplayNameKey(member.displayNameKey) === MAIN_ADMIN_NAME_KEY);
+}
+
+function visibleMemberName(member) {
+  if (isMainAdminIdentity(member)) return "";
+  return member?.displayName || "";
+}
+
+function memberListDisplayName(member) {
+  if (isMainAdminIdentity(member)) return "Master Admin";
+  return member?.displayName || "Ohne Name";
+}
+
+function visibleActorName(name) {
+  return isMainAdminName(name) ? "Master Admin" : name || "";
+}
+
 function roleDisplayLabel(role = appState.member?.role) {
   if (role === "admin" && appState.ui.masterAdmin === true) {
-    return appState.ui.masterAdminKind === "named" ? "Benannter Master Admin" : "Master Admin";
+    return "Master Admin";
   }
   return ROLE_META[role] || role || "";
 }
@@ -5355,7 +5440,7 @@ function isEventAccessWindowOpen(event, now = new Date()) {
 }
 
 function checkinStaffAccessMessage(event = appState.event, now = new Date()) {
-  if (isEventHidden(event)) return "Dieses Event ist versteckt. Check-in Staff Zugriff ist gesperrt, bis ein Haupt-Admin das Event wieder sichtbar macht.";
+  if (isEventHidden(event)) return "Dieses Event ist versteckt. Check-in Staff Zugriff ist gesperrt, bis ein Master Admin das Event wieder sichtbar macht.";
   const accessWindow = checkinStaffAccessWindow(event);
   if (!accessWindow) return "Check-in Staff Zugriff ist nicht aktiv, weil kein Eventdatum gesetzt ist.";
   if (accessWindow.start >= accessWindow.end) return "Check-in Staff Zugriff ist nicht aktiv, weil Start und Ende ungültig sind.";
@@ -5407,7 +5492,7 @@ function checkinAccessStatus(event = appState.event, now = new Date()) {
     return {
       type: "warning",
       label: "Versteckt",
-      detail: "Check-in Staff kann sich nicht anmelden, bis ein Haupt-Admin das Event wieder sichtbar macht."
+      detail: "Check-in Staff kann sich nicht anmelden, bis ein Master Admin das Event wieder sichtbar macht."
     };
   }
 

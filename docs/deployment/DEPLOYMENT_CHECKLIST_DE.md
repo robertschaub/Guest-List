@@ -26,12 +26,11 @@
 - [ ] Event-Link kopiert
 - [ ] `Event-Zugang für Check-in Staff` im Tab `Event verwalten` geprüft
 - [ ] In-App-Anleitungen im Tab `Anleitung` geprüft und bei Bedarf angepasst
-- [ ] Admin-Kurzanleitung, Check-in-Kurzanleitung und Notfallkarte bereitgelegt
 
 ## Logins definieren und informieren
 
 - [ ] Master Admins festgelegt
-- [ ] Benannte Admins angelegt, falls nötig
+- [ ] Admin-Logins angelegt, falls nötig
 - [ ] Check-in-PINs pro Event definiert
 - [ ] Check-in-Team über Event-Link, Rolle, Name/Position und Check-in-PIN informiert
 - [ ] Ansprechperson für Problemfälle kommuniziert
