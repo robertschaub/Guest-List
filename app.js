@@ -6,7 +6,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore,
-  enableIndexedDbPersistence,
   collection,
   doc,
   getDoc,
@@ -224,6 +223,10 @@ const appState = {
   guestUnsubscribe: null,
   adminNotesUnsubscribe: null,
   auditUnsubscribe: null,
+  loggedInMembers: [],
+  loggedInMembersLoaded: false,
+  loggedInMembersUnsubscribe: null,
+  loggedInMembersEventId: "",
   checkInLocks: new Set(),
   currentTab: "checkin",
   ui: {
@@ -271,10 +274,6 @@ async function boot() {
     appState.auth = getAuth(appState.firebaseApp);
     appState.db = getFirestore(appState.firebaseApp);
 
-    enableIndexedDbPersistence(appState.db).catch((error) => {
-      console.warn("Firestore offline cache could not be enabled", error.code || error.message);
-    });
-
     setConnectionStatus(navigator.onLine ? "Online" : "Offline", navigator.onLine ? "ok" : "warn");
 
     onAuthStateChanged(appState.auth, async (user) => {
@@ -319,8 +318,7 @@ async function startApp() {
 
       const memberSnap = await getCurrentMemberSnap();
       if (memberSnap.exists()) {
-        appState.member = { id: memberSnap.id, ...memberSnap.data() };
-        loadMainApp();
+        resumeExistingMemberSession(memberSnap);
       } else {
         renderJoin();
       }
@@ -354,11 +352,19 @@ async function startApp() {
 
   const memberSnap = await getCurrentMemberSnap();
   if (memberSnap.exists()) {
-    appState.member = { id: memberSnap.id, ...memberSnap.data() };
-    loadMainApp();
+    resumeExistingMemberSession(memberSnap);
   } else {
     renderJoin();
   }
+}
+
+function resumeExistingMemberSession(memberSnap) {
+  appState.member = { id: memberSnap.id, ...memberSnap.data() };
+  persistLocalDeviceLabel(appState.member.deviceLabel);
+  loadMainApp();
+  window.setTimeout(() => {
+    void promptForDuplicateNamedMemberLogout(appState.eventId, appState.member);
+  }, 0);
 }
 
 async function getCurrentMemberSnap() {
@@ -1144,6 +1150,7 @@ async function joinAdminFromCredentials(pin, displayName, deviceLabel) {
 
     const memberSnap = await getDoc(memberRef(appState.user.uid));
     appState.member = { id: memberSnap.id, ...memberSnap.data() };
+    persistLocalDeviceLabel(appState.member.deviceLabel);
     appState.currentTab = "admin";
     await addAudit("member_login", { name: displayName }, { role: "admin", deviceLabel });
     await promptForDuplicateNamedMemberLogout(appState.eventId, appState.member);
@@ -1208,6 +1215,7 @@ async function joinCheckinStaffFromAllowedEvents(pin, displayName, deviceLabel) 
     appState.eventId = eventData.id;
     appState.event = eventData;
     appState.member = memberSnap.exists() ? { id: memberSnap.id, ...memberSnap.data() } : null;
+    persistLocalDeviceLabel(appState.member?.deviceLabel);
     appState.guests = [];
     appState.adminNotes = {};
     appState.adminNotesLoaded = false;
@@ -1354,6 +1362,7 @@ function loadMainApp() {
   if (isAdmin()) void refreshMasterAdminState();
   subscribeCurrentEvent();
   subscribeCurrentMember();
+  if (isAdmin()) ensureLoggedInMembersSubscription();
   if (hasActiveEventAccess()) {
     subscribeGuests();
     subscribeAdminNotes();
@@ -1557,6 +1566,7 @@ function subscribeCurrentMember() {
     }
 
     appState.member = { id: snapshot.id, ...snapshot.data() };
+    persistLocalDeviceLabel(appState.member.deviceLabel);
     if (isAdmin()) void refreshMasterAdminState({ rerender: false });
     renderShell();
     renderActiveTab();
@@ -4093,7 +4103,10 @@ async function reconnectNamedAdminSessionAfterPinChange(securityData, newPin, di
   saveAdminSession(newPin, displayName);
   if (appState.eventId) {
     const memberSnap = await getMemberSnapForEvent(appState.eventId);
-    if (memberSnap.exists()) appState.member = { id: memberSnap.id, ...memberSnap.data() };
+    if (memberSnap.exists()) {
+      appState.member = { id: memberSnap.id, ...memberSnap.data() };
+      persistLocalDeviceLabel(appState.member.deviceLabel);
+    }
   }
   appState.ui.masterAdmin = await currentAdminIsMasterAdmin();
   updateFooterStatus();
@@ -4283,69 +4296,112 @@ function sameNamedPin(left, right) {
   return Boolean(left.displayNameKey && right.displayNameKey && left.displayNameKey === right.displayNameKey);
 }
 
-async function renderLoggedInMembersList() {
+function renderLoggedInMembersList() {
   if (!isAdmin()) return;
   const target = document.getElementById("loggedInMembersList");
   if (!target) return;
 
-  try {
-    const snapshot = await getDocs(collection(appState.db, "events", appState.eventId, "members"));
-    const members = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
-      .sort((a, b) => {
-        const roleCompare = String(a.role || "").localeCompare(String(b.role || ""), "de");
-        if (roleCompare) return roleCompare;
-        return String(a.displayName || a.id).localeCompare(String(b.displayName || b.id), "de");
-      });
-
-    target.innerHTML = members.length ? members.map((member) => {
-      const isSelf = member.id === appState.user?.uid;
-      const roleLabel = ROLE_META[member.role] || member.role || "User";
-      const updated = formatTimestamp(member.updatedAt || member.createdAt);
-      const details = [
-        roleLabel,
-        member.deviceLabel || "",
-        updated ? `seit ${updated}` : "",
-        isSelf ? "dieses Gerät" : ""
-      ].filter(Boolean).join(" · ");
-      return `
-        <div class="pin-list-row">
-          <span>
-            <strong>${escapeHtml(memberListDisplayName(member))}</strong>
-            <span class="small">${escapeHtml(details)}</span>
-          </span>
-          <span class="pin-list-actions member-device-actions">
-            <input class="compact-input" data-device-label-for="${escapeHtml(member.id)}" value="${escapeHtml(member.deviceLabel || "")}" aria-label="Gerätename" />
-            <button class="btn-secondary" type="button" data-save-device-label="${escapeHtml(member.id)}" disabled>Name speichern</button>
-            <button class="btn-danger" type="button" data-force-logout="${escapeHtml(member.id)}" ${isSelf ? "disabled" : ""}>Abmelden</button>
-          </span>
-        </div>
-      `;
-    }).join("") : `<p class="small">Keine aktiven Anmeldungen.</p>`;
-
-    target.querySelectorAll("[data-device-label-for]").forEach((input) => {
-      const member = members.find((item) => item.id === input.dataset.deviceLabelFor);
-      const button = target.querySelector(`[data-save-device-label="${cssEscape(input.dataset.deviceLabelFor)}"]`);
-      input.addEventListener("input", () => {
-        if (button) button.disabled = input.value.trim() === String(member?.deviceLabel || "");
-      });
-    });
-    target.querySelectorAll("[data-save-device-label]").forEach((button) => {
-      const member = members.find((item) => item.id === button.dataset.saveDeviceLabel);
-      button.addEventListener("click", () => {
-        const input = target.querySelector(`[data-device-label-for="${cssEscape(button.dataset.saveDeviceLabel)}"]`);
-        void updateMemberDeviceLabel(member, input?.value || "");
-      });
-    });
-    target.querySelectorAll("[data-force-logout]").forEach((button) => {
-      const member = members.find((item) => item.id === button.dataset.forceLogout);
-      button.addEventListener("click", () => {
-        void forceLogoutMember(member);
-      });
-    });
-  } catch (error) {
-    console.error(error);
-    target.innerHTML = `<p class="notice error">Aktive Anmeldungen konnten nicht geladen werden.</p>`;
+  ensureLoggedInMembersSubscription();
+  if (appState.loggedInMembersLoaded) {
+    renderLoggedInMembersRows(appState.loggedInMembers);
+    return;
   }
+
+  target.innerHTML = `<p class="small">Lädt…</p>`;
+}
+
+function ensureLoggedInMembersSubscription() {
+  if (!isAdmin() || !appState.eventId) {
+    unsubscribeLoggedInMembersList();
+    return;
+  }
+  if (appState.loggedInMembersUnsubscribe && appState.loggedInMembersEventId === appState.eventId) return;
+
+  unsubscribeLoggedInMembersList();
+  appState.loggedInMembersEventId = appState.eventId;
+  appState.loggedInMembersLoaded = false;
+
+  appState.loggedInMembersUnsubscribe = onSnapshot(
+    collection(appState.db, "events", appState.eventId, "members"),
+    (snapshot) => {
+      const members = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+        .sort((a, b) => {
+          const roleCompare = String(a.role || "").localeCompare(String(b.role || ""), "de");
+          if (roleCompare) return roleCompare;
+          return String(a.displayName || a.id).localeCompare(String(b.displayName || b.id), "de");
+        });
+      appState.loggedInMembers = members;
+      appState.loggedInMembersLoaded = true;
+      renderLoggedInMembersRows(members);
+    },
+    (error) => {
+      console.error(error);
+      appState.loggedInMembersLoaded = false;
+      const currentTarget = document.getElementById("loggedInMembersList");
+      if (currentTarget) currentTarget.innerHTML = `<p class="notice error">Aktive Anmeldungen konnten nicht geladen werden.</p>`;
+    }
+  );
+}
+
+function renderLoggedInMembersRows(members = []) {
+  const target = document.getElementById("loggedInMembersList");
+  if (!target) return;
+
+  target.innerHTML = members.length ? members.map((member) => {
+    const isSelf = member.id === appState.user?.uid;
+    const roleLabel = ROLE_META[member.role] || member.role || "User";
+    const updated = formatTimestamp(member.updatedAt || member.createdAt);
+    const details = [
+      roleLabel,
+      member.deviceLabel || "",
+      updated ? `seit ${updated}` : "",
+      isSelf ? "dieses Gerät" : ""
+    ].filter(Boolean).join(" · ");
+    return `
+      <div class="pin-list-row">
+        <span>
+          <strong>${escapeHtml(memberListDisplayName(member))}</strong>
+          <span class="small">${escapeHtml(details)}</span>
+        </span>
+        <span class="pin-list-actions member-device-actions">
+          <input class="compact-input" data-device-label-for="${escapeHtml(member.id)}" value="${escapeHtml(member.deviceLabel || "")}" aria-label="Gerätename" />
+          <button class="btn-secondary" type="button" data-save-device-label="${escapeHtml(member.id)}" disabled>Name speichern</button>
+          <button class="btn-danger" type="button" data-force-logout="${escapeHtml(member.id)}" ${isSelf ? "disabled" : ""}>Abmelden</button>
+        </span>
+      </div>
+    `;
+  }).join("") : `<p class="small">Keine aktiven Anmeldungen.</p>`;
+
+  target.querySelectorAll("[data-device-label-for]").forEach((input) => {
+    const member = members.find((item) => item.id === input.dataset.deviceLabelFor);
+    const button = target.querySelector(`[data-save-device-label="${cssEscape(input.dataset.deviceLabelFor)}"]`);
+    input.addEventListener("input", () => {
+      if (button) button.disabled = input.value.trim() === String(member?.deviceLabel || "");
+    });
+  });
+  target.querySelectorAll("[data-save-device-label]").forEach((button) => {
+    const member = members.find((item) => item.id === button.dataset.saveDeviceLabel);
+    button.addEventListener("click", () => {
+      const input = target.querySelector(`[data-device-label-for="${cssEscape(button.dataset.saveDeviceLabel)}"]`);
+      void updateMemberDeviceLabel(member, input?.value || "");
+    });
+  });
+  target.querySelectorAll("[data-force-logout]").forEach((button) => {
+    const member = members.find((item) => item.id === button.dataset.forceLogout);
+    button.addEventListener("click", () => {
+      void forceLogoutMember(member);
+    });
+  });
+}
+
+function unsubscribeLoggedInMembersList() {
+  if (appState.loggedInMembersUnsubscribe) {
+    appState.loggedInMembersUnsubscribe();
+    appState.loggedInMembersUnsubscribe = null;
+  }
+  appState.loggedInMembers = [];
+  appState.loggedInMembersLoaded = false;
+  appState.loggedInMembersEventId = "";
 }
 
 async function updateMemberDeviceLabel(member, rawLabel) {
@@ -4369,8 +4425,8 @@ async function updateMemberDeviceLabel(member, rawLabel) {
     });
     if (member.id === appState.user?.uid) {
       appState.member = { ...appState.member, deviceLabel };
+      persistLocalDeviceLabel(deviceLabel);
     }
-    await renderLoggedInMembersList();
     notify("Gerätename gespeichert.", "success");
   } catch (error) {
     console.error(error);
@@ -4392,7 +4448,6 @@ async function forceLogoutMember(member) {
       displayName: member.displayName || "",
       deviceLabel: member.deviceLabel || ""
     });
-    await renderLoggedInMembersList();
     notify(`${name} wurde abgemeldet.`, "success");
   } catch (error) {
     console.error(error);
@@ -4401,7 +4456,7 @@ async function forceLogoutMember(member) {
 }
 
 async function promptForDuplicateNamedMemberLogout(eventId, member) {
-  if (!eventId || !member?.role || !member?.displayNameKey) return;
+  if (!eventId || !member?.role || !hasMemberLoginIdentity(member)) return;
 
   let duplicates = [];
   try {
@@ -4415,12 +4470,8 @@ async function promptForDuplicateNamedMemberLogout(eventId, member) {
 
   const name = memberListDisplayName(member);
   const deviceText = `${duplicates.length} ${duplicates.length === 1 ? "anderes Gerät" : "andere Geräte"}`;
-  let shouldLogout = window.confirm(`${name} ist bereits auf ${deviceText} angemeldet.\n\nAndere Geräte jetzt abmelden?\n\nOK = abmelden`);
-
-  if (!shouldLogout) {
-    const keepConfirmed = window.confirm(`Andere Geräte angemeldet lassen?\n\nBitte nochmals bestätigen.`);
-    shouldLogout = !keepConfirmed;
-  }
+  const actionText = duplicates.length === 1 ? "Anderes Gerät" : "Andere Geräte";
+  const shouldLogout = window.confirm(`${name} ist bereits auf ${deviceText} angemeldet.\n\n${actionText} jetzt abmelden?\n\nOK = abmelden\nAbbrechen = angemeldet lassen`);
 
   if (!shouldLogout) return;
 
@@ -4434,15 +4485,23 @@ async function promptForDuplicateNamedMemberLogout(eventId, member) {
 }
 
 async function findDuplicateNamedMemberSessions(eventId, member) {
-  const q = query(
-    collection(appState.db, "events", eventId, "members"),
-    where("role", "==", member.role),
-    where("displayNameKey", "==", member.displayNameKey)
-  );
-  const snapshot = await getDocs(q);
+  const snapshot = await getDocs(collection(appState.db, "events", eventId, "members"));
   return snapshot.docs
     .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
-    .filter((item) => item.id !== appState.user?.uid);
+    .filter((item) => item.id !== appState.user?.uid && sameMemberLoginIdentity(item, member));
+}
+
+function sameMemberLoginIdentity(left, right) {
+  if (!left || !right || left.role !== right.role) return false;
+  if (left.pinNameHash && right.pinNameHash && left.pinNameHash === right.pinNameHash) return true;
+
+  const leftNameKey = normalizeDisplayNameKey(left.displayNameKey || left.displayName);
+  const rightNameKey = normalizeDisplayNameKey(right.displayNameKey || right.displayName);
+  return Boolean(leftNameKey && leftNameKey === rightNameKey);
+}
+
+function hasMemberLoginIdentity(member) {
+  return Boolean(member?.pinNameHash || normalizeDisplayNameKey(member?.displayNameKey || member?.displayName));
 }
 
 async function logoutDuplicateNamedMemberSessions(eventId, member, duplicates) {
@@ -5566,6 +5625,16 @@ function isMainAdminName(value) {
   return normalizeDisplayNameKey(value) === MAIN_ADMIN_NAME_KEY;
 }
 
+function persistLocalDeviceLabel(label) {
+  const deviceLabel = String(label || "").trim();
+  if (!deviceLabel) return;
+  try {
+    localStorage.setItem(DEVICE_LABEL_STORAGE_KEY, deviceLabel);
+  } catch {
+    // Ignore unavailable local storage.
+  }
+}
+
 function getLocalDeviceLabel() {
   try {
     const existing = localStorage.getItem(DEVICE_LABEL_STORAGE_KEY);
@@ -6164,6 +6233,7 @@ async function activateKnownEvent(eventId) {
   appState.eventId = targetEventId;
   appState.event = eventData;
   appState.member = memberSnap.exists() ? { id: memberSnap.id, ...memberSnap.data() } : null;
+  persistLocalDeviceLabel(appState.member?.deviceLabel);
   appState.guests = [];
   appState.adminNotes = {};
   appState.adminNotesLoaded = false;
@@ -6330,6 +6400,7 @@ function debounce(fn, delay) {
 }
 
 function unsubscribeAll() {
+  unsubscribeLoggedInMembersList();
   if (appState.eventUnsubscribe) {
     appState.eventUnsubscribe();
     appState.eventUnsubscribe = null;
