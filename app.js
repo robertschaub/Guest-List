@@ -878,10 +878,10 @@ function renderAdminPinSection(isMaster = false) {
 
   return `
     <section class="card">
-      <h2>Admin-PINs</h2>
-      <form id="adminPinForm" class="grid two">
+      <h2>Admin-PIN erstellen oder ändern</h2>
+      <form id="adminPinForm" class="grid two admin-pin-form">
         <input id="adminPinEditId" type="hidden" />
-        <div class="form-row">
+        <div class="form-row admin-pin-auth-row">
           <label for="adminPinAuthPin">Dein Master-Admin-PIN</label>
           <input id="adminPinAuthPin" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="current-password" placeholder="Master-Admin-PIN" />
         </div>
@@ -892,10 +892,6 @@ function renderAdminPinSection(isMaster = false) {
         <div class="form-row">
           <label for="adminPinNew">Neuer Admin-PIN</label>
           <input id="adminPinNew" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
-        </div>
-        <div class="form-row">
-          <label for="adminPinConfirm">Neuer Admin-PIN wiederholen</label>
-          <input id="adminPinConfirm" type="password" minlength="${PIN_MIN_LENGTH}" autocomplete="new-password" placeholder="zur Kontrolle wiederholen" />
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" id="adminPinSaveBtn" type="submit" disabled>PIN speichern</button>
@@ -996,13 +992,12 @@ function bindAdminPinForm() {
   const authInput = document.getElementById("adminPinAuthPin");
   const nameInput = document.getElementById("adminPinName");
   const newInput = document.getElementById("adminPinNew");
-  const confirmInput = document.getElementById("adminPinConfirm");
   const button = document.getElementById("adminPinSaveBtn");
   const cancelButton = document.getElementById("adminPinCancelBtn");
-  if (!form || !authInput || !nameInput || !newInput || !confirmInput || !button) return;
+  if (!form || !authInput || !nameInput || !newInput || !button) return;
 
   updateAdminPinButtonState();
-  [authInput, nameInput, newInput, confirmInput].forEach((input) => {
+  [authInput, nameInput, newInput].forEach((input) => {
     input.addEventListener("input", updateAdminPinButtonState);
     input.addEventListener("change", updateAdminPinButtonState);
     input.addEventListener("keyup", updateAdminPinButtonState);
@@ -1016,14 +1011,13 @@ function updateAdminPinButtonState() {
   const authInput = document.getElementById("adminPinAuthPin");
   const nameInput = document.getElementById("adminPinName");
   const pinInput = document.getElementById("adminPinNew");
-  const confirmInput = document.getElementById("adminPinConfirm");
   const saveButton = document.getElementById("adminPinSaveBtn");
-  if (!authInput || !nameInput || !pinInput || !confirmInput || !saveButton) return;
+  if (!authInput || !nameInput || !pinInput || !saveButton) return;
 
   const pin = pinInput.value;
   saveButton.disabled = authInput.value.length < PIN_MIN_LENGTH
-    || pin.length < PIN_MIN_LENGTH
-    || pin !== confirmInput.value;
+    || normalizeDisplayNameKey(nameInput.value).length === 0
+    || pin.length < PIN_MIN_LENGTH;
   saveButton.textContent = "PIN speichern";
 }
 
@@ -1046,16 +1040,14 @@ function startAdminPinEdit(pin) {
   const authInput = document.getElementById("adminPinAuthPin");
   const nameInput = document.getElementById("adminPinName");
   const pinInput = document.getElementById("adminPinNew");
-  const confirmInput = document.getElementById("adminPinConfirm");
   const cancelButton = document.getElementById("adminPinCancelBtn");
   const form = document.getElementById("adminPinForm");
-  if (!editInput || !nameInput || !pinInput || !confirmInput) return;
+  if (!editInput || !nameInput || !pinInput) return;
 
   editInput.value = namedPinEditKey(pin);
   if (authInput) authInput.value = "";
   nameInput.value = pin.displayName || pin.displayNameKey || "";
   pinInput.value = "";
-  confirmInput.value = "";
   cancelButton?.classList.remove("hidden");
   updateAdminPinButtonState();
   scrollBelowStickyHeader(form?.closest(".card") || form);
@@ -1609,7 +1601,6 @@ function renderCheckin() {
 
   const filteredGuests = prioritizeActiveUndoGuests(filterGuests(appState.ui.search, appState.ui.categoryFilter, appState.ui.statusFilter));
   const results = filteredGuests.slice(0, 60);
-  const filteredCount = filteredGuests.length;
 
   content.innerHTML = `
     ${renderSummaryCards({ compact: true })}
@@ -1636,7 +1627,6 @@ function renderCheckin() {
           </select>
         </div>
       </div>
-      <p class="small">${filteredCount} Treffer · maximal 60 sichtbar. Für schnellen Eingang: mindestens 2–3 Buchstaben suchen.</p>
     </section>
     ${renderAddGuestPanel(categories)}
     <section class="guest-list">
@@ -3667,7 +3657,6 @@ async function saveAdminPinFromForm(event) {
   const namedDisplayName = val("adminPinName").trim();
   const normalizedAdminName = normalizeDisplayNameKey(namedDisplayName);
   const newPin = val("adminPinNew");
-  const newPinConfirm = val("adminPinConfirm");
   const editId = val("adminPinEditId");
   const isEdit = Boolean(editId);
   const isMainName = normalizedAdminName === MAIN_ADMIN_NAME_KEY;
@@ -3681,10 +3670,6 @@ async function saveAdminPinFromForm(event) {
   }
   if (authPin.length < PIN_MIN_LENGTH || newPin.length < PIN_MIN_LENGTH) {
     notify(`Admin-PIN muss mindestens ${PIN_MIN_LENGTH} Zeichen haben.`, "warning");
-    return;
-  }
-  if (newPin !== newPinConfirm) {
-    notify("Neuer Admin-PIN und Wiederholung stimmen nicht überein.", "warning");
     return;
   }
   try {

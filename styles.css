@@ -232,6 +232,10 @@ details .grid {
   align-content: start;
 }
 
+.admin-pin-auth-row {
+  grid-column: 1 / -1;
+}
+
 input, select, textarea {
   width: 100%;
   min-height: var(--tap);
