@@ -45,7 +45,7 @@ Frontend-Deployment über GitHub Pages, solange keine Nachteile entstehen. Wicht
 - Kategorien final: GA, Member GA, Member VIP, On Stage, Mitarbeiter.
 - Gastfelder: Guest ID, Name, Kategorie, Status, Check-in-Zeit, Check-in durch/Gerät, Support-Kommentar, interne Notiz.
 - Doppel-Check-in: Warnung; Admin kann überschreiben.
-- No Show: Manuell pro Gast und Admin-Bulk für offene Gäste.
+- No Show ist kein separater Status; am Eventende entsprechen offene Gäste den No-Shows.
 - Support-Kommentar: sichtbar und editierbar für Check-in Staff.
 - Import: CSV/Excel vorher als CSV; App importiert CSV.
 - Export: komplette Gästeliste, eingecheckte Gäste, offene Gäste, Audit Log bzw. Backup.

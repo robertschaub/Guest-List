@@ -76,7 +76,7 @@ The earlier `site/` localStorage prototype is obsolete and should not be recreat
 - One-click check-in.
 - Duplicate check-in protection using a Firestore transaction.
 - Support comment per guest.
-- Status values: `open`, `checked_in`, `no_show`, shown in German.
+- Status values: `open`, `checked_in`, shown in German. Guests still open at event end are operationally no-shows.
 - Category totals and dashboard.
 - Audit log.
 
@@ -127,7 +127,7 @@ After editing:
 - Duplicate check-in warning and transaction behavior.
 - Admin override or correction behavior where supported.
 - Support comment update.
-- Mark open guests as No Show.
+- Reset checked-in guests to open for status correction.
 - Export all guests and checked-in guests.
 - Firestore Security Rules compatibility.
 
@@ -165,4 +165,3 @@ Repo-local skills live under `.claude/skills/`. Use them when their description 
 - `guest-list-ui`: guest-list UI, CSV, import/export, check-in flow, mobile usability.
 - `firebase-firestore`: Firebase config, Firestore data model, rules, and transaction behavior.
 - `handoff`: compact task handoffs for another agent.
-

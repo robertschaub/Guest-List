@@ -31,7 +31,7 @@ import {
 
 const CONFIG = window.GUESTLIST_APP_CONFIG || {};
 const DEFAULT_CATEGORIES = CONFIG.app?.categories || ["GA", "Member GA", "Member VIP", "On Stage", "Mitarbeiter"];
-const DEFAULT_STATUSES = ["open", "checked_in", "no_show"];
+const DEFAULT_STATUSES = ["open", "checked_in"];
 const CONFIGURED_EVENTS = Array.isArray(CONFIG.app?.knownEvents) ? CONFIG.app.knownEvents : [];
 const KNOWN_EVENTS_STORAGE_KEY = "guestlist:knownEvents";
 const ADMIN_SESSION_STORAGE_KEY = "guestlist:adminSession";
@@ -51,8 +51,7 @@ const CHECKIN_UNDO_WINDOW_MS = 60 * 1000;
 
 const STATUS_META = {
   open: { label: "Offen", badge: "warning" },
-  checked_in: { label: "Eingecheckt", badge: "success" },
-  no_show: { label: "No Show", badge: "danger" }
+  checked_in: { label: "Eingecheckt", badge: "success" }
 };
 
 const ROLE_META = {
@@ -1598,7 +1597,7 @@ function renderCheckin() {
 
   if (!appState.guestsLoaded) {
     content.innerHTML = `
-      ${renderSummaryCards()}
+      ${renderSummaryCards({ compact: true })}
       ${isOffline() ? `<div class="notice error"><strong>Offline:</strong> Check-in und Änderungen sind gesperrt. Bitte Verbindung prüfen und Seite neu laden.</div>` : ""}
       <section class="card compact">
         <strong>Gäste laden…</strong>
@@ -1613,7 +1612,7 @@ function renderCheckin() {
   const filteredCount = filteredGuests.length;
 
   content.innerHTML = `
-    ${renderSummaryCards()}
+    ${renderSummaryCards({ compact: true })}
     ${isOffline() ? `<div class="notice error"><strong>Offline:</strong> Check-in und Änderungen sind gesperrt. Bitte Verbindung prüfen und Seite neu laden.</div>` : ""}
     ${renderEmptyEventWarning()}
     <section class="card search-sticky">
@@ -1779,10 +1778,11 @@ function renderAddGuestPanel(categories) {
 function renderGuestCard(guest) {
   if (isAdmin() && appState.ui.editingGuestId === guest.id) return renderGuestEditCard(guest);
 
-  const status = STATUS_META[guest.status || "open"] || STATUS_META.open;
+  const statusValue = guestStatus(guest);
+  const status = STATUS_META[statusValue] || STATUS_META.open;
   const checkedText = guest.checkedInAt ? ` · ${formatTimestamp(guest.checkedInAt)}` : "";
   const byText = guest.checkedInByName ? ` · durch ${escapeHtml(guest.checkedInByName)}` : "";
-  const alreadyChecked = guest.status === "checked_in";
+  const alreadyChecked = statusValue === "checked_in";
   const canOverride = isAdmin();
   const commentId = `comment-${guest.id}`;
   const disabled = writeDisabledAttr();
@@ -1839,7 +1839,6 @@ function renderGuestCard(guest) {
               <p class="small">Bewusste Korrekturen am Einlass. Diese Aktionen fragen zusätzlich nach Bestätigung.</p>
               <div class="actions guest-danger-actions">
                 ${overrideCheckinButton}
-                <button class="btn-warning" data-action="no-show" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Auf No Show setzen</button>
                 <button class="btn-secondary" data-action="reset-open" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Auf Offen setzen</button>
                 <button class="btn-danger" data-action="delete-guest" data-guest-id="${escapeHtml(guest.id)}" ${disabled}>Gast löschen</button>
               </div>
@@ -1918,10 +1917,6 @@ function attachGuestCardHandlers(root) {
       if (appState.ui.editingGuestId === button.dataset.guestId) appState.ui.editingGuestId = "";
       renderActiveTab();
     });
-  });
-
-  root.querySelectorAll("[data-action='no-show']").forEach((button) => {
-    button.addEventListener("click", () => updateGuestStatus(button.dataset.guestId, "no_show"));
   });
 
   root.querySelectorAll("[data-action='reset-open']").forEach((button) => {
@@ -2013,7 +2008,7 @@ function resetSearchForNextCheckin() {
 function buildCheckinUndoState(guestDocId, before = {}, force = false) {
   const actorName = appState.member?.displayName || "Check-in";
   const actorDevice = appState.member?.deviceLabel || "";
-  const previousStatus = before.status || "open";
+  const previousStatus = canonicalStatus(before.status);
   const now = Date.now();
   return {
     eventId: appState.eventId,
@@ -2052,7 +2047,7 @@ function setCheckinUndo(undo) {
 function renderCheckinUndoNotice(undo) {
   const flash = document.getElementById("flash");
   if (!flash) return;
-  const statusLabel = STATUS_META[undo.previousStatus]?.label || "Offen";
+  const statusLabel = STATUS_META[canonicalStatus(undo.previousStatus)]?.label || "Offen";
   flash.innerHTML = `
     <div class="notice success flash-message checkin-undo-message" data-checkin-undo-notice>
       <span><strong>${escapeHtml(undo.guestName)} eingecheckt.</strong> Rückgängig für 1 Minute möglich. Vorheriger Status: ${escapeHtml(statusLabel)}.</span>
@@ -2196,7 +2191,7 @@ function undoLastCheckin() {
 }
 
 function normalizeUndoStatus(status) {
-  return DEFAULT_STATUSES.includes(status) ? status : "open";
+  return canonicalStatus(status);
 }
 
 function checkinUndoStillMatches(current, undo) {
@@ -2218,7 +2213,7 @@ async function saveGuestComment(guestDocId) {
       updatedAt: serverTimestamp(),
       lastActionAt: serverTimestamp(),
       lastActionByName: appState.member.displayName || "Check-in",
-      ...(isAdmin() ? staleGuestFieldDeletes() : {})
+      ...(isAdmin() ? { status: guestStatus(guest), ...staleGuestFieldDeletes() } : {})
     });
     await addAudit("support_comment_update", guest, {
       oldComment: staffInfoForGuest(guest),
@@ -2271,6 +2266,7 @@ async function saveEditedGuest(event, guestDocId) {
     batch.update(guestRef(guestDocId), {
       name: trimmedName,
       category: normalizedCategory,
+      status: guestStatus(guest),
       searchName: normalizeForSearch(`${trimmedName} ${guest.guestId || ""} ${normalizedCategory}`),
       supportComment,
       adminStaffInfo,
@@ -2313,14 +2309,17 @@ async function updateGuestStatus(guestDocId, status) {
     notify("Nur Admins dürfen den Status manuell ändern.", "warning");
     return;
   }
+  if (!DEFAULT_STATUSES.includes(status)) {
+    notify("Dieser Status wird nicht unterstützt.", "warning");
+    return;
+  }
   const guest = findGuest(guestDocId);
   if (!guest) return;
-  const currentStatus = guest.status || "open";
+  const currentStatus = guestStatus(guest);
   if (currentStatus === status) {
     notify(`${guest.name} ist bereits ${STATUS_META[status]?.label || status}.`, "info");
     return;
   }
-  if (status === "no_show" && !confirm(`${guest.name} auf No Show setzen?`)) return;
   if (status === "open" && !confirm(`${guest.name} wieder auf Offen setzen? Check-in-Daten werden dabei entfernt.`)) return;
 
   try {
@@ -2394,9 +2393,24 @@ function renderOverview() {
   bindGuestListControls();
 }
 
-function renderSummaryCards() {
+function renderSummaryCards(options = {}) {
   const stats = calculateStats();
   const percent = stats.total ? Math.round((stats.checkedIn / stats.total) * 100) : 0;
+  if (options.compact) {
+    return `
+      <section class="checkin-summary-strip" aria-label="Check-in Übersicht">
+        <div class="checkin-summary-line">
+          <strong>${stats.checkedIn}/${stats.total}</strong>
+          <span>eingecheckt</span>
+          <span class="checkin-summary-muted">${stats.open} offen</span>
+        </div>
+        <strong class="checkin-summary-percent">${percent}%</strong>
+        <div class="checkin-summary-progress" aria-hidden="true">
+          <span style="width: ${percent}%"></span>
+        </div>
+      </section>
+    `;
+  }
   return `
     <section class="card overview-summary-card">
       <div class="overview-summary-header">
@@ -2411,7 +2425,6 @@ function renderSummaryCards() {
       </div>
       <div class="overview-status-row" aria-label="Statusübersicht">
         <span><strong>${stats.open}</strong> Offen</span>
-        <span><strong>${stats.noShow}</strong> No Show</span>
       </div>
       ${renderCategoryStatsList()}
     </section>
@@ -2423,12 +2436,10 @@ function renderCategoryStatsList() {
   const rows = categories.map((category) => {
     const guests = appState.guests.filter((g) => (g.category || "") === category);
     const total = guests.length;
-    const checked = guests.filter((g) => g.status === "checked_in").length;
-    const open = guests.filter((g) => (g.status || "open") === "open").length;
-    const noShow = guests.filter((g) => g.status === "no_show").length;
+    const checked = guests.filter((g) => guestStatus(g) === "checked_in").length;
+    const open = total - checked;
     const details = total ? [
-      open ? `${open} offen` : "",
-      noShow ? `${noShow} No Show` : ""
+      open ? `${open} offen` : ""
     ].filter(Boolean).join(" · ") || "Keine offenen Gäste" : "Keine Gäste";
     return `
       <div class="category-summary-row">
@@ -2535,7 +2546,7 @@ function renderGuestTable(guests) {
       <td>${escapeHtml(g.name || "")}</td>
       <td>${escapeHtml(g.guestId || g.id)}</td>
       <td>${escapeHtml(g.category || "")}</td>
-      <td><span class="badge ${STATUS_META[g.status || "open"]?.badge || "warning"}">${STATUS_META[g.status || "open"]?.label || "Offen"}</span></td>
+      <td><span class="badge ${STATUS_META[guestStatus(g)]?.badge || "warning"}">${STATUS_META[guestStatus(g)]?.label || "Offen"}</span></td>
       <td>${escapeHtml(adminStaffInfoForGuest(g))}</td>
       <td>${escapeHtml(staffInfoForGuest(g))}</td>
       ${showAdminPrivate ? `<td>${escapeHtml(adminOnlyInfoForGuest(g))}</td>` : ""}
@@ -2634,7 +2645,6 @@ function renderAdmin() {
         <button class="btn-secondary" data-export="all" ${exportDisabled}>Alle Gäste CSV</button>
         <button class="btn-secondary" data-export="checked_in" ${exportDisabled}>Eingecheckte CSV</button>
         <button class="btn-secondary" data-export="open" ${exportDisabled}>Offene CSV</button>
-        <button class="btn-secondary" data-export="no_show" ${exportDisabled}>No Show CSV</button>
         <button class="btn-secondary" id="exportAuditBtn" type="button">Audit Log CSV</button>
       </div>
       <div id="backupStatus">${appState.ui.lastBackupMessage ? `<p class="notice success">${escapeHtml(appState.ui.lastBackupMessage)}</p>` : ""}</div>
@@ -3467,13 +3477,13 @@ function exportGuests(filter) {
     return;
   }
   let rows = appState.guests;
-  if (filter !== "all") rows = rows.filter((g) => (g.status || "open") === filter);
+  if (filter !== "all") rows = rows.filter((g) => guestStatus(g) === filter);
 
   const csvRows = rows.map((g) => ({
     "Guest ID": g.guestId || "",
     "Name": g.name || "",
     "Kategorie": g.category || "",
-    "Status": STATUS_META[g.status || "open"]?.label || g.status || "Offen",
+    "Status": STATUS_META[guestStatus(g)]?.label || "Offen",
     "Check-in Zeit": formatTimestamp(g.checkedInAt),
     "Check-in durch": g.checkedInByName || "",
     "Check-in Gerät": g.checkedInDevice || "",
@@ -4537,8 +4547,8 @@ function auditSummary(entry) {
   const details = entry.details && typeof entry.details === "object" ? entry.details : {};
   const rawSubject = entry.guestName || details.displayName || details.name || "";
   const subject = shouldHideReservedAdminNameInAudit(entry.action) ? visibleActorName(rawSubject) : rawSubject;
-  const statusLabel = (value) => STATUS_META[value]?.label || value || "";
-  const filterLabel = (value) => value === "all" ? "Alle" : (STATUS_META[value]?.label || value || "");
+  const statusLabel = (value) => STATUS_META[canonicalStatus(value)]?.label || "Offen";
+  const filterLabel = (value) => value === "all" ? "Alle" : (STATUS_META[canonicalStatus(value)]?.label || "Offen");
   const changed = (...items) => items.filter(Boolean).join(", ");
 
   switch (entry.action) {
@@ -4597,8 +4607,6 @@ function auditSummary(entry) {
       return { subject: "CSV Export", detail: `${details.count || 0} Gäste · ${filterLabel(details.filter)}` };
     case "audit_export":
       return { subject: "Audit Log Export", detail: `${details.count || 0} Einträge` };
-    case "bulk_no_show":
-      return { subject: "Tagesabschluss", detail: `${details.count || 0} offene Gäste auf No Show gesetzt` };
     case "pins_reset":
       return { subject: "Check-in-PIN", detail: pinAuditDetail(details) };
     case "admin_pin_reset":
@@ -4943,7 +4951,6 @@ function labelForAction(action) {
     audit_export: "Audit Log Export",
     guide_update: "Anleitung geändert",
     duplicate_check_in_attempt: "Doppel-Check-in verhindert",
-    bulk_no_show: "Bulk No Show",
     pins_reset: "Check-in-PIN neu gesetzt",
     admin_pin_reset: "Admin-PIN neu gesetzt",
     member_login: "Anmeldung",
@@ -4981,10 +4988,17 @@ async function addAuditForEvent(eventId, action, guest, details = {}, actor = {}
 
 function calculateStats() {
   const total = appState.guests.length;
-  const checkedIn = appState.guests.filter((g) => g.status === "checked_in").length;
-  const noShow = appState.guests.filter((g) => g.status === "no_show").length;
-  const open = appState.guests.filter((g) => (g.status || "open") === "open").length;
-  return { total, checkedIn, open, noShow };
+  const checkedIn = appState.guests.filter((g) => guestStatus(g) === "checked_in").length;
+  const open = total - checkedIn;
+  return { total, checkedIn, open };
+}
+
+function canonicalStatus(status) {
+  return status === "checked_in" ? "checked_in" : "open";
+}
+
+function guestStatus(guest) {
+  return canonicalStatus(guest?.status);
 }
 
 function filterGuests(search, category, status) {
@@ -4994,7 +5008,7 @@ function filterGuests(search, category, status) {
     const text = `${guest.name || ""} ${guest.guestId || ""} ${guest.category || ""} ${isEventMember() ? `${staffInfoForGuest(guest)} ${adminStaffInfoForGuest(guest)}` : ""} ${isAdmin() ? adminOnlyInfoForGuest(guest) : ""}`;
     const searchMatches = !normalizedSearch || normalizeForSearch(text).includes(normalizedSearch);
     const categoryMatches = !category || category === "all" || (guest.category || "") === category;
-    const statusMatches = !status || status === "all" || (guest.status || "open") === status;
+    const statusMatches = !status || status === "all" || guestStatus(guest) === status;
     return searchMatches && categoryMatches && statusMatches;
   });
 }
@@ -5080,7 +5094,6 @@ function normalizeCategory(input) {
 function parseStatus(value) {
   const normalized = normalizeForSearch(value || "");
   if (["eingecheckt", "checkedin", "checked in", "checked", "checkin"].includes(normalized)) return "checked_in";
-  if (["noshow", "no show", "abwesend"].includes(normalized)) return "no_show";
   return "open";
 }
 

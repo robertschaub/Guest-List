@@ -199,7 +199,7 @@ Prüfen:
 
 **Gegeben** Gäste sind in Kategorien verteilt.  
 **Wenn** Check-ins durchgeführt werden.  
-**Dann** ändern sich Total/Eingecheckt/Offen/No Show korrekt je Kategorie.
+**Dann** ändern sich Total/Eingecheckt/Offen korrekt je Kategorie.
 
 Prüfen alle Kategorien:
 
@@ -209,10 +209,10 @@ Prüfen alle Kategorien:
 - On Stage
 - Mitarbeiter
 
-## Test 12 — No Show / Statuskorrektur
+## Test 12 — Statuskorrektur
 
 **Gegeben** ein einzelner Gast muss korrigiert werden.
-**Wenn** Admin den Gast in der Check-in-Liste auf No Show oder Offen setzt.
+**Wenn** Admin einen eingecheckten Gast in der Check-in-Liste wieder auf Offen setzt.
 **Dann** werden Status und Summen korrekt aktualisiert.
 
 Prüfen:
@@ -220,6 +220,7 @@ Prüfen:
 - Die Korrektur fragt nach Bestätigung.
 - Check-in-Daten werden beim Zurücksetzen auf Offen entfernt.
 - Audit Log enthält die Statusänderung.
+- Offene Gäste entsprechen am Eventende den No-Shows.
 
 ## Test 13 — Export / Backup
 
@@ -232,7 +233,6 @@ Prüfen:
 - Alle Gäste CSV.
 - Eingecheckte CSV.
 - Offene CSV.
-- No Show CSV.
 - Audit Log CSV.
 - Backup-Hinweis nach Export sichtbar.
 - Umlaute in Export.

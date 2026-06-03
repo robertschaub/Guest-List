@@ -392,6 +392,61 @@ input:focus, select:focus, textarea:focus {
   font-size: 1rem;
 }
 
+.checkin-summary-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 10px;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.checkin-summary-line {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.checkin-summary-line strong {
+  color: var(--text);
+  font-size: 1.02rem;
+  line-height: 1;
+}
+
+.checkin-summary-muted {
+  color: var(--muted);
+}
+
+.checkin-summary-percent {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.checkin-summary-progress {
+  grid-column: 1 / -1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.checkin-summary-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--success);
+}
+
 .overview-summary-card {
   padding: 16px 18px;
 }

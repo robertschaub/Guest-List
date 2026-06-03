@@ -208,13 +208,13 @@ Technisch:
 
 - `open`
 - `checked_in`
-- `no_show`
 
 Deutsch angezeigt:
 
 - Offen
 - Eingecheckt
-- No Show
+
+Offene Gäste entsprechen am Eventende den No-Shows.
 
 ### Rollen im MVP
 

@@ -69,7 +69,7 @@ window.GUESTLIST_APP_CONFIG = {
   app: {
     defaultEventName: "Event Gästeliste",
     categories: ["GA", "Member GA", "Member VIP", "On Stage", "Mitarbeiter"],
-    statuses: ["open", "checked_in", "no_show"]
+    statuses: ["open", "checked_in"]
   }
 };
 ```

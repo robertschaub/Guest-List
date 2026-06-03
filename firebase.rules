@@ -252,7 +252,7 @@ service cloud.firestore {
     }
 
     function validStatus(status) {
-      return status == 'open' || status == 'checked_in' || status == 'no_show';
+      return status == 'open' || status == 'checked_in';
     }
 
     function validSecurityData(data) {
@@ -442,7 +442,7 @@ service cloud.firestore {
           && resource.data.checkedInByUid == request.auth.uid
           && resource.data.checkedInAt is timestamp
           && request.time < resource.data.checkedInAt + duration.value(1, 'm')
-          && (request.resource.data.status == 'open' || request.resource.data.status == 'no_show')
+          && request.resource.data.status == 'open'
           && request.resource.data.checkedInAt == null
           && request.resource.data.checkedInByUid == null
           && request.resource.data.checkedInByName == null

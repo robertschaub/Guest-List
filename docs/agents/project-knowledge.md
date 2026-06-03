@@ -40,7 +40,6 @@ Guest status values:
 
 - `open`
 - `checked_in`
-- `no_show`
 
 Default categories:
 
@@ -93,4 +92,3 @@ Manual checks should cover:
 - Support comment update.
 - CSV export.
 - Firestore Rules smoke test.
-

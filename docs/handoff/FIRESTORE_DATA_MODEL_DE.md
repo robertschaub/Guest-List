@@ -101,7 +101,7 @@ Erwartete Felder:
 - `name`
 - `searchName`
 - `category`
-- `status`: `open`, `checked_in`, `no_show`
+- `status`: `open`, `checked_in`
 - `supportComment`: Info von Check-in Staff für alle
 - `adminStaffInfo`: Info von Administratoren an Check-in Staff
 - `checkedInAt`
@@ -144,9 +144,9 @@ Erwartete Felder:
 
 - Ein Gast gehört zu genau einem Event.
 - `guestId` soll innerhalb eines Events eindeutig sein. Der CSV Import blockiert doppelte IDs in der Datei und bei Zusatzimporten auch IDs, die bereits im Event existieren.
-- `status` darf nur `open`, `checked_in`, `no_show` sein.
+- `status` darf nur `open`, `checked_in` sein. Offene Gäste entsprechen am Eventende den No-Shows.
 - Doppel-Check-in-Schutz muss per Firestore Transaction geschehen.
-- Check-in Staff darf Status auf `checked_in` setzen, eigene Check-ins während 1 Minute wieder auf den vorherigen Nicht-Check-in-Status zurücksetzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen. Die App hält eigene rückgängig machbare Check-ins während dieses Zeitfensters in der Check-in-Liste sichtbar, auch wenn Suche, Status- oder Kategorie-Filter sie sonst ausblenden würden.
+- Check-in Staff darf Status auf `checked_in` setzen, eigene Check-ins während 1 Minute wieder auf `open` zurücksetzen und `supportComment` ändern, aber keine Admin-Infos ändern und keine Gäste löschen. Die App hält eigene rückgängig machbare Check-ins während dieses Zeitfensters in der Check-in-Liste sichtbar, auch wenn Suche, Status- oder Kategorie-Filter sie sonst ausblenden würden.
 - Check-in Staff darf nur innerhalb des Firestore-geprüften Zeitfensters `checkinAccessStartsAt` bis `checkinAccessEndsAt` lesen und schreiben. Admins können dieses Zeitfenster pro Event ändern, um Test- oder Demo-Events kontrolliert weiterzuverwenden.
 - Die In-App-Anleitungen sind global gespeichert. Die UI zeigt Check-in Staff `checkin` und `emergency`; Admins sehen zusätzlich `admin`. Nur Master Admins dürfen Anleitungstexte erstellen, ändern oder löschen.
 - Admin darf Import, Export, PIN-Reset und Korrekturen durchführen.

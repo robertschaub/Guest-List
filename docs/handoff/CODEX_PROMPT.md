@@ -31,9 +31,9 @@ MVP features:
 - Prevent duplicate check-ins using a Firestore transaction
 - Show warning if guest is already checked in
 - Allow support comment editing
-- Status values: Offen, Eingecheckt, No Show
+- Status values: Offen, Eingecheckt
 - Category lists with totals
-- Overview: total, checked in, open, no show
+- Overview: total, checked in, open
 - CSV export
 - Audit log
 - Mobile-first UI

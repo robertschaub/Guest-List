@@ -17,11 +17,11 @@ Statische Web-App für Event-Gästeliste, Check-in auf mehreren Mobile-/Tablet-G
 - Doppel-Check-in-Schutz per Firestore-Transaktion
 - Letzten eigenen Check-in direkt rückgängig machen, solange keine andere Aktion folgt
 - Support-Kommentar pro Gast
-- Status: Offen, Eingecheckt, No Show
+- Status: Offen, Eingecheckt
 - Kategorie-Listen mit Summen
 - CSV-Import und CSV-Export
 - Globale In-App-Anleitungen getrennt für Admins und Check-in Staff, durch Master Admins editierbar
-- Audit Log für Check-in, Check-in rückgängig, Doppel-Check-in-Versuch, Kommentar, Gaständerung, Import, Export, No Show, Audit-Export und PIN-Reset
+- Audit Log für Check-in, Check-in rückgängig, Doppel-Check-in-Versuch, Kommentar, Gaständerung, Import, Export, Audit-Export und PIN-Reset
 
 ## Technischer Stack
 
@@ -90,7 +90,7 @@ window.GUESTLIST_APP_CONFIG = {
       "01-05-2026-main-event": "01-05-2026-main-event"
     },
     categories: ["GA", "Member GA", "Member VIP", "On Stage", "Mitarbeiter"],
-    statuses: ["open", "checked_in", "no_show"]
+    statuses: ["open", "checked_in"]
   }
 };
 ```
@@ -225,7 +225,7 @@ Check-in Staff sieht Check-in, Übersicht und Anmeldung. Admin-Bereiche wie Impo
 1. Event-Link öffnen.
 2. Admin-Name und Admin-PIN eingeben.
 3. Im Tab `Events` den `Event-Zugang für Check-in Staff` prüfen.
-4. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder einzelne No Shows setzen.
+4. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten oder exportieren.
 5. Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.
 6. Vor Eventstart unter `Backup & Export` Gäste-CSV und Audit-Log-CSV herunterladen.
 7. Event-Link und benötigte Admin-/Check-in-PINs extern sichern.
@@ -285,7 +285,7 @@ Am Event:
 Nach dem Event:
 
 1. Export `Alle Gäste CSV` und `Audit Log CSV` herunterladen.
-2. Optional einzelne Gäste in der Check-in-Liste auf `No Show` setzen.
+2. Offene Gäste entsprechen am Eventende den No-Shows.
 3. Audit Log prüfen.
 
 ## Kosten / Limits
