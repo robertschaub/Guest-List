@@ -519,7 +519,7 @@ function renderAdminCreateEventDialog() {
           <button class="btn-secondary modal-close-btn" id="closeCreateEventDialogBtn" type="button" aria-label="Dialog schließen">Schließen</button>
         </div>
         ${renderCreateEventForm({
-          omitAdminPin: isAdmin() && Boolean(getAdminSession()?.pin),
+          omitAdminPin: true,
           omitAdminName: true,
           omitCheckinLogin: true,
           omitEventLinkFields: true
@@ -615,8 +615,10 @@ async function createEventFromForm(event) {
   const checkinNameInput = document.getElementById("setupCheckinName");
   const checkinPinInput = document.getElementById("checkinPin");
   const adminNameInput = document.getElementById("setupName");
+  const adminPinInput = document.getElementById("adminPin");
   const linkName = (linkNameInput ? val("newEventLinkName").trim() : suggestEventLinkName(name));
-  const adminPin = val("adminPin") || (isAdmin() ? getAdminSession()?.pin || "" : "");
+  const adminPin = adminPinInput ? val("adminPin") : (getAdminSession()?.pin || "");
+  const adminPinRequired = Boolean(adminPinInput);
   const checkinLoginRequired = Boolean(checkinNameInput || checkinPinInput);
   const checkinDisplayName = checkinLoginRequired ? val("setupCheckinName").trim() : "";
   const checkinPin = checkinLoginRequired ? val("checkinPin") : "";
@@ -650,7 +652,7 @@ async function createEventFromForm(event) {
     result.innerHTML = `<p class="notice error">Dieser Admin-Name ist reserviert. Bitte persönlichen Admin-Namen verwenden.</p>`;
     return;
   }
-  if (adminPin.length < PIN_MIN_LENGTH || (checkinLoginRequired && checkinPin.length < PIN_MIN_LENGTH)) {
+  if ((adminPinRequired && adminPin.length < PIN_MIN_LENGTH) || (checkinLoginRequired && checkinPin.length < PIN_MIN_LENGTH)) {
     result.innerHTML = `<p class="notice error">PINs müssen mindestens ${PIN_MIN_LENGTH} Zeichen haben.</p>`;
     return;
   }
@@ -661,7 +663,6 @@ async function createEventFromForm(event) {
 
   try {
     result.innerHTML = `<p class="notice info">Admin-Zugriff wird geprüft…</p>`;
-    await verifyGlobalAdminPin(adminPin, displayName, deviceLabel, eventId);
 
     const targetEventRef = doc(appState.db, "events", eventId);
     const existingEventSnap = await getDoc(targetEventRef);
@@ -673,7 +674,7 @@ async function createEventFromForm(event) {
     const checkinPinEntry = checkinLoginRequired
       ? await namedPinEntry(eventId, "checkin", checkinPin, checkinDisplayName)
       : null;
-    const adminAuth = await adminMemberAuthFields(adminPin, displayName);
+    const adminAuth = await adminAuthForNewEvent(eventId, adminPin, displayName, deviceLabel, createdFromAdminEventsTab);
 
     await setDoc(targetEventRef, {
       name,
@@ -734,6 +735,49 @@ async function createEventFromForm(event) {
     console.error(error);
     result.innerHTML = `<p class="notice error">Event konnte nicht erstellt werden: ${escapeHtml(setupErrorMessage(error))}</p>`;
   }
+}
+
+async function adminAuthForNewEvent(eventId, adminPin, displayName, deviceLabel, useCurrentAdminSession) {
+  if (useCurrentAdminSession) {
+    const authFields = currentAdminMemberAuthFields();
+    if (authFields) {
+      await setAdminMemberForEvent(eventId, authFields, displayName, deviceLabel);
+      return authFields;
+    }
+    if (!adminPin) {
+      throw new Error("Aktuelle Admin-Anmeldung ist unvollständig. Bitte neu anmelden.");
+    }
+  }
+
+  if (!adminPin) {
+    throw new Error("Admin-PIN fehlt.");
+  }
+
+  await verifyGlobalAdminPin(adminPin, displayName, deviceLabel, eventId);
+  return adminMemberAuthFields(adminPin, displayName);
+}
+
+function currentAdminMemberAuthFields() {
+  if (!isAdmin()) return null;
+  const pinHash = String(appState.member?.pinHash || "");
+  const pinNameHash = String(appState.member?.pinNameHash || "");
+  const displayNameKey = String(appState.member?.displayNameKey || "");
+  if (!pinHash || !pinNameHash || !displayNameKey) return null;
+  return { pinHash, pinNameHash, displayNameKey };
+}
+
+async function setAdminMemberForEvent(eventId, authFields, displayName, deviceLabel) {
+  await setDoc(doc(appState.db, "events", eventId, "members", appState.user.uid), {
+    uid: appState.user.uid,
+    role: "admin",
+    pinHash: authFields.pinHash,
+    pinNameHash: authFields.pinNameHash,
+    displayNameKey: authFields.displayNameKey,
+    displayName,
+    deviceLabel,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
 }
 
 function renderEventNotFound(eventId) {
