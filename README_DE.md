@@ -9,7 +9,7 @@ Statische Web-App für Event-Gästeliste, Check-in auf mehreren Mobile-/Tablet-G
 - Firebase Anonymous Auth, aber keine Benutzer-Accounts und keine Mitarbeiter-Logins
 - Event-Setup direkt in der App
 - Geheimer Event-Link plus PIN
-- Rollen: Admin und Check-in Staff
+- Zugänge: Admin und Check-in Staff
 - Kategorien: GA, Member GA, Member VIP, On Stage, Mitarbeiter
 - ca. 1200 Gäste realistisch nutzbar
 - Namenssuche / Guest-ID-Suche
@@ -174,7 +174,7 @@ Für den Einlass gibt es in der App den Tab `Anleitung`. Check-in Staff sieht di
 
 ### Grundkonzepte
 
-**Administrator-Rollen:** Admins melden sich mit Rolle `Admin`, Name und Admin-PIN an. Check-in Staff nutzt keinen Admin-PIN.
+**Administrator-Rollen:** Admins melden sich mit Name und Admin-PIN an. Check-in Staff nutzt keinen Admin-PIN.
 
 **Events und Gültigkeit:** Jedes Event hat eine eigene Event-Link ID, eigene Gästeliste und eigene Check-in-PINs. Der sichtbare Eventname darf sich ändern, die Event-Link ID bleibt stabil. Check-in Staff hat nur im freigegebenen Zeitfenster Zugriff. Admins können Events auch außerhalb dieses Zeitfensters öffnen und bearbeiten.
 
@@ -205,32 +205,30 @@ Für den Einlass gibt es in der App den Tab `Anleitung`. Check-in Staff sieht di
 
 1. Check-in-Logins für den Event anlegen: Name/Position und PIN, z.B. `Check-in Team` oder `Eingang 1`.
 2. Check-in-Logins gelten immer nur für einen Event.
-3. Check-in-Team informieren: Event-Link, Rolle `Check-in Staff`, Name/Position, Check-in-PIN, Startzeit und Ansprechperson.
+3. Check-in-Team informieren: Event-Link, Name/Position, Check-in-PIN, Startzeit und Ansprechperson.
 4. Admin-PINs nicht an Check-in Staff weitergeben.
 
 ### Check-in Staff
 
 1. Event-Link öffnen.
-2. Rolle `Check-in Staff` wählen.
+2. Namen oder Position eingeben.
 3. Check-in-PIN eingeben.
-4. Namen eingeben; Gerät ist optional, z.B. `iPad Eingang links`.
-5. Gäste suchen.
-6. Gast einchecken.
-7. Support-Kommentar bei Bedarf ergänzen.
+4. Gäste suchen.
+5. Gast einchecken.
+6. Support-Kommentar bei Bedarf ergänzen.
 
 Check-in Staff sieht Check-in, Übersicht und Anmeldung. Admin-Bereiche wie Import, Export, PINs und Audit Log sind Admin-only.
 
 ### Admin
 
 1. Event-Link öffnen.
-2. Rolle `Admin` wählen.
-3. Globalen Admin-PIN eingeben.
-4. Im Tab `Event verwalten` den `Event-Zugang für Check-in Staff` prüfen.
-5. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder einzelne No Shows setzen.
-6. Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.
-7. Vor Eventstart unter `Backup & Export` Gäste-CSV und Audit-Log-CSV herunterladen.
-8. Event-Link und benötigte Admin-/Check-in-PINs extern sichern.
-9. Bei Geräteproblemen: Seite hart neu laden (`Ctrl+F5`), Event-Link neu öffnen, PIN erneut eingeben.
+2. Admin-Name und Admin-PIN eingeben.
+3. Im Tab `Event verwalten` den `Event-Zugang für Check-in Staff` prüfen.
+4. Gäste importieren, manuell ergänzen, in der Check-in-Liste bearbeiten, exportieren oder einzelne No Shows setzen.
+5. Der Admin-PIN ist global für alle Events; Check-in-PINs sind pro Event separat.
+6. Vor Eventstart unter `Backup & Export` Gäste-CSV und Audit-Log-CSV herunterladen.
+7. Event-Link und benötigte Admin-/Check-in-PINs extern sichern.
+8. Bei Geräteproblemen: Seite hart neu laden (`Ctrl+F5`), Event-Link neu öffnen, PIN erneut eingeben.
 
 ## CSV-Import
 

@@ -52,7 +52,7 @@ Prüfen:
 ## Test 3 — Admin Login
 
 **Gegeben** Event-Link ist geöffnet.  
-**Wenn** Rolle Admin, persönlicher Admin-Name und Admin-PIN eingegeben werden.
+**Wenn** persönlicher Admin-Name und Admin-PIN eingegeben werden.
 **Dann** sind Admin-Funktionen sichtbar.
 
 Prüfen:
@@ -80,7 +80,7 @@ Prüfen:
 ## Test 4 — Check-in Staff Login
 
 **Gegeben** Event-Link ist geöffnet.  
-**Wenn** Rolle Check-in Staff und Check-in-PIN eingegeben werden.  
+**Wenn** Check-in Name/Position und Check-in-PIN eingegeben werden.
 **Dann** ist Check-in Oberfläche sichtbar.
 
 Prüfen:
@@ -89,7 +89,7 @@ Prüfen:
 - Mitarbeitername wird gespeichert/angezeigt; Gerätename ist optional.
 - Admin-Funktionen sind nicht sichtbar.
 - Tabs `Übersicht`, `Listen`, `Admin` und `Log` sind für Check-in Staff nicht sichtbar.
-- Nur `Check-in`, `Event wechseln` und `Rolle/PIN wechseln` sind sichtbar.
+- Nur `Check-in`, `Event wechseln` und `Anmeldung` sind sichtbar.
 
 ## Test 5 — CSV Import
 

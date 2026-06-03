@@ -106,7 +106,7 @@ const GUIDE_DEFINITIONS = {
 ## Check-in Logins definieren und informieren
 1. Check-in-Logins für den Event anlegen: Name/Position und PIN, z.B. Check-in Team oder Eingang 1.
 2. Check-in-Logins gelten immer nur für einen Event.
-3. Check-in-Team über Event-Link, Rolle, Name/Position, PIN, Startzeit und Ansprechperson informieren.
+3. Check-in-Team über Event-Link, Name/Position, PIN, Startzeit und Ansprechperson informieren.
 
 ## Einlassbetrieb
 - Übersicht regelmäßig kontrollieren.
@@ -132,9 +132,8 @@ const GUIDE_DEFINITIONS = {
 ## Start am Gerät
 1. Richtigen Event-Link öffnen.
 2. Header prüfen.
-3. Rolle Check-in Staff wählen.
+3. Namen oder Position eintragen.
 4. Check-in-PIN eingeben.
-5. Namen oder Position eintragen.
 
 ## Gast einchecken
 1. Name oder Guest ID suchen.
@@ -678,7 +677,6 @@ function renderRolePinTab() {
 }
 
 function renderRolePinSections() {
-  const currentRole = appState.member?.role || "checkin";
   const storedDisplayName = appState.member?.displayName || localStorage.getItem("guestlist:memberName") || "";
   const displayName = isMainAdminName(storedDisplayName) ? "" : storedDisplayName;
   const linked = hasLinkedRole();
@@ -699,20 +697,14 @@ function renderRolePinSections() {
       ${accessNotice}
       <form id="joinForm" class="grid two role-pin-form">
         <div class="form-row">
-          <label for="memberRole">Rolle</label>
-          <select id="memberRole">
-            <option value="checkin" ${currentRole === "checkin" ? "selected" : ""}>Check-in Staff</option>
-            <option value="admin" ${currentRole === "admin" ? "selected" : ""}>Admin</option>
-          </select>
+          <label for="memberName">Name / Position</label>
+          <input id="memberName" value="${escapeHtml(displayName)}" required placeholder="Admin-Name oder Check-in-Position" />
+          <p class="field-help">Die App erkennt automatisch, ob der Zugang Admin oder Check-in Staff ist.</p>
         </div>
         <div class="form-row">
           <label for="memberPin">PIN</label>
           <input id="memberPin" type="password" minlength="${PIN_MIN_LENGTH}" required autocomplete="off" placeholder="mindestens ${PIN_MIN_LENGTH} Zeichen" />
-          <p class="field-help">Admin: persönlicher Admin-PIN. Check-in Staff: Name/Position und Event-PIN müssen zusammenpassen.</p>
-        </div>
-        <div class="form-row">
-          <label for="memberName">Name</label>
-          <input id="memberName" value="${escapeHtml(displayName)}" required placeholder="Admin-Name / Check-in-Position" />
+          <p class="field-help">Admins nutzen ihren persönlichen Admin-PIN. Check-in Staff nutzt den Event-PIN passend zu Name/Position.</p>
         </div>
         <div class="actions" style="grid-column:1/-1">
           <button class="btn-primary" id="joinSubmitBtn" type="submit" disabled>Anmelden</button>
@@ -849,11 +841,10 @@ function bindRolePinHandlers() {
 
 function bindJoinForm() {
   const form = document.getElementById("joinForm");
-  const roleInput = document.getElementById("memberRole");
   const pinInput = document.getElementById("memberPin");
   const nameInput = document.getElementById("memberName");
   const button = document.getElementById("joinSubmitBtn");
-  if (!form || !roleInput || !pinInput || !nameInput || !button) return;
+  if (!form || !pinInput || !nameInput || !button) return;
 
   const updateButtonState = () => {
     const hasPin = pinInput.value.length >= PIN_MIN_LENGTH;
@@ -862,7 +853,7 @@ function bindJoinForm() {
   };
 
   updateButtonState();
-  [roleInput, pinInput, nameInput].forEach((input) => {
+  [pinInput, nameInput].forEach((input) => {
     input.addEventListener("input", updateButtonState);
     input.addEventListener("change", updateButtonState);
   });
@@ -951,22 +942,21 @@ async function joinEventFromForm(event) {
   let result = document.getElementById("joinResult");
   result.innerHTML = `<p class="notice info">Verbinde…</p>`;
 
-  const role = val("memberRole");
   const pin = val("memberPin");
-  const displayName = val("memberName").trim() || (role === "admin" ? "" : "Check-in");
+  const displayName = val("memberName").trim();
   const deviceLabel = appState.member?.deviceLabel || getLocalDeviceLabel();
 
   if (pin.length < PIN_MIN_LENGTH) {
     result.innerHTML = `<p class="notice warning">PIN ist zu kurz. Bitte den vollständigen PIN mit mindestens ${PIN_MIN_LENGTH} Zeichen eingeben.</p>`;
     return;
   }
-  if (role === "admin" && !displayName) {
-    result.innerHTML = `<p class="notice warning">Admin-Name ist Pflicht.</p>`;
+  if (!displayName) {
+    result.innerHTML = `<p class="notice warning">Name oder Position ist Pflicht.</p>`;
     return;
   }
 
   if (hasLinkedRole()) {
-    const currentRole = roleDisplayLabel(appState.member?.role) || "Rolle";
+    const currentRole = roleDisplayLabel(appState.member?.role) || "Zugang";
     const currentName = visibleMemberName(appState.member);
     const confirmed = window.confirm(`Dieses Gerät ist bereits als ${currentRole}${currentName ? `: ${currentName}` : ""} angemeldet.\n\nZuerst abmelden und dann neu anmelden?`);
     if (!confirmed) {
@@ -981,43 +971,50 @@ async function joinEventFromForm(event) {
     if (result) result.innerHTML = `<p class="notice info">Abgemeldet. Verbinde neu…</p>`;
   }
 
-  if (role === "checkin") {
-    try {
-      const joined = await joinCheckinStaffFromAllowedEvents(pin, displayName, deviceLabel);
-      if (!joined) {
-        result.innerHTML = `<p class="notice error">${escapeHtml(checkinStaffLoginErrorMessage())}</p>`;
-      }
-    } catch (error) {
-      console.error(error);
-      result.innerHTML = `<p class="notice error">${escapeHtml(joinErrorMessage(error))}</p>`;
-    }
-    return;
-  }
-
-  if (!appState.eventId) {
-    const defaultEvent = await findFirstAvailableAdminEvent();
-    if (defaultEvent) {
-      appState.eventId = defaultEvent.id;
-      appState.event = defaultEvent;
-      localStorage.setItem("guestlist:lastEventId", appState.eventId);
-      saveKnownEvent(appState.event);
-      window.history.replaceState(null, "", urlWithEvent(appState.eventId));
-      els.eventTitle.textContent = appState.event.name || "Gästeliste";
-      setEventMeta();
-    } else {
-      result.innerHTML = `<p class="notice error">Kein bekanntes Event gefunden. Bitte Event-Link öffnen oder neues Event erstellen.</p>`;
-      return;
-    }
-  }
-
-  if (!appState.eventId) {
-    result.innerHTML = `<p class="notice error">Kein Event aktiv.</p>`;
+  const adminAttempt = await joinAdminFromCredentials(pin, displayName, deviceLabel);
+  if (adminAttempt.joined) {
     return;
   }
 
   try {
-    await verifyGlobalAdminPin(pin, displayName, deviceLabel, appState.eventId);
-    await connectAdminToEvent(appState.eventId, pin, displayName, deviceLabel);
+    const joined = await joinCheckinStaffFromAllowedEvents(pin, displayName, deviceLabel);
+    if (!joined) {
+      result.innerHTML = `<p class="notice error">${escapeHtml(loginFailureMessage(adminAttempt.error))}</p>`;
+    }
+  } catch (error) {
+    console.error(error);
+    result.innerHTML = `<p class="notice error">${escapeHtml(joinErrorMessage(error))}</p>`;
+  }
+}
+
+async function joinAdminFromCredentials(pin, displayName, deviceLabel) {
+  try {
+    let targetEventId = appState.eventId;
+    let targetEvent = appState.event;
+
+    if (!targetEventId) {
+      const defaultEvent = await findFirstAvailableAdminEvent();
+      if (!defaultEvent) return { joined: false, error: null };
+      targetEventId = defaultEvent.id;
+      targetEvent = defaultEvent;
+    }
+
+    if (!targetEventId) return { joined: false, error: null };
+
+    await verifyGlobalAdminPin(pin, displayName, deviceLabel, targetEventId);
+    await connectAdminToEvent(targetEventId, pin, displayName, deviceLabel);
+
+    appState.eventId = targetEventId;
+    if (targetEvent) {
+      appState.event = { ...targetEvent, id: targetEventId };
+      saveKnownEvent(appState.event);
+    }
+    localStorage.setItem("guestlist:lastEventId", targetEventId);
+    window.history.replaceState(null, "", urlWithEvent(targetEventId));
+    if (appState.event) {
+      els.eventTitle.textContent = appState.event.name || "Gästeliste";
+      setEventMeta();
+    }
 
     localStorage.setItem("guestlist:memberName", displayName);
     saveAdminSession(pin, displayName);
@@ -1026,12 +1023,31 @@ async function joinEventFromForm(event) {
     appState.member = { id: memberSnap.id, ...memberSnap.data() };
     await addAudit("member_login", { name: displayName }, { role: "admin", deviceLabel });
     await promptForDuplicateNamedMemberLogout(appState.eventId, appState.member);
-    result.innerHTML = `<p class="notice success">Verbunden.</p>`;
     loadMainApp();
+    return { joined: true, error: null };
   } catch (error) {
-    console.error(error);
-    result.innerHTML = `<p class="notice error">${escapeHtml(joinErrorMessage(error))}</p>`;
+    if (!isExpectedAdminLoginMiss(error)) console.error(error);
+    return { joined: false, error };
   }
+}
+
+function isExpectedAdminLoginMiss(error) {
+  if (!error) return true;
+  if (isPermissionError(error)) return true;
+  const message = String(error?.message || error || "");
+  return /Admin-Name passt nicht|Globale Admin-Konfiguration fehlt|Globales Admin-Security-Dokument fehlt/i.test(message);
+}
+
+function loginFailureMessage(adminError) {
+  if (adminError && !isExpectedAdminLoginMiss(adminError)) return joinErrorMessage(adminError);
+  const checkinMessage = checkinStaffLoginErrorMessage();
+  if (appState.eventId && !isEventAccessWindowOpen(appState.event)) {
+    return `Verbindung fehlgeschlagen. Prüfe Name/Position und PIN. Für Check-in Staff: ${checkinMessage}`;
+  }
+  if (/Kein Check-in Event gefunden/i.test(checkinMessage)) {
+    return "Verbindung fehlgeschlagen. Prüfe Name/Position und PIN. Check-in Staff braucht den Event-Link.";
+  }
+  return "Verbindung fehlgeschlagen. Prüfe Name/Position und PIN.";
 }
 
 async function joinCheckinStaffFromAllowedEvents(pin, displayName, deviceLabel) {
@@ -1089,7 +1105,7 @@ async function joinCheckinStaffFromAllowedEvents(pin, displayName, deviceLabel) 
 
 function joinErrorMessage(error) {
   if (isPermissionError(error)) {
-    return "Verbindung fehlgeschlagen. Prüfe Rolle, Name und PIN. Das Feld Gerät darf leer bleiben.";
+    return "Verbindung fehlgeschlagen. Prüfe Name/Position und PIN.";
   }
   return `Verbindung fehlgeschlagen: ${error?.message || error}`;
 }
@@ -4412,7 +4428,7 @@ function auditActionOptions() {
 
 async function renderGuides() {
   if (!hasActiveEventAccess()) {
-    tabContent().innerHTML = `<section class="card"><h2>Anleitung</h2><p class="notice warning">Bitte zuerst mit Rolle und PIN anmelden.</p></section>`;
+    tabContent().innerHTML = `<section class="card"><h2>Anleitung</h2><p class="notice warning">Bitte zuerst mit Name/Position und PIN anmelden.</p></section>`;
     return;
   }
 
@@ -4447,14 +4463,14 @@ async function loadGuide(guideId) {
     const guideSnap = await getDoc(guideRef(guideId));
     if (!guideSnap.exists()) return fallback;
     const data = guideSnap.data();
-    return {
+    return normalizeGuideContent(guideId, {
       ...fallback,
       title: String(data.title || fallback.title).trim() || fallback.title,
       body: String(data.body || fallback.body).trim() || fallback.body,
       updatedAt: data.updatedAt || null,
       updatedByName: String(data.updatedByName || "").trim(),
       saved: true
-    };
+    });
   } catch (error) {
     console.error(error);
     return {
@@ -4462,6 +4478,36 @@ async function loadGuide(guideId) {
       loadError: "Gespeicherte Anleitung konnte nicht geladen werden. Zeige Standardtext."
     };
   }
+}
+
+function normalizeGuideContent(guideId, guide) {
+  let body = String(guide?.body || "");
+  if (guideId === GUIDE_IDS.admin) {
+    body = replaceText(body,
+      "Check-in-Team über Event-Link, Rolle, Name/Position, PIN, Startzeit und Ansprechperson informieren.",
+      "Check-in-Team über Event-Link, Name/Position, PIN, Startzeit und Ansprechperson informieren.");
+    body = replaceText(body,
+      "Check-in-Team informieren: Event-Link, Rolle `Check-in Staff`, Name/Position, Check-in-PIN, Startzeit und Ansprechperson.",
+      "Check-in-Team informieren: Event-Link, Name/Position, Check-in-PIN, Startzeit und Ansprechperson.");
+  }
+  if (guideId === GUIDE_IDS.checkin) {
+    body = replaceText(body,
+      "3. Rolle Check-in Staff wählen.\n4. Check-in-PIN eingeben.\n5. Namen oder Position eintragen.",
+      "3. Namen oder Position eintragen.\n4. Check-in-PIN eingeben.");
+    body = replaceText(body,
+      "2. Rolle `Check-in Staff` wählen.\n3. Check-in-PIN eingeben.\n4. Namen eingeben;",
+      "2. Namen oder Position eingeben.\n3. Check-in-PIN eingeben;");
+  }
+  return { ...guide, body };
+}
+
+function replaceText(value, search, replacement) {
+  const pattern = new RegExp(escapeRegExp(search).replace(/\r?\n/g, "\\r?\\n"), "g");
+  return String(value || "").replace(pattern, replacement);
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function defaultGuide(guideId) {

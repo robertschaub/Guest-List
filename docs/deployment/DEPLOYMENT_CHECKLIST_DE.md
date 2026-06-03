@@ -32,7 +32,7 @@
 - [ ] Master Admins festgelegt
 - [ ] Admin-Logins angelegt, falls nötig
 - [ ] Check-in-PINs pro Event definiert
-- [ ] Check-in-Team über Event-Link, Rolle, Name/Position und Check-in-PIN informiert
+- [ ] Check-in-Team über Event-Link, Name/Position und Check-in-PIN informiert
 - [ ] Ansprechperson für Problemfälle kommuniziert
 - [ ] Admin-PINs getrennt vom Check-in-Team gehalten
 
