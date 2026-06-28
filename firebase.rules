@@ -429,6 +429,7 @@ service cloud.firestore {
       return data.partnerName is string
         && data.partnerName.size() > 0
         && data.partnerName.size() <= 120
+        && (!data.keys().hasAny(['token']) || (data.token is string && data.token.size() == 64))
         && data.tokenHash is string
         && data.tokenHash.size() == 64
         && data.guestLimit is int
@@ -444,7 +445,7 @@ service cloud.firestore {
         && data.createdByUid is string
         && data.createdByName is string
         && data.keys().hasOnly([
-          'partnerName', 'tokenHash', 'guestLimit', 'usedCount', 'active', 'expiresAt',
+          'partnerName', 'token', 'tokenHash', 'guestLimit', 'usedCount', 'active', 'expiresAt',
           'counterMutationId', 'counterMutationKind',
           'createdAt', 'updatedAt', 'createdByUid', 'createdByName'
         ]);

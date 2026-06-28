@@ -102,11 +102,12 @@ Partner-Sessions verwenden zusätzlich:
 
 ## events/{eventId}/partnerLinks/{partnerId}
 
-Admin-verwalteter, event-spezifischer Partnerzugang. Der geheime Token wird nicht im Klartext gespeichert und nur direkt nach Erstellung oder Erneuerung im Admin-Browser angezeigt.
+Admin-verwalteter, event-spezifischer Partnerzugang. Neue und erneuerte Partner-Links speichern den geheimen Token zusätzlich zum Hash, damit Admins den Link später wieder anzeigen und kopieren können. Ältere Links ohne gespeicherten Token müssen einmal erneuert werden.
 
 Erwartete Felder:
 
 - `partnerName`
+- `token`: geheimer Link-Token für Admin-Anzeige und Kopieren
 - `tokenHash`
 - `guestLimit`: maximal erlaubte Summe aus ausstehenden und bestätigten Einreichungen
 - `usedCount`: aktuell belegte Plätze

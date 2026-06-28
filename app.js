@@ -270,6 +270,7 @@ const appState = {
     adminCreateEventOpen: false,
     lastBackupMessage: "",
     partnerLinkUrls: {},
+    partnerLinkVisible: {},
     editingPartnerSubmissionId: ""
   }
 };
@@ -2892,13 +2893,20 @@ function renderPartnerLinkRows(links) {
   if (!links.length) return `<p class="small">Noch keine Partner-Links.</p>`;
   return `<div class="pin-list">${links.map((link) => {
     const status = partnerLinkStatus(link);
-    const availableUrl = appState.ui.partnerLinkUrls[link.id] || "";
+    const availableUrl = partnerLinkUrlForAdmin(link);
+    const isVisible = Boolean(appState.ui.partnerLinkVisible[link.id]);
     return `
       <div class="pin-list-row partner-link-row">
         <div class="pin-list-main">
           <strong>${escapeHtml(link.partnerName || "Partner")}</strong>
           <small><span class="badge ${status.badge}">${escapeHtml(status.label)}</span> · ${Number(link.usedCount || 0)} von ${Number(link.guestLimit || 0)} Plätzen belegt · gültig bis ${escapeHtml(formatTimestamp(link.expiresAt) || "-")}</small>
-          ${availableUrl ? `<div class="copy-field"><input value="${escapeHtml(availableUrl)}" readonly aria-label="Partner-Link" /><button class="btn-secondary" type="button" data-copy-partner-link="${escapeHtml(link.id)}">Link kopieren</button></div>` : `<small>Der geheime Link wird nur direkt nach Erstellung oder Erneuerung angezeigt.</small>`}
+          ${availableUrl ? `
+            <div class="copy-field partner-copy-field">
+              <input data-partner-link-input="${escapeHtml(link.id)}" value="${escapeHtml(availableUrl)}" type="${isVisible ? "text" : "password"}" readonly autocomplete="off" spellcheck="false" aria-label="Partner-Link für ${escapeHtml(link.partnerName || "Partner")}" />
+              <button class="btn-secondary" type="button" data-toggle-partner-link-visibility="${escapeHtml(link.id)}" aria-label="Partner-Link ${isVisible ? "ausblenden" : "anzeigen"}">${isVisible ? "Ausblenden" : "Anzeigen"}</button>
+              <button class="btn-secondary" type="button" data-copy-partner-link="${escapeHtml(link.id)}">Kopieren</button>
+            </div>
+          ` : `<small>Der geheime Link ist für diesen Eintrag noch nicht gespeichert. Link erneuern, dann kann er hier angezeigt und kopiert werden.</small>`}
         </div>
         <div class="partner-link-controls">
           <label class="small" for="partner-limit-${escapeHtml(link.id)}">Limit</label>
@@ -2945,6 +2953,7 @@ function renderAdminPartnerSubmissions(submissions) {
 
 function bindPartnerAdminHandlers() {
   document.getElementById("createPartnerLinkForm")?.addEventListener("submit", createPartnerLinkFromForm);
+  document.querySelectorAll("[data-toggle-partner-link-visibility]").forEach((button) => button.addEventListener("click", () => togglePartnerLinkVisibility(button.dataset.togglePartnerLinkVisibility)));
   document.querySelectorAll("[data-copy-partner-link]").forEach((button) => button.addEventListener("click", () => copyPartnerLink(button.dataset.copyPartnerLink)));
   document.querySelectorAll("[data-save-partner-limit]").forEach((button) => button.addEventListener("click", () => savePartnerLimit(button.dataset.savePartnerLimit)));
   document.querySelectorAll("[data-reset-partner-link]").forEach((button) => button.addEventListener("click", () => resetPartnerLink(button.dataset.resetPartnerLink)));
@@ -2972,6 +2981,7 @@ async function createPartnerLinkFromForm(event) {
   try {
     await setDoc(linkRef, {
       partnerName,
+      token,
       tokenHash: await hashPartnerToken(appState.eventId, token),
       guestLimit,
       usedCount: 0,
@@ -2985,6 +2995,7 @@ async function createPartnerLinkFromForm(event) {
       createdByName: appState.member?.displayName || "Admin"
     });
     appState.ui.partnerLinkUrls[linkRef.id] = urlWithPartner(appState.eventId, linkRef.id, token);
+    appState.ui.partnerLinkVisible[linkRef.id] = true;
     renderAdmin();
     const result = document.getElementById("partnerLinkResult");
     if (result) result.innerHTML = `<p class="notice success">Partner-Link erstellt. Jetzt kopieren und sicher an ${escapeHtml(partnerName)} senden.</p>`;
@@ -3018,12 +3029,14 @@ async function resetPartnerLink(partnerId) {
   const token = randomPartnerToken();
   try {
     await updateDoc(partnerLinkRef(partnerId), {
+      token,
       tokenHash: await hashPartnerToken(appState.eventId, token),
       active: true,
       expiresAt: partnerLinkExpiry(),
       updatedAt: serverTimestamp()
     });
     appState.ui.partnerLinkUrls[partnerId] = urlWithPartner(appState.eventId, partnerId, token);
+    appState.ui.partnerLinkVisible[partnerId] = true;
     await addAudit("partner_link_reset", { name: link.partnerName }, { partnerId });
     renderAdmin();
     notify("Partner-Link erneuert. Den neuen Link jetzt kopieren.", "success");
@@ -3052,7 +3065,8 @@ async function togglePartnerLink(partnerId) {
 }
 
 async function copyPartnerLink(partnerId) {
-  const url = appState.ui.partnerLinkUrls[partnerId];
+  const link = appState.partnerLinks.find((item) => item.id === partnerId);
+  const url = partnerLinkUrlForAdmin(link);
   if (!url) {
     notify("Der geheime Link ist nicht mehr verfügbar. Erneuere den Link, um einen neuen zu kopieren.", "warning");
     return;
@@ -3063,6 +3077,26 @@ async function copyPartnerLink(partnerId) {
   } catch (error) {
     console.error(error);
     notify("Link konnte nicht kopiert werden. Bitte das Link-Feld manuell kopieren.", "error");
+  }
+}
+
+function partnerLinkUrlForAdmin(link) {
+  if (!link?.id) return "";
+  const token = String(link.token || "").trim();
+  if (token) return urlWithPartner(appState.eventId, link.id, token);
+  return appState.ui.partnerLinkUrls[link.id] || "";
+}
+
+function togglePartnerLinkVisibility(partnerId) {
+  if (!partnerId) return;
+  const isVisible = !appState.ui.partnerLinkVisible[partnerId];
+  appState.ui.partnerLinkVisible[partnerId] = isVisible;
+  const input = document.querySelector(`[data-partner-link-input="${cssEscape(partnerId)}"]`);
+  const button = document.querySelector(`[data-toggle-partner-link-visibility="${cssEscape(partnerId)}"]`);
+  if (input) input.type = isVisible ? "text" : "password";
+  if (button) {
+    button.textContent = isVisible ? "Ausblenden" : "Anzeigen";
+    button.setAttribute("aria-label", `Partner-Link ${isVisible ? "ausblenden" : "anzeigen"}`);
   }
 }
 

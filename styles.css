@@ -850,6 +850,10 @@ tr:last-child td { border-bottom: 0; }
   align-items: center;
 }
 
+.partner-copy-field {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
 .event-switch-list {
   display: grid;
   gap: 10px;
@@ -1569,6 +1573,10 @@ body.modal-open {
 
   .copy-field input {
     min-width: 0;
+  }
+
+  .partner-copy-field {
+    grid-template-columns: 1fr;
   }
 
   .audit-list {

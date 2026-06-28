@@ -151,6 +151,7 @@ Prüfen:
 Prüfen:
 
 - Partner-Link enthält Event-ID, Partner-ID und geheimen Token; der Link eines Events funktioniert nicht für ein anderes Event.
+- Admin kann den Partner-Link in der Partner-Link-Liste anzeigen, ausblenden und in die Zwischenablage kopieren.
 - Partner kann Name, Kategorie und optionalen Kommentar erfassen.
 - Einreichung 1 und 2 funktionieren; Einreichung 3 wird durch die Transaction und Firestore Rules blockiert.
 - Ausstehende Einreichungen sind für Check-in Staff nicht sichtbar.

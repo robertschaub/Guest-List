@@ -226,13 +226,13 @@ Check-in Staff sieht Check-in, Übersicht und Anmeldung. Admin-Bereiche wie Impo
 ### Partner-Gäste
 
 1. Admin öffnet im Tab `Events` den Bereich `Partner-Gästelisten`.
-2. Partnername und maximales Kontingent setzen, Partner-Link erstellen und sofort kopieren.
+2. Partnername und maximales Kontingent setzen, Partner-Link erstellen, anzeigen oder kopieren.
 3. Partner öffnet den Link und erfasst Name, Kategorie und optionalen Kommentar.
 4. Admin bestätigt oder lehnt Einreichungen einzeln oder gesammelt ab.
 5. Nur bestätigte Einreichungen erscheinen als offene Gäste in der aktiven Gästeliste.
-6. Admin kann Kontingent und Link-Status jederzeit ändern oder den geheimen Link erneuern.
+6. Admin kann Kontingent und Link-Status jederzeit ändern, den geheimen Link kopieren oder erneuern.
 
-Ausstehende und bestätigte Einreichungen zählen zum Kontingent. Ablehnung oder Löschen eines ausstehenden Eintrags gibt einen Platz frei. Ein erneuerter Link macht den bisherigen Link sofort ungültig.
+Ausstehende und bestätigte Einreichungen zählen zum Kontingent. Ablehnung oder Löschen eines ausstehenden Eintrags gibt einen Platz frei. Ein erneuerter Link macht den bisherigen Link sofort ungültig. Ältere Partner-Links ohne gespeicherten Token müssen einmal erneuert werden, bevor Admins sie später wieder anzeigen oder kopieren können.
 
 ### Admin
 
