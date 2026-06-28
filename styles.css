@@ -1091,6 +1091,58 @@ body.modal-open {
   min-height: 260px;
 }
 
+.partner-link-row {
+  align-items: flex-start;
+}
+
+.partner-link-row .pin-list-main {
+  display: grid;
+  flex: 1 1 420px;
+  gap: 7px;
+  min-width: 0;
+}
+
+.partner-link-controls {
+  display: flex;
+  flex: 0 1 520px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.partner-link-controls input {
+  width: 92px;
+}
+
+.partner-bulk-actions {
+  margin-bottom: 12px;
+}
+
+.partner-submissions-table input[type="checkbox"] {
+  width: 22px;
+  min-height: 22px;
+}
+
+.partner-quota {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.partner-quota strong {
+  font-size: 1.5rem;
+}
+
+.partner-submission-card .actions {
+  margin-top: 10px;
+}
+
 @media (max-width: 820px) {
   .grid.two, .grid.three, .grid.four {
     grid-template-columns: 1fr 1fr;
@@ -1532,5 +1584,21 @@ body.modal-open {
   .guest-danger-actions {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .partner-link-row,
+  .partner-link-controls,
+  .partner-quota {
+    display: grid;
+    width: 100%;
+  }
+
+  .partner-link-controls {
+    justify-content: stretch;
+  }
+
+  .partner-link-controls input,
+  .partner-link-controls button {
+    width: 100%;
   }
 }

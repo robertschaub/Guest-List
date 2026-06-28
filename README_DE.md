@@ -9,7 +9,7 @@ Statische Web-App für Event-Gästeliste, Check-in auf mehreren Mobile-/Tablet-G
 - Firebase Anonymous Auth, aber keine Benutzer-Accounts und keine Mitarbeiter-Logins
 - Event-Setup direkt in der App
 - Geheimer Event-Link plus PIN
-- Zugänge: Admin und Check-in Staff
+- Zugänge: Admin, Check-in Staff und event-spezifische Partner-Links
 - Kategorien: GA, Member GA, Member VIP, On Stage, Mitarbeiter
 - ca. 1200 Gäste realistisch nutzbar
 - Namenssuche / Guest-ID-Suche
@@ -17,6 +17,7 @@ Statische Web-App für Event-Gästeliste, Check-in auf mehreren Mobile-/Tablet-G
 - Doppel-Check-in-Schutz per Firestore-Transaktion
 - Letzten eigenen Check-in direkt rückgängig machen, solange keine andere Aktion folgt
 - Support-Kommentar pro Gast
+- Partner-Gäste mit Kontingent, Admin-Freigabe und Schutz vor vorzeitiger Sichtbarkeit
 - Status: Offen, Eingecheckt
 - Kategorie-Listen mit Summen
 - CSV-Import und CSV-Export
@@ -178,6 +179,8 @@ Für den Einlass gibt es in der App den Tab `Anleitung`. Check-in Staff sieht di
 
 **Events und Gültigkeit:** Jedes Event hat eine eigene Event-Link ID, eigene Gästeliste und eigene Check-in-PINs. Der sichtbare Eventname darf sich ändern, die Event-Link ID bleibt stabil. Check-in Staff hat nur im freigegebenen Zeitfenster Zugriff. Admins können Events auch außerhalb dieses Zeitfensters öffnen und bearbeiten.
 
+**Partner-Links:** Admins erstellen pro Partner und Event einen geheimen Link mit einem veränderbaren Gästekontingent. Partner brauchen weder Account noch PIN. Sie sehen nur ihre eigenen Einreichungen. Ausstehende oder abgelehnte Partner-Gäste bleiben für Check-in Staff unsichtbar; erst die Admin-Bestätigung übernimmt sie in die aktive Gästeliste.
+
 ### Admin Logins
 
 1. Admins sind global, nicht pro Event.
@@ -219,6 +222,17 @@ Für den Einlass gibt es in der App den Tab `Anleitung`. Check-in Staff sieht di
 6. Support-Kommentar bei Bedarf ergänzen.
 
 Check-in Staff sieht Check-in, Übersicht und Anmeldung. Admin-Bereiche wie Import, Export, PINs und Audit Log sind Admin-only.
+
+### Partner-Gäste
+
+1. Admin öffnet im Tab `Events` den Bereich `Partner-Gästelisten`.
+2. Partnername und maximales Kontingent setzen, Partner-Link erstellen und sofort kopieren.
+3. Partner öffnet den Link und erfasst Name, Kategorie und optionalen Kommentar.
+4. Admin bestätigt oder lehnt Einreichungen einzeln oder gesammelt ab.
+5. Nur bestätigte Einreichungen erscheinen als offene Gäste in der aktiven Gästeliste.
+6. Admin kann Kontingent und Link-Status jederzeit ändern oder den geheimen Link erneuern.
+
+Ausstehende und bestätigte Einreichungen zählen zum Kontingent. Ablehnung oder Löschen eines ausstehenden Eintrags gibt einen Platz frei. Ein erneuerter Link macht den bisherigen Link sofort ungültig.
 
 ### Admin
 

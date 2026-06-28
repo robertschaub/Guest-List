@@ -55,7 +55,14 @@ const STATUS_META = {
 
 const ROLE_META = {
   checkin: "Check-in Staff",
-  admin: "Admin"
+  admin: "Admin",
+  partner: "Partner"
+};
+
+const PARTNER_SUBMISSION_STATUS = {
+  pending: { label: "Ausstehend", badge: "warning" },
+  approved: { label: "Bestätigt", badge: "success" },
+  rejected: { label: "Abgelehnt", badge: "danger" }
 };
 
 const INFO_LABELS = {
@@ -106,6 +113,13 @@ const GUIDE_DEFINITIONS = {
 1. Check-in-Logins für den Event anlegen: Name/Position und PIN, z.B. Check-in Team oder Eingang 1.
 2. Check-in-Logins gelten immer nur für einen Event.
 3. Check-in-Team über Event-Link, Name/Position, PIN, Startzeit und Ansprechperson informieren.
+
+## Partner-Gästelisten
+1. Im Tab Events unter Partner-Gästelisten Partnername und Kontingent setzen.
+2. Geheimen Partner-Link erstellen, sofort kopieren und nur an den vorgesehenen Partner senden.
+3. Ausstehende Einreichungen prüfen und einzeln oder gesammelt bestätigen oder ablehnen.
+4. Erst bestätigte Partner-Gäste erscheinen in der aktiven Gästeliste.
+5. Bei Bedarf Kontingent ändern, Link deaktivieren oder geheimen Link erneuern.
 
 ## Einlassbetrieb
 - Übersicht regelmäßig kontrollieren.
@@ -223,6 +237,14 @@ const appState = {
   guestUnsubscribe: null,
   adminNotesUnsubscribe: null,
   auditUnsubscribe: null,
+  partnerLinks: [],
+  partnerLinksLoaded: false,
+  partnerLinksUnsubscribe: null,
+  partnerSubmissions: [],
+  partnerSubmissionsLoaded: false,
+  partnerSubmissionsUnsubscribe: null,
+  currentPartnerLink: null,
+  partnerLinkUnsubscribe: null,
   loggedInMembers: [],
   loggedInMembersLoaded: false,
   loggedInMembersUnsubscribe: null,
@@ -246,7 +268,9 @@ const appState = {
     masterAdminKind: "",
     showCheckinPins: false,
     adminCreateEventOpen: false,
-    lastBackupMessage: ""
+    lastBackupMessage: "",
+    partnerLinkUrls: {},
+    editingPartnerSubmissionId: ""
   }
 };
 
@@ -298,6 +322,8 @@ async function startApp() {
   const params = new URLSearchParams(window.location.search);
   const rawEventParam = params.get("event");
   const eventParam = resolveEventId(rawEventParam);
+  const partnerId = String(params.get("partner") || "").trim();
+  const partnerToken = String(params.get("token") || "").trim();
   const setupParam = params.get("setup");
 
   if (setupParam === "1") {
@@ -332,7 +358,9 @@ async function startApp() {
   }
 
   if (rawEventParam && eventUrlId(eventParam) !== rawEventParam) {
-    window.location.replace(urlWithEvent(eventParam));
+    window.location.replace(partnerId && partnerToken
+      ? urlWithPartner(eventParam, partnerId, partnerToken)
+      : urlWithEvent(eventParam));
     return;
   }
 
@@ -351,6 +379,18 @@ async function startApp() {
   setEventMeta();
 
   const memberSnap = await getCurrentMemberSnap();
+  if (partnerId || partnerToken) {
+    if (!partnerId || !partnerToken) {
+      renderPartnerLinkError("Dieser Partner-Link ist unvollständig. Bitte den vollständigen Link erneut öffnen.");
+      return;
+    }
+    if (memberSnap.exists() && memberSnap.data()?.role !== "partner") {
+      renderPartnerLinkError("Dieses Browserfenster ist bereits als Admin oder Check-in Staff angemeldet. Öffne den Partner-Link in einem privaten Browserfenster.");
+      return;
+    }
+    await joinPartnerFromLink(partnerId, partnerToken);
+    return;
+  }
   if (memberSnap.exists()) {
     resumeExistingMemberSession(memberSnap);
   } else {
@@ -791,6 +831,54 @@ function renderEventNotFound(eventId) {
       <div class="actions">
         <button class="btn-secondary" onclick="window.location.href='${escapeJsUrl(urlWithoutParams())}?setup=1'">Zur Event-Auswahl</button>
       </div>
+    </section>
+  `);
+}
+
+async function joinPartnerFromLink(partnerId, token) {
+  try {
+    const tokenHash = await hashPartnerToken(appState.eventId, token);
+    await setDoc(memberRef(appState.user.uid), {
+      uid: appState.user.uid,
+      role: "partner",
+      pinHash: "",
+      pinNameHash: "",
+      displayNameKey: partnerId,
+      displayName: "Partner",
+      deviceLabel: "Partner-Link",
+      partnerId,
+      partnerTokenHash: tokenHash,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    const [memberSnap, linkSnap] = await Promise.all([
+      getDoc(memberRef(appState.user.uid)),
+      getDoc(partnerLinkRef(partnerId))
+    ]);
+    if (!memberSnap.exists() || !linkSnap.exists()) throw new Error("Partner-Link nicht gefunden.");
+
+    appState.member = { id: memberSnap.id, ...memberSnap.data() };
+    appState.currentPartnerLink = { id: linkSnap.id, ...linkSnap.data() };
+    appState.currentTab = "partner";
+    clearAdminSession();
+    window.history.replaceState(null, "", urlWithPartner(appState.eventId, partnerId, token));
+    loadMainApp();
+  } catch (error) {
+    console.error(error);
+    renderPartnerLinkError(isPermissionError(error)
+      ? "Dieser Partner-Link ist ungültig, abgelaufen oder wurde deaktiviert. Bitte den Event-Admin kontaktieren."
+      : `Partner-Link konnte nicht geöffnet werden: ${error?.message || error}`);
+  }
+}
+
+function renderPartnerLinkError(message) {
+  els.eventTitle.textContent = appState.event?.name || "Partner-Gästeliste";
+  setEventMeta();
+  render(`
+    <section class="card">
+      <h2>Partner-Link nicht verfügbar</h2>
+      <p class="notice error">${escapeHtml(message)}</p>
     </section>
   `);
 }
@@ -1351,14 +1439,21 @@ function loadMainApp() {
   appState.guestsLoaded = false;
   appState.adminNotes = {};
   appState.adminNotesLoaded = false;
+  appState.partnerLinks = [];
+  appState.partnerLinksLoaded = false;
+  appState.partnerSubmissions = [];
+  appState.partnerSubmissionsLoaded = false;
   appState.ui.masterAdmin = null;
   appState.ui.masterAdminKind = "";
+  if (isPartner()) appState.currentTab = "partner";
   if (isAdmin()) void ensureCurrentEventAccessWindowFields();
   renderShell();
   if (isAdmin()) void refreshMasterAdminState();
   subscribeCurrentEvent();
   subscribeCurrentMember();
   if (isAdmin()) ensureLoggedInMembersSubscription();
+  if (isAdmin()) subscribePartnerAdminData();
+  if (isPartner()) subscribePartnerData();
   if (hasActiveEventAccess()) {
     subscribeGuests();
     subscribeAdminNotes();
@@ -1389,6 +1484,12 @@ function visibleTabs() {
       { id: "overview", label: "Übersicht" },
       { id: "guides", label: "Anleitung" },
       { id: "role", label: "Anmeldung" }
+    ];
+  }
+
+  if (isPartner()) {
+    return [
+      { id: "partner", label: "Gäste erfassen" }
     ];
   }
 
@@ -1483,6 +1584,7 @@ function renderActiveTab() {
   else if (appState.currentTab === "role") renderRolePinTab();
   else if (appState.currentTab === "adminSettings") renderAdminSettings();
   else if (appState.currentTab === "log") renderAuditLog();
+  else if (appState.currentTab === "partner") renderPartnerPortal();
 }
 
 function subscribeCurrentEvent() {
@@ -1588,6 +1690,70 @@ function subscribeAdminNotes() {
   });
 }
 
+function subscribePartnerAdminData() {
+  appState.partnerLinksLoaded = false;
+  appState.partnerSubmissionsLoaded = false;
+  appState.partnerLinksUnsubscribe = onSnapshot(
+    collection(appState.db, "events", appState.eventId, "partnerLinks"),
+    (snapshot) => {
+      appState.partnerLinks = snapshot.docs
+        .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+        .sort((a, b) => String(a.partnerName || "").localeCompare(String(b.partnerName || ""), "de"));
+      appState.partnerLinksLoaded = true;
+      if (appState.currentTab === "admin") renderActiveTab();
+    },
+    (error) => {
+      console.error(error);
+      appState.partnerLinksLoaded = true;
+      notify("Partner-Links konnten nicht geladen werden.", "error");
+    }
+  );
+  appState.partnerSubmissionsUnsubscribe = onSnapshot(
+    collection(appState.db, "events", appState.eventId, "partnerSubmissions"),
+    (snapshot) => {
+      appState.partnerSubmissions = snapshot.docs
+        .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+        .sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
+      appState.partnerSubmissionsLoaded = true;
+      if (appState.currentTab === "admin") renderActiveTab();
+    },
+    (error) => {
+      console.error(error);
+      appState.partnerSubmissionsLoaded = true;
+      notify("Partner-Gäste konnten nicht geladen werden.", "error");
+    }
+  );
+}
+
+function subscribePartnerData() {
+  const partnerId = appState.member?.partnerId;
+  if (!partnerId) return;
+  appState.partnerSubmissionsLoaded = false;
+  appState.partnerLinkUnsubscribe = onSnapshot(partnerLinkRef(partnerId), (snapshot) => {
+    appState.currentPartnerLink = snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+    renderActiveTab();
+  }, (error) => {
+    console.error(error);
+    appState.currentPartnerLink = null;
+    renderActiveTab();
+  });
+  const submissionsQuery = query(
+    collection(appState.db, "events", appState.eventId, "partnerSubmissions"),
+    where("partnerId", "==", partnerId)
+  );
+  appState.partnerSubmissionsUnsubscribe = onSnapshot(submissionsQuery, (snapshot) => {
+    appState.partnerSubmissions = snapshot.docs
+      .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+      .sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
+    appState.partnerSubmissionsLoaded = true;
+    renderActiveTab();
+  }, (error) => {
+    console.error(error);
+    appState.partnerSubmissionsLoaded = true;
+    renderActiveTab();
+  });
+}
+
 function renderCheckin() {
   const content = tabContent();
   const categories = getCategories();
@@ -1682,7 +1848,7 @@ function renderEmptyEventWarning() {
 }
 
 function handleCheckinAuthButton() {
-  if (isEventMember()) {
+  if (hasLinkedRole()) {
     void logoutCurrentMember("checkin");
     return;
   }
@@ -1696,6 +1862,7 @@ async function logoutCurrentMember(nextTab = "role") {
   const targetTab = typeof nextTab === "string" ? nextTab : "role";
   const memberDocRef = appState.eventId && appState.user?.uid ? memberRef(appState.user.uid) : null;
   const wasLinked = hasLinkedRole();
+  const wasPartner = isPartner();
 
   if (memberDocRef && wasLinked && isOffline()) {
     notify("Abmelden nicht möglich: Gerät ist offline.", "error");
@@ -1704,10 +1871,12 @@ async function logoutCurrentMember(nextTab = "role") {
 
   if (memberDocRef && wasLinked) {
     try {
-      await addAudit("member_logout", { name: appState.member?.displayName || "" }, {
-        role: appState.member?.role || "",
-        deviceLabel: appState.member?.deviceLabel || ""
-      });
+      if (!isPartner()) {
+        await addAudit("member_logout", { name: appState.member?.displayName || "" }, {
+          role: appState.member?.role || "",
+          deviceLabel: appState.member?.deviceLabel || ""
+        });
+      }
       await deleteDoc(memberDocRef);
     } catch (error) {
       console.error(error);
@@ -1716,6 +1885,9 @@ async function logoutCurrentMember(nextTab = "role") {
     }
   }
 
+  if (wasPartner && appState.eventId) {
+    window.history.replaceState(null, "", urlWithEvent(appState.eventId));
+  }
   finishLocalLogout(targetTab);
   return true;
 }
@@ -1727,6 +1899,11 @@ function finishLocalLogout(nextTab = "role", message = "") {
   appState.adminNotesLoaded = false;
   appState.guests = [];
   appState.guestsLoaded = false;
+  appState.partnerLinks = [];
+  appState.partnerLinksLoaded = false;
+  appState.partnerSubmissions = [];
+  appState.partnerSubmissionsLoaded = false;
+  appState.currentPartnerLink = null;
   appState.member = null;
   appState.ui.editingGuestId = "";
   clearCheckinUndo();
@@ -2615,6 +2792,8 @@ function renderAdmin() {
 
     ${renderCheckinPinSection()}
 
+    ${renderPartnerAdminSection()}
+
     <section class="card">
       <h2>Gäste importieren</h2>
       <p class="small">Erwartete Spalten: <code>Name</code>, <code>Kategorie</code>, optional <code>Guest ID</code> und Info-Spalten. Excel vorher als CSV speichern.</p>
@@ -2660,6 +2839,7 @@ function renderAdmin() {
   bindCheckinAccessForm();
   bindCheckinPinForm();
   bindCheckinPinVisibilityToggle();
+  bindPartnerAdminHandlers();
   void renderNamedPinList("checkin");
   document.getElementById("previewImportBtn")?.addEventListener("click", previewCsvImport);
   document.getElementById("runImportBtn")?.addEventListener("click", runCsvImport);
@@ -2668,6 +2848,515 @@ function renderAdmin() {
   void renderAdminEventDirectory();
   void renderEventVisibilitySection();
   void renderEventDeleteSection();
+}
+
+function renderPartnerAdminSection() {
+  const links = appState.partnerLinks;
+  const submissions = appState.partnerSubmissions;
+  const pendingCount = submissions.filter((item) => item.status === "pending").length;
+  return `
+    <section class="card" id="partnerAdminSection">
+      <h2>Partner-Gästelisten</h2>
+      <p class="small">Erstelle pro Partner einen geheimen Link. Eingereichte Gäste sind erst nach Admin-Bestätigung in der aktiven Gästeliste sichtbar.</p>
+      <form id="createPartnerLinkForm" class="grid two">
+        <div class="form-row">
+          <label for="partnerName">Partnername</label>
+          <input id="partnerName" required maxlength="120" placeholder="z.B. Sponsor AG" />
+        </div>
+        <div class="form-row">
+          <label for="partnerGuestLimit">Maximale Gästezahl</label>
+          <input id="partnerGuestLimit" type="number" min="0" max="5000" value="10" required />
+          <p class="field-help">Ausstehende und bestätigte Einträge zählen. Abgelehnte oder gelöschte Einträge geben den Platz frei.</p>
+        </div>
+        <div class="actions" style="grid-column:1/-1">
+          <button class="btn-primary" type="submit">Partner-Link erstellen</button>
+        </div>
+      </form>
+      <div id="partnerLinkResult"></div>
+      <div class="admin-section">
+        <h3>Partner-Links</h3>
+        ${!appState.partnerLinksLoaded ? `<p class="small">Partner-Links werden geladen…</p>` : renderPartnerLinkRows(links)}
+      </div>
+      <div class="admin-section">
+        <div class="pin-list-header">
+          <h3>Partner-Einreichungen</h3>
+          <span class="badge ${pendingCount ? "warning" : "success"}">${pendingCount} ausstehend</span>
+        </div>
+        ${!appState.partnerSubmissionsLoaded ? `<p class="small">Einreichungen werden geladen…</p>` : renderAdminPartnerSubmissions(submissions)}
+      </div>
+    </section>
+  `;
+}
+
+function renderPartnerLinkRows(links) {
+  if (!links.length) return `<p class="small">Noch keine Partner-Links.</p>`;
+  return `<div class="pin-list">${links.map((link) => {
+    const status = partnerLinkStatus(link);
+    const availableUrl = appState.ui.partnerLinkUrls[link.id] || "";
+    return `
+      <div class="pin-list-row partner-link-row">
+        <div class="pin-list-main">
+          <strong>${escapeHtml(link.partnerName || "Partner")}</strong>
+          <small><span class="badge ${status.badge}">${escapeHtml(status.label)}</span> · ${Number(link.usedCount || 0)} von ${Number(link.guestLimit || 0)} Plätzen belegt · gültig bis ${escapeHtml(formatTimestamp(link.expiresAt) || "-")}</small>
+          ${availableUrl ? `<div class="copy-field"><input value="${escapeHtml(availableUrl)}" readonly aria-label="Partner-Link" /><button class="btn-secondary" type="button" data-copy-partner-link="${escapeHtml(link.id)}">Link kopieren</button></div>` : `<small>Der geheime Link wird nur direkt nach Erstellung oder Erneuerung angezeigt.</small>`}
+        </div>
+        <div class="partner-link-controls">
+          <label class="small" for="partner-limit-${escapeHtml(link.id)}">Limit</label>
+          <input id="partner-limit-${escapeHtml(link.id)}" data-partner-limit-input="${escapeHtml(link.id)}" type="number" min="0" max="5000" value="${Number(link.guestLimit || 0)}" />
+          <button class="btn-secondary" type="button" data-save-partner-limit="${escapeHtml(link.id)}">Limit speichern</button>
+          <button class="btn-secondary" type="button" data-reset-partner-link="${escapeHtml(link.id)}">Link erneuern</button>
+          <button class="${link.active === false ? "btn-primary" : "btn-danger"}" type="button" data-toggle-partner-link="${escapeHtml(link.id)}">${link.active === false ? "Aktivieren" : "Deaktivieren"}</button>
+        </div>
+      </div>
+    `;
+  }).join("")}</div>`;
+}
+
+function renderAdminPartnerSubmissions(submissions) {
+  if (!submissions.length) return `<p class="small">Noch keine Partner-Gäste eingereicht.</p>`;
+  const rows = submissions.map((item) => {
+    const status = PARTNER_SUBMISSION_STATUS[item.status] || PARTNER_SUBMISSION_STATUS.pending;
+    const pending = item.status === "pending";
+    return `
+      <tr>
+        <td>${pending ? `<input type="checkbox" data-partner-submission-select="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.name)} auswählen" />` : ""}</td>
+        <td><strong>${escapeHtml(item.name || "")}</strong><br><small>${escapeHtml(item.partnerName || partnerNameForId(item.partnerId))}</small></td>
+        <td>${escapeHtml(item.category || "")}</td>
+        <td>${escapeHtml(item.comment || "")}</td>
+        <td><span class="badge ${status.badge}">${escapeHtml(status.label)}</span></td>
+        <td>${pending ? `<div class="actions"><button class="btn-primary" type="button" data-approve-partner-submission="${escapeHtml(item.id)}">Bestätigen</button><button class="btn-danger" type="button" data-reject-partner-submission="${escapeHtml(item.id)}">Ablehnen</button></div>` : ""}</td>
+      </tr>
+    `;
+  }).join("");
+  return `
+    <div class="actions partner-bulk-actions">
+      <button class="btn-secondary" id="selectAllPendingPartnerGuests" type="button">Alle ausstehenden auswählen</button>
+      <button class="btn-primary" id="approveSelectedPartnerGuests" type="button">Auswahl bestätigen</button>
+      <button class="btn-danger" id="rejectSelectedPartnerGuests" type="button">Auswahl ablehnen</button>
+    </div>
+    <div class="table-wrap">
+      <table class="partner-submissions-table">
+        <thead><tr><th></th><th>Gast / Partner</th><th>Kategorie</th><th>Kommentar</th><th>Status</th><th>Aktion</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function bindPartnerAdminHandlers() {
+  document.getElementById("createPartnerLinkForm")?.addEventListener("submit", createPartnerLinkFromForm);
+  document.querySelectorAll("[data-copy-partner-link]").forEach((button) => button.addEventListener("click", () => copyPartnerLink(button.dataset.copyPartnerLink)));
+  document.querySelectorAll("[data-save-partner-limit]").forEach((button) => button.addEventListener("click", () => savePartnerLimit(button.dataset.savePartnerLimit)));
+  document.querySelectorAll("[data-reset-partner-link]").forEach((button) => button.addEventListener("click", () => resetPartnerLink(button.dataset.resetPartnerLink)));
+  document.querySelectorAll("[data-toggle-partner-link]").forEach((button) => button.addEventListener("click", () => togglePartnerLink(button.dataset.togglePartnerLink)));
+  document.querySelectorAll("[data-approve-partner-submission]").forEach((button) => button.addEventListener("click", () => reviewPartnerSubmission(button.dataset.approvePartnerSubmission, "approved")));
+  document.querySelectorAll("[data-reject-partner-submission]").forEach((button) => button.addEventListener("click", () => reviewPartnerSubmission(button.dataset.rejectPartnerSubmission, "rejected")));
+  document.getElementById("selectAllPendingPartnerGuests")?.addEventListener("click", () => {
+    document.querySelectorAll("[data-partner-submission-select]").forEach((checkbox) => { checkbox.checked = true; });
+  });
+  document.getElementById("approveSelectedPartnerGuests")?.addEventListener("click", () => reviewSelectedPartnerSubmissions("approved"));
+  document.getElementById("rejectSelectedPartnerGuests")?.addEventListener("click", () => reviewSelectedPartnerSubmissions("rejected"));
+}
+
+async function createPartnerLinkFromForm(event) {
+  event.preventDefault();
+  if (!requireOnline("Partner-Link erstellen") || !isAdmin()) return;
+  const partnerName = val("partnerName").trim();
+  const guestLimit = Number(val("partnerGuestLimit"));
+  if (!partnerName || !Number.isInteger(guestLimit) || guestLimit < 0 || guestLimit > 5000) {
+    notify("Partnername und ein Limit zwischen 0 und 5000 sind erforderlich.", "warning");
+    return;
+  }
+  const linkRef = doc(collection(appState.db, "events", appState.eventId, "partnerLinks"));
+  const token = randomPartnerToken();
+  try {
+    await setDoc(linkRef, {
+      partnerName,
+      tokenHash: await hashPartnerToken(appState.eventId, token),
+      guestLimit,
+      usedCount: 0,
+      active: true,
+      expiresAt: partnerLinkExpiry(),
+      counterMutationId: "",
+      counterMutationKind: "",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      createdByUid: appState.user.uid,
+      createdByName: appState.member?.displayName || "Admin"
+    });
+    appState.ui.partnerLinkUrls[linkRef.id] = urlWithPartner(appState.eventId, linkRef.id, token);
+    renderAdmin();
+    const result = document.getElementById("partnerLinkResult");
+    if (result) result.innerHTML = `<p class="notice success">Partner-Link erstellt. Jetzt kopieren und sicher an ${escapeHtml(partnerName)} senden.</p>`;
+    await addAudit("partner_link_create", { name: partnerName }, { partnerId: linkRef.id, guestLimit });
+  } catch (error) {
+    console.error(error);
+    notify(`Partner-Link konnte nicht erstellt werden: ${error.message || error}`, "error");
+  }
+}
+
+async function savePartnerLimit(partnerId) {
+  const input = document.querySelector(`[data-partner-limit-input="${cssEscape(partnerId)}"]`);
+  const guestLimit = Number(input?.value);
+  if (!Number.isInteger(guestLimit) || guestLimit < 0 || guestLimit > 5000) {
+    notify("Das Limit muss eine ganze Zahl zwischen 0 und 5000 sein.", "warning");
+    return;
+  }
+  try {
+    await updateDoc(partnerLinkRef(partnerId), { guestLimit, updatedAt: serverTimestamp() });
+    await addAudit("partner_limit_update", { name: partnerNameForId(partnerId) }, { partnerId, guestLimit });
+    notify("Partner-Limit gespeichert.", "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Limit konnte nicht gespeichert werden: ${error.message || error}`, "error");
+  }
+}
+
+async function resetPartnerLink(partnerId) {
+  const link = appState.partnerLinks.find((item) => item.id === partnerId);
+  if (!link || !window.confirm(`Geheimen Link für ${link.partnerName} erneuern? Der bisherige Link funktioniert danach sofort nicht mehr.`)) return;
+  const token = randomPartnerToken();
+  try {
+    await updateDoc(partnerLinkRef(partnerId), {
+      tokenHash: await hashPartnerToken(appState.eventId, token),
+      active: true,
+      expiresAt: partnerLinkExpiry(),
+      updatedAt: serverTimestamp()
+    });
+    appState.ui.partnerLinkUrls[partnerId] = urlWithPartner(appState.eventId, partnerId, token);
+    await addAudit("partner_link_reset", { name: link.partnerName }, { partnerId });
+    renderAdmin();
+    notify("Partner-Link erneuert. Den neuen Link jetzt kopieren.", "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Link konnte nicht erneuert werden: ${error.message || error}`, "error");
+  }
+}
+
+async function togglePartnerLink(partnerId) {
+  const link = appState.partnerLinks.find((item) => item.id === partnerId);
+  if (!link) return;
+  const active = link.active === false;
+  try {
+    await updateDoc(partnerLinkRef(partnerId), {
+      active,
+      expiresAt: active ? partnerLinkExpiry() : link.expiresAt,
+      updatedAt: serverTimestamp()
+    });
+    await addAudit(active ? "partner_link_enable" : "partner_link_disable", { name: link.partnerName }, { partnerId });
+    notify(active ? "Partner-Link aktiviert." : "Partner-Link deaktiviert.", "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Partner-Link konnte nicht geändert werden: ${error.message || error}`, "error");
+  }
+}
+
+async function copyPartnerLink(partnerId) {
+  const url = appState.ui.partnerLinkUrls[partnerId];
+  if (!url) {
+    notify("Der geheime Link ist nicht mehr verfügbar. Erneuere den Link, um einen neuen zu kopieren.", "warning");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    notify("Partner-Link kopiert.", "success");
+  } catch (error) {
+    console.error(error);
+    notify("Link konnte nicht kopiert werden. Bitte das Link-Feld manuell kopieren.", "error");
+  }
+}
+
+function selectedPartnerSubmissionIds() {
+  return [...document.querySelectorAll("[data-partner-submission-select]:checked")].map((checkbox) => checkbox.dataset.partnerSubmissionSelect);
+}
+
+async function reviewSelectedPartnerSubmissions(status) {
+  const ids = selectedPartnerSubmissionIds();
+  if (!ids.length) {
+    notify("Bitte mindestens einen ausstehenden Gast auswählen.", "warning");
+    return;
+  }
+  const verb = status === "approved" ? "bestätigen" : "ablehnen";
+  if (!window.confirm(`${ids.length} Partner-Gäste ${verb}?`)) return;
+  for (const id of ids) await reviewPartnerSubmission(id, status, { skipConfirm: true, quiet: true });
+  notify(`${ids.length} Partner-Gäste bearbeitet.`, "success");
+}
+
+async function reviewPartnerSubmission(submissionId, status, options = {}) {
+  const submission = appState.partnerSubmissions.find((item) => item.id === submissionId);
+  if (!submission || submission.status !== "pending") return;
+  const approved = status === "approved";
+  if (!options.skipConfirm && !window.confirm(`${submission.name} ${approved ? "bestätigen" : "ablehnen"}?`)) return;
+  try {
+    await runTransaction(appState.db, async (transaction) => {
+      const submissionRef = partnerSubmissionRef(submissionId);
+      const submissionSnap = await transaction.get(submissionRef);
+      if (!submissionSnap.exists() || submissionSnap.data().status !== "pending") throw new Error("Einreichung wurde bereits bearbeitet.");
+      const current = submissionSnap.data();
+      if (approved) {
+        const guestDocId = `partner-${submissionId}`;
+        const guestDocRef = guestRef(guestDocId);
+        const guestSnap = await transaction.get(guestDocRef);
+        if (guestSnap.exists()) throw new Error("Dieser Partner-Gast wurde bereits übernommen.");
+        transaction.set(guestDocRef, buildApprovedPartnerGuest(current, submissionId));
+        transaction.update(submissionRef, {
+          status: "approved",
+          guestDocId,
+          reviewedAt: serverTimestamp(),
+          reviewedByUid: appState.user.uid,
+          reviewedByName: appState.member?.displayName || "Admin",
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        const linkRef = partnerLinkRef(current.partnerId);
+        const linkSnap = await transaction.get(linkRef);
+        if (!linkSnap.exists()) throw new Error("Zugehöriger Partner-Link fehlt.");
+        transaction.update(linkRef, {
+          usedCount: Math.max(0, Number(linkSnap.data().usedCount || 0) - 1),
+          counterMutationId: submissionId,
+          counterMutationKind: "reject",
+          updatedAt: serverTimestamp()
+        });
+        transaction.update(submissionRef, {
+          status: "rejected",
+          guestDocId: null,
+          reviewedAt: serverTimestamp(),
+          reviewedByUid: appState.user.uid,
+          reviewedByName: appState.member?.displayName || "Admin",
+          updatedAt: serverTimestamp()
+        });
+      }
+    });
+    await addAudit(approved ? "partner_guest_approve" : "partner_guest_reject", { name: submission.name, category: submission.category }, { partnerId: submission.partnerId, submissionId });
+    if (!options.quiet) notify(approved ? "Partner-Gast bestätigt und zur Gästeliste hinzugefügt." : "Partner-Gast abgelehnt.", "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Partner-Gast konnte nicht bearbeitet werden: ${error.message || error}`, "error");
+  }
+}
+
+function buildApprovedPartnerGuest(submission, submissionId) {
+  const guestId = `P-${String(submission.partnerId || "").slice(0, 6).toUpperCase()}-${submissionId.slice(0, 8).toUpperCase()}`;
+  return {
+    guestId,
+    name: String(submission.name || "").trim(),
+    searchName: normalizeForSearch(`${submission.name || ""} ${guestId} ${submission.category || ""}`),
+    category: String(submission.category || "GA").trim(),
+    status: "open",
+    supportComment: String(submission.comment || "").trim(),
+    adminStaffInfo: "",
+    checkedInAt: null,
+    checkedInByUid: null,
+    checkedInByName: null,
+    checkedInDevice: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    createdByUid: appState.user.uid,
+    createdByName: appState.member?.displayName || "Admin"
+  };
+}
+
+function renderPartnerPortal() {
+  const content = tabContent();
+  if (!isPartner()) {
+    content.innerHTML = `<section class="card"><h2>Kein Zugriff</h2><p>Bitte den vollständigen Partner-Link öffnen.</p></section>`;
+    return;
+  }
+  const link = appState.currentPartnerLink;
+  if (!link) {
+    content.innerHTML = `<section class="card"><h2>Partner-Link nicht verfügbar</h2><p class="notice error">Der Link ist ungültig, abgelaufen oder wurde deaktiviert. Bitte den Event-Admin kontaktieren.</p></section>`;
+    return;
+  }
+  const active = link.active !== false && timestampMillis(link.expiresAt) > Date.now();
+  const used = Number(link.usedCount || 0);
+  const limit = Number(link.guestLimit || 0);
+  const remaining = Math.max(0, limit - used);
+  const editing = appState.partnerSubmissions.find((item) => item.id === appState.ui.editingPartnerSubmissionId && item.status === "pending") || null;
+  const categories = eventCategoriesForForm();
+  content.innerHTML = `
+    <section class="card partner-portal-header">
+      <h2>Gäste für ${escapeHtml(link.partnerName || "Partner")}</h2>
+      <p>Event: <strong>${escapeHtml(appState.event?.name || "")}</strong>${appState.event?.date ? ` · ${escapeHtml(formatEventDate(appState.event.date))}` : ""}</p>
+      <div class="partner-quota" aria-label="Partner-Gästekontingent">
+        <strong>${used}/${limit}</strong>
+        <span>Plätze belegt · ${remaining} verfügbar</span>
+      </div>
+      ${active ? "" : `<p class="notice error">Dieser Partner-Link ist nicht mehr aktiv. Einträge können nur noch angesehen werden.</p>`}
+    </section>
+    <section class="card">
+      <h2>${editing ? "Ausstehenden Gast bearbeiten" : "Gast einreichen"}</h2>
+      <p class="small">Der Gast wird erst nach Bestätigung durch einen Admin in die aktive Gästeliste übernommen.</p>
+      <form id="partnerGuestForm" class="grid two">
+        <div class="form-row">
+          <label for="partnerGuestName">Name</label>
+          <input id="partnerGuestName" maxlength="200" required value="${escapeHtml(editing?.name || "")}" ${active ? "" : "disabled"} />
+        </div>
+        <div class="form-row">
+          <label for="partnerGuestCategory">Kategorie</label>
+          <select id="partnerGuestCategory" ${active ? "" : "disabled"}>${categories.map((category) => option(category, category, editing?.category || categories[0])).join("")}</select>
+        </div>
+        <div class="form-row" style="grid-column:1/-1">
+          <label for="partnerGuestComment">Kommentar (optional)</label>
+          <textarea id="partnerGuestComment" maxlength="1000" ${active ? "" : "disabled"}>${escapeHtml(editing?.comment || "")}</textarea>
+        </div>
+        <div class="actions" style="grid-column:1/-1">
+          <button class="btn-primary" type="submit" ${!active || (!editing && remaining <= 0) ? "disabled" : ""}>${editing ? "Änderungen speichern" : "Gast einreichen"}</button>
+          ${editing ? `<button class="btn-secondary" id="cancelPartnerGuestEdit" type="button">Abbrechen</button>` : ""}
+        </div>
+      </form>
+      ${!editing && remaining <= 0 ? `<p class="notice warning">Das Gästekontingent ist ausgeschöpft. Bitte den Event-Admin kontaktieren.</p>` : ""}
+    </section>
+    <section class="card">
+      <h2>Meine Einreichungen</h2>
+      ${!appState.partnerSubmissionsLoaded ? `<p class="small">Einreichungen werden geladen…</p>` : renderPartnerSubmissionCards(appState.partnerSubmissions, active)}
+    </section>
+  `;
+  document.getElementById("partnerGuestForm")?.addEventListener("submit", savePartnerGuestSubmission);
+  document.getElementById("cancelPartnerGuestEdit")?.addEventListener("click", () => {
+    appState.ui.editingPartnerSubmissionId = "";
+    renderPartnerPortal();
+  });
+  document.querySelectorAll("[data-edit-partner-guest]").forEach((button) => button.addEventListener("click", () => {
+    appState.ui.editingPartnerSubmissionId = button.dataset.editPartnerGuest;
+    renderPartnerPortal();
+    scrollBelowStickyHeader(document.getElementById("partnerGuestForm")?.closest(".card"));
+  }));
+  document.querySelectorAll("[data-delete-partner-guest]").forEach((button) => button.addEventListener("click", () => deletePartnerGuestSubmission(button.dataset.deletePartnerGuest)));
+}
+
+function renderPartnerSubmissionCards(submissions, active) {
+  if (!submissions.length) return `<p class="small">Noch keine Gäste eingereicht.</p>`;
+  return `<div class="guest-list">${submissions.map((item) => {
+    const status = PARTNER_SUBMISSION_STATUS[item.status] || PARTNER_SUBMISSION_STATUS.pending;
+    const pending = item.status === "pending";
+    const removable = pending || item.status === "rejected";
+    return `
+      <article class="guest-card partner-submission-card">
+        <div class="guest-head">
+          <div>
+            <h3 class="guest-title">${escapeHtml(item.name || "")}</h3>
+            <p class="guest-meta">${escapeHtml(item.category || "")}${item.comment ? ` · ${escapeHtml(item.comment)}` : ""}</p>
+          </div>
+          <span class="badge ${status.badge}">${escapeHtml(status.label)}</span>
+        </div>
+        ${item.status === "approved" ? `<p class="small">Bestätigt und in die aktive Gästeliste übernommen.</p>` : ""}
+        ${item.status === "rejected" ? `<p class="small">Abgelehnte Einträge belegen keinen Platz im Kontingent.</p>` : ""}
+        ${removable && active ? `<div class="actions">${pending ? `<button class="btn-secondary" type="button" data-edit-partner-guest="${escapeHtml(item.id)}">Bearbeiten</button>` : ""}<button class="btn-danger" type="button" data-delete-partner-guest="${escapeHtml(item.id)}">Löschen</button></div>` : ""}
+      </article>
+    `;
+  }).join("")}</div>`;
+}
+
+async function savePartnerGuestSubmission(event) {
+  event.preventDefault();
+  if (!requireOnline("Partner-Gast speichern") || !isPartner()) return;
+  const name = val("partnerGuestName").trim();
+  const category = val("partnerGuestCategory").trim();
+  const comment = val("partnerGuestComment").trim();
+  if (!name || !eventCategoriesForForm().includes(category)) {
+    notify("Name und gültige Kategorie sind erforderlich.", "warning");
+    return;
+  }
+  const editingId = appState.ui.editingPartnerSubmissionId;
+  try {
+    if (editingId) {
+      const existing = appState.partnerSubmissions.find((item) => item.id === editingId);
+      if (!existing || existing.status !== "pending") throw new Error("Nur ausstehende Einträge können bearbeitet werden.");
+      await updateDoc(partnerSubmissionRef(editingId), {
+        name,
+        searchName: normalizeForSearch(`${name} ${category}`),
+        category,
+        comment,
+        updatedAt: serverTimestamp()
+      });
+      appState.ui.editingPartnerSubmissionId = "";
+      notify("Einreichung aktualisiert.", "success");
+      return;
+    }
+
+    const submissionRef = doc(collection(appState.db, "events", appState.eventId, "partnerSubmissions"));
+    await runTransaction(appState.db, async (transaction) => {
+      const linkRef = partnerLinkRef(appState.member.partnerId);
+      const linkSnap = await transaction.get(linkRef);
+      if (!linkSnap.exists()) throw new Error("Partner-Link wurde nicht gefunden.");
+      const link = linkSnap.data();
+      const usedCount = Number(link.usedCount || 0);
+      const guestLimit = Number(link.guestLimit || 0);
+      if (link.active === false || timestampMillis(link.expiresAt) <= Date.now()) throw new Error("Partner-Link ist nicht mehr aktiv.");
+      if (usedCount >= guestLimit) throw new Error("Das Gästekontingent ist ausgeschöpft.");
+      transaction.set(submissionRef, {
+        partnerId: appState.member.partnerId,
+        partnerName: String(link.partnerName || "Partner"),
+        name,
+        searchName: normalizeForSearch(`${name} ${category}`),
+        category,
+        comment,
+        status: "pending",
+        guestDocId: null,
+        submittedByUid: appState.user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        reviewedAt: null,
+        reviewedByUid: null,
+        reviewedByName: null
+      });
+      transaction.update(linkRef, {
+        usedCount: usedCount + 1,
+        counterMutationId: submissionRef.id,
+        counterMutationKind: "create",
+        updatedAt: serverTimestamp()
+      });
+    });
+    document.getElementById("partnerGuestForm")?.reset();
+    notify("Gast eingereicht. Ein Admin muss den Eintrag noch bestätigen.", "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Einreichung konnte nicht gespeichert werden: ${error.message || error}`, "error");
+  }
+}
+
+async function deletePartnerGuestSubmission(submissionId) {
+  const submission = appState.partnerSubmissions.find((item) => item.id === submissionId);
+  if (!submission || !["pending", "rejected"].includes(submission.status)) return;
+  if (!window.confirm(`${submission.name} aus den Einreichungen löschen?`)) return;
+  try {
+    if (submission.status === "rejected") {
+      await deleteDoc(partnerSubmissionRef(submissionId));
+    } else {
+      await runTransaction(appState.db, async (transaction) => {
+        const submissionRef = partnerSubmissionRef(submissionId);
+        const linkRef = partnerLinkRef(appState.member.partnerId);
+        const [submissionSnap, linkSnap] = await Promise.all([
+          transaction.get(submissionRef),
+          transaction.get(linkRef)
+        ]);
+        if (!submissionSnap.exists() || submissionSnap.data().status !== "pending") throw new Error("Einreichung kann nicht mehr gelöscht werden.");
+        if (!linkSnap.exists()) throw new Error("Partner-Link wurde nicht gefunden.");
+        transaction.delete(submissionRef);
+        transaction.update(linkRef, {
+          usedCount: Math.max(0, Number(linkSnap.data().usedCount || 0) - 1),
+          counterMutationId: submissionId,
+          counterMutationKind: "delete",
+          updatedAt: serverTimestamp()
+        });
+      });
+    }
+    if (appState.ui.editingPartnerSubmissionId === submissionId) appState.ui.editingPartnerSubmissionId = "";
+    notify("Einreichung gelöscht. Der Platz ist wieder verfügbar.", "success");
+  } catch (error) {
+    console.error(error);
+    notify(`Einreichung konnte nicht gelöscht werden: ${error.message || error}`, "error");
+  }
+}
+
+function partnerNameForId(partnerId) {
+  return appState.partnerLinks.find((item) => item.id === partnerId)?.partnerName || "Partner";
+}
+
+function partnerLinkStatus(link) {
+  if (link.active === false) return { label: "Deaktiviert", badge: "danger" };
+  if (timestampMillis(link.expiresAt) <= Date.now()) return { label: "Abgelaufen", badge: "danger" };
+  return { label: "Aktiv", badge: "success" };
 }
 
 function renderAdminEventPickerOnly() {
@@ -3138,7 +3827,7 @@ async function renderEventDeleteSection() {
   target.innerHTML = `
     <section class="card danger-section event-delete-card">
       <h2>Event löschen</h2>
-      <p class="notice error"><strong>Master-only:</strong> Löscht dieses Event inklusive Gäste, Admin-Notizen, aktiver Anmeldungen, Event-PINs und Audit Log. Die globalen Anleitungen bleiben erhalten.</p>
+      <p class="notice error"><strong>Master-only:</strong> Löscht dieses Event inklusive Gäste, Partner-Links und -Einreichungen, Admin-Notizen, aktiver Anmeldungen, Event-PINs und Audit Log. Die globalen Anleitungen bleiben erhalten.</p>
       ${isAuthorizingEvent ? `<p class="notice warning">Dieses Event ist aktuell das globale Admin-Anker-Event.${replacement ? ` Vor dem Löschen wird der Anker auf <strong>${escapeHtml(replacement.name || replacement.id)}</strong> umgestellt.` : " Lege zuerst ein anderes Event an, bevor dieses Event gelöscht werden kann."}</p>` : ""}
       <div class="actions">
         <button class="btn-danger" id="deleteEventBtn" type="button" ${cannotDeleteAuthorizingEvent ? "disabled" : ""}>Event endgültig löschen</button>
@@ -3162,7 +3851,7 @@ async function deleteCurrentEvent() {
   const eventName = appState.event?.name || eventId;
   if (!eventId) return;
 
-  if (!confirmByTypingEventId(`Du löschst das Event "${eventName}" inklusive Gäste, Admin-Notizen, aktiven Anmeldungen, Event-PINs und Audit Log. Die globalen Anleitungen bleiben erhalten.`)) return;
+  if (!confirmByTypingEventId(`Du löschst das Event "${eventName}" inklusive Gäste, Partner-Links und -Einreichungen, Admin-Notizen, aktiven Anmeldungen, Event-PINs und Audit Log. Die globalen Anleitungen bleiben erhalten.`)) return;
   const typed = window.prompt(`Letzte Bestätigung für "${eventName}".\nBitte exakt eingeben:\nEVENT LÖSCHEN`);
   if (typed === null) return;
   if (typed.trim() !== "EVENT LÖSCHEN") {
@@ -3184,13 +3873,15 @@ async function deleteCurrentEvent() {
     const updateStatus = (label, count) => {
       counts[label] = count;
       if (result) {
-        result.innerHTML = `<p class="notice info">Löscht… Gäste: ${counts.guests || 0}, Admin-Notizen: ${counts.guestAdminNotes || 0}, Anmeldungen: ${counts.members || 0}, Audit: ${counts.auditLog || 0}</p>`;
+        result.innerHTML = `<p class="notice info">Löscht… Gäste: ${counts.guests || 0}, Partner-Einreichungen: ${counts.partnerSubmissions || 0}, Partner-Links: ${counts.partnerLinks || 0}, Admin-Notizen: ${counts.guestAdminNotes || 0}, Anmeldungen: ${counts.members || 0}, Audit: ${counts.auditLog || 0}</p>`;
       }
     };
 
     counts.auditLog = await deleteEventCollectionInChunks(eventId, "auditLog", (count) => updateStatus("auditLog", count));
     counts.guestAdminNotes = await deleteEventCollectionInChunks(eventId, "guestAdminNotes", (count) => updateStatus("guestAdminNotes", count));
     counts.guests = await deleteEventCollectionInChunks(eventId, "guests", (count) => updateStatus("guests", count));
+    counts.partnerSubmissions = await deleteEventCollectionInChunks(eventId, "partnerSubmissions", (count) => updateStatus("partnerSubmissions", count));
+    counts.partnerLinks = await deleteEventCollectionInChunks(eventId, "partnerLinks", (count) => updateStatus("partnerLinks", count));
     await deleteDoc(doc(appState.db, "events", eventId, "private", "security"));
     counts.members = await deleteEventMembersInChunks(eventId, (count) => updateStatus("members", count));
     await deleteDoc(doc(appState.db, "events", eventId));
@@ -4675,6 +5366,20 @@ function auditSummary(entry) {
       return { subject: "Check-in-PIN", detail: pinAuditDetail(details) };
     case "admin_pin_reset":
       return { subject: "Admin-PIN", detail: pinAuditDetail(details) };
+    case "partner_link_create":
+      return { subject, detail: `Partner-Link erstellt · Limit ${details.guestLimit ?? 0}` };
+    case "partner_limit_update":
+      return { subject, detail: `Partner-Limit auf ${details.guestLimit ?? 0} geändert` };
+    case "partner_link_reset":
+      return { subject, detail: "Partner-Link erneuert" };
+    case "partner_link_enable":
+      return { subject, detail: "Partner-Link aktiviert" };
+    case "partner_link_disable":
+      return { subject, detail: "Partner-Link deaktiviert" };
+    case "partner_guest_approve":
+      return { subject, detail: "Partner-Gast bestätigt" };
+    case "partner_guest_reject":
+      return { subject, detail: "Partner-Gast abgelehnt" };
     default:
       return { subject, detail: "" };
   }
@@ -4995,7 +5700,14 @@ function auditActionValues() {
     "guest_export",
     "audit_export",
     "pins_reset",
-    "admin_pin_reset"
+    "admin_pin_reset",
+    "partner_link_create",
+    "partner_limit_update",
+    "partner_link_reset",
+    "partner_link_enable",
+    "partner_link_disable",
+    "partner_guest_approve",
+    "partner_guest_reject"
   ];
 }
 
@@ -5021,7 +5733,14 @@ function labelForAction(action) {
     member_logout: "Abmeldung",
     member_device_update: "Gerät umbenannt",
     member_force_logout: "Gerät abgemeldet",
-    member_duplicate_logout: "Doppelte Anmeldung bereinigt"
+    member_duplicate_logout: "Doppelte Anmeldung bereinigt",
+    partner_link_create: "Partner-Link erstellt",
+    partner_limit_update: "Partner-Limit geändert",
+    partner_link_reset: "Partner-Link erneuert",
+    partner_link_enable: "Partner-Link aktiviert",
+    partner_link_disable: "Partner-Link deaktiviert",
+    partner_guest_approve: "Partner-Gast bestätigt",
+    partner_guest_reject: "Partner-Gast abgelehnt"
   };
   return labels[action] || action || "Aktion";
 }
@@ -5400,6 +6119,14 @@ function memberRef(uid) {
   return doc(appState.db, "events", appState.eventId, "members", uid);
 }
 
+function partnerLinkRef(partnerId) {
+  return doc(appState.db, "events", appState.eventId, "partnerLinks", partnerId);
+}
+
+function partnerSubmissionRef(submissionId) {
+  return doc(appState.db, "events", appState.eventId, "partnerSubmissions", submissionId);
+}
+
 function guestRef(id) {
   return doc(appState.db, "events", appState.eventId, "guests", id);
 }
@@ -5437,6 +6164,10 @@ function isAdmin() {
 
 function isCheckinStaff() {
   return appState.member?.role === "checkin";
+}
+
+function isPartner() {
+  return appState.member?.role === "partner";
 }
 
 function isActiveCheckinStaff() {
@@ -5542,6 +6273,7 @@ function isMainAdminIdentity(member) {
 
 function visibleMemberName(member) {
   if (isMainAdminIdentity(member)) return "";
+  if (member?.role === "partner") return appState.currentPartnerLink?.partnerName || "Partner";
   return member?.displayName || "";
 }
 
@@ -5697,6 +6429,26 @@ async function hashNamedPin(eventId, role, pin, displayName) {
   const data = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function hashPartnerToken(eventId, token) {
+  const input = `${eventId}:partner:${token}`;
+  const data = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function randomPartnerToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function partnerLinkExpiry() {
+  const accessWindow = eventAccessWindow(appState.event);
+  if (accessWindow?.end) return accessWindow.end;
+  const fallback = localDateEnd(appState.event?.date);
+  return fallback || new Date(Date.now() + 24 * 60 * 60 * 1000);
 }
 
 async function memberAuthFields(eventId, role, pin, displayName) {
@@ -6362,6 +7114,10 @@ function urlWithEvent(id) {
   return `${urlWithoutParams()}?event=${encodeURIComponent(eventUrlId(id))}`;
 }
 
+function urlWithPartner(eventId, partnerId, token) {
+  return `${urlWithEvent(eventId)}&partner=${encodeURIComponent(partnerId)}&token=${encodeURIComponent(token)}`;
+}
+
 function timestampMillis(value) {
   if (!value) return 0;
   if (typeof value.toMillis === "function") return value.toMillis();
@@ -6457,5 +7213,17 @@ function unsubscribeAll() {
   if (appState.auditUnsubscribe) {
     appState.auditUnsubscribe();
     appState.auditUnsubscribe = null;
+  }
+  if (appState.partnerLinksUnsubscribe) {
+    appState.partnerLinksUnsubscribe();
+    appState.partnerLinksUnsubscribe = null;
+  }
+  if (appState.partnerSubmissionsUnsubscribe) {
+    appState.partnerSubmissionsUnsubscribe();
+    appState.partnerSubmissionsUnsubscribe = null;
+  }
+  if (appState.partnerLinkUnsubscribe) {
+    appState.partnerLinkUnsubscribe();
+    appState.partnerLinkUnsubscribe = null;
   }
 }

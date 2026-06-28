@@ -142,6 +142,29 @@ Prüfen:
 - Bearbeitung aktualisiert die Suche.
 - Audit Log enthält die Änderung.
 
+## Test 6b — Partner-Link, Kontingent und Freigabe
+
+**Gegeben** Admin ist im richtigen Event eingeloggt.
+**Wenn** ein Partner-Link mit einem Kontingent von 2 erstellt und in einem privaten Browserfenster geöffnet wird.
+**Dann** kann der Partner Gäste einreichen, sieht aber weder die aktive Gästeliste noch Einreichungen anderer Partner.
+
+Prüfen:
+
+- Partner-Link enthält Event-ID, Partner-ID und geheimen Token; der Link eines Events funktioniert nicht für ein anderes Event.
+- Partner kann Name, Kategorie und optionalen Kommentar erfassen.
+- Einreichung 1 und 2 funktionieren; Einreichung 3 wird durch die Transaction und Firestore Rules blockiert.
+- Ausstehende Einreichungen sind für Check-in Staff nicht sichtbar.
+- Partner kann einen ausstehenden Eintrag bearbeiten und löschen; Löschen gibt den Platz frei.
+- Admin kann das Limit erhöhen und senken. Ein Limit unterhalb der aktuellen Belegung löscht keine bestehenden Einträge, blockiert aber weitere.
+- Admin kann einzelne und mehrere ausgewählte Einreichungen bestätigen oder ablehnen.
+- Bestätigte Einreichung erscheint mit Status `Offen` in der aktiven Gästeliste und der Partner-Kommentar ist als Check-in-Kommentar sichtbar.
+- Bestätigte Einreichung ist für den Partner gesperrt und zählt weiter zum Kontingent.
+- Abgelehnte Einreichung bleibt für den Partner sichtbar, belegt aber keinen Platz und kann gelöscht werden.
+- Deaktivieren des Partner-Links sperrt weitere Partner-Zugriffe und Änderungen sofort.
+- `Link erneuern` macht den bisherigen geheimen Link ungültig; nur der neu kopierte Link funktioniert.
+- Partner-Link läuft nach dem Event automatisch ab.
+- Event-Löschung entfernt Partner-Links und Partner-Einreichungen mit.
+
 ## Test 7 — Einfacher Check-in
 
 **Gegeben** ein Gast ist Status Offen.  

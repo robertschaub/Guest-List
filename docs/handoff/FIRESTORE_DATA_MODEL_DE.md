@@ -10,6 +10,8 @@ appGuides/{guideId}
 events/{eventId}
 events/{eventId}/private/security
 events/{eventId}/members/{uid}
+events/{eventId}/partnerLinks/{partnerId}
+events/{eventId}/partnerSubmissions/{submissionId}
 events/{eventId}/guests/{guestDocId}
 events/{eventId}/guestAdminNotes/{guestDocId}
 events/{eventId}/auditLog/{logId}
@@ -84,7 +86,7 @@ Temporäre Rollen-/Sessiondaten für anonym authentifizierte Clients.
 Erwartete Felder:
 
 - `uid`
-- `role`: `admin` oder `checkin`
+- `role`: `admin`, `checkin` oder `partner`
 - `pinHash`
 - `pinNameHash`
 - `displayNameKey`: normalisierter Name für case-insensitive PIN+Name-Prüfung
@@ -92,6 +94,43 @@ Erwartete Felder:
 - `deviceLabel`: automatisch lokal erzeugte Geräte-ID bzw. Admin-gepflegter Gerätename
 - `createdAt`
 - `updatedAt`
+
+Partner-Sessions verwenden zusätzlich:
+
+- `partnerId`: ID des Partner-Links im aktuellen Event
+- `partnerTokenHash`: SHA-256-Hash des geheimen Link-Tokens
+
+## events/{eventId}/partnerLinks/{partnerId}
+
+Admin-verwalteter, event-spezifischer Partnerzugang. Der geheime Token wird nicht im Klartext gespeichert und nur direkt nach Erstellung oder Erneuerung im Admin-Browser angezeigt.
+
+Erwartete Felder:
+
+- `partnerName`
+- `tokenHash`
+- `guestLimit`: maximal erlaubte Summe aus ausstehenden und bestätigten Einreichungen
+- `usedCount`: aktuell belegte Plätze
+- `active`: manuelle Freigabe oder Sperre
+- `expiresAt`: automatisches Ende nach dem Event
+- `counterMutationId`, `counterMutationKind`: technische Felder zur transaktionsgebundenen Kontingentprüfung
+- `createdAt`, `updatedAt`
+- `createdByUid`, `createdByName`
+
+## events/{eventId}/partnerSubmissions/{submissionId}
+
+Vom Partner eingereichte Gäste. Diese Collection ist bewusst von `guests` getrennt. Dadurch sehen Check-in Staff und andere Nicht-Admins ausstehende oder abgelehnte Einträge nicht.
+
+Erwartete Felder:
+
+- `partnerId`, `partnerName`
+- `name`, `searchName`
+- `category`
+- `comment`
+- `status`: `pending`, `approved` oder `rejected`
+- `guestDocId`: nach Bestätigung ID des erzeugten Gast-Dokuments, sonst `null`
+- `submittedByUid`
+- `createdAt`, `updatedAt`
+- `reviewedAt`, `reviewedByUid`, `reviewedByName`
 
 ## events/{eventId}/guests/{guestDocId}
 
@@ -143,6 +182,11 @@ Erwartete Felder:
 ## Wichtige Datenregeln
 
 - Ein Gast gehört zu genau einem Event.
+- Ein Partner-Link gehört zu genau einem Event und kann nicht für ein anderes Event verwendet werden.
+- Partner sehen nur ihren eigenen Link und ihre eigenen Einreichungen, niemals die aktive Gästeliste oder Einreichungen anderer Partner.
+- Neue Partner-Einreichungen und die Erhöhung von `usedCount` erfolgen gemeinsam in einer Firestore Transaction. Das Löschen eines ausstehenden Eintrags und die Reduktion erfolgen ebenfalls gemeinsam.
+- Das Partner-Kontingent zählt ausstehende und bestätigte Einreichungen. Ablehnung oder Löschen eines ausstehenden Eintrags gibt einen Platz frei. Bestätigte Einträge bleiben gesperrt und zählen weiter.
+- Nur ein Admin kann eine Einreichung bestätigen. Erst dabei wird ein Dokument unter `guests` erstellt und damit für Check-in Staff sichtbar.
 - `guestId` soll innerhalb eines Events eindeutig sein. Der CSV Import blockiert doppelte IDs in der Datei und bei Zusatzimporten auch IDs, die bereits im Event existieren.
 - `status` darf nur `open`, `checked_in` sein. Offene Gäste entsprechen am Eventende den No-Shows.
 - Doppel-Check-in-Schutz muss per Firestore Transaction geschehen.

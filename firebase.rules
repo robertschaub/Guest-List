@@ -22,6 +22,14 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/events/$(eventId)/private/security).data;
     }
 
+    function partnerLinkExists(eventId, partnerId) {
+      return exists(/databases/$(database)/documents/events/$(eventId)/partnerLinks/$(partnerId));
+    }
+
+    function partnerLinkData(eventId, partnerId) {
+      return get(/databases/$(database)/documents/events/$(eventId)/partnerLinks/$(partnerId)).data;
+    }
+
     function adminSecurityExists() {
       return exists(/databases/$(database)/documents/appSecurity/admin);
     }
@@ -40,7 +48,7 @@ service cloud.firestore {
     }
 
     function validRole(role) {
-      return role == 'admin' || role == 'checkin';
+      return role == 'admin' || role == 'checkin' || role == 'partner';
     }
 
     function mainAdminNameKey() {
@@ -141,13 +149,37 @@ service cloud.firestore {
         );
     }
 
+    function validPartnerCredentials(eventId, data) {
+      return data.role == 'partner'
+        && data.partnerId is string
+        && data.partnerId.size() > 0
+        && data.partnerTokenHash is string
+        && data.partnerTokenHash.size() == 64
+        && data.pinHash == ''
+        && data.pinNameHash == ''
+        && data.displayNameKey == data.partnerId
+        && eventExists(eventId)
+        && !eventHidden(eventId)
+        && partnerLinkExists(eventId, data.partnerId)
+        && partnerLinkData(eventId, data.partnerId).active == true
+        && partnerLinkData(eventId, data.partnerId).expiresAt is timestamp
+        && request.time < partnerLinkData(eventId, data.partnerId).expiresAt
+        && data.partnerTokenHash == partnerLinkData(eventId, data.partnerId).tokenHash;
+    }
+
     function hasCurrentPin(eventId) {
       return isMember(eventId)
         && (
-          validPin(eventId, memberData(eventId).role, memberData(eventId).pinHash, '', memberData(eventId).displayNameKey)
+          validPartnerCredentials(eventId, memberData(eventId))
           || (
-            memberData(eventId).keys().hasAny(['pinNameHash'])
-            && validPin(eventId, memberData(eventId).role, memberData(eventId).pinHash, memberData(eventId).pinNameHash, memberData(eventId).displayNameKey)
+            memberData(eventId).role != 'partner'
+            && (
+              validPin(eventId, memberData(eventId).role, memberData(eventId).pinHash, '', memberData(eventId).displayNameKey)
+              || (
+                memberData(eventId).keys().hasAny(['pinNameHash'])
+                && validPin(eventId, memberData(eventId).role, memberData(eventId).pinHash, memberData(eventId).pinNameHash, memberData(eventId).displayNameKey)
+              )
+            )
           )
         );
     }
@@ -175,6 +207,11 @@ service cloud.firestore {
         && memberData(eventId).role == 'admin';
     }
 
+    function isPartner(eventId) {
+      return hasCurrentPin(eventId)
+        && memberData(eventId).role == 'partner';
+    }
+
     function checkinAccessWindowOpen(eventId) {
       return eventExists(eventId)
         && !eventHidden(eventId)
@@ -196,6 +233,7 @@ service cloud.firestore {
 
     function memberWriteAllowedForRole(eventId, role) {
       return role == 'admin'
+        || role == 'partner'
         || (
           role == 'checkin'
           && checkinAccessWindowOpen(eventId)
@@ -235,11 +273,22 @@ service cloud.firestore {
         && request.resource.data.displayNameKey is string
         && request.resource.data.displayName is string
         && request.resource.data.deviceLabel is string
-        && validPin(eventId, request.resource.data.role, request.resource.data.pinHash, request.resource.data.pinNameHash, request.resource.data.displayNameKey)
+        && (
+          (
+            request.resource.data.role == 'partner'
+            && validPartnerCredentials(eventId, request.resource.data)
+          )
+          || (
+            request.resource.data.role != 'partner'
+            && !request.resource.data.keys().hasAny(['partnerId', 'partnerTokenHash'])
+            && validPin(eventId, request.resource.data.role, request.resource.data.pinHash, request.resource.data.pinNameHash, request.resource.data.displayNameKey)
+          )
+        )
         && memberWriteAllowedForRole(eventId, request.resource.data.role)
         && request.resource.data.keys().hasOnly([
           'uid', 'role', 'pinHash', 'pinNameHash', 'displayNameKey',
-          'displayName', 'deviceLabel', 'createdAt', 'updatedAt'
+          'displayName', 'deviceLabel', 'partnerId', 'partnerTokenHash',
+          'createdAt', 'updatedAt'
         ]);
     }
 
@@ -374,6 +423,139 @@ service cloud.firestore {
           'createdAt', 'updatedAt', 'createdByUid', 'createdByName',
           'lastActionAt', 'lastActionByName'
         ]);
+    }
+
+    function validPartnerLinkData(data) {
+      return data.partnerName is string
+        && data.partnerName.size() > 0
+        && data.partnerName.size() <= 120
+        && data.tokenHash is string
+        && data.tokenHash.size() == 64
+        && data.guestLimit is int
+        && data.guestLimit >= 0
+        && data.guestLimit <= 5000
+        && data.usedCount is int
+        && data.usedCount >= 0
+        && data.usedCount <= 5000
+        && data.active is bool
+        && data.expiresAt is timestamp
+        && data.counterMutationId is string
+        && data.counterMutationKind is string
+        && data.createdByUid is string
+        && data.createdByName is string
+        && data.keys().hasOnly([
+          'partnerName', 'tokenHash', 'guestLimit', 'usedCount', 'active', 'expiresAt',
+          'counterMutationId', 'counterMutationKind',
+          'createdAt', 'updatedAt', 'createdByUid', 'createdByName'
+        ]);
+    }
+
+    function partnerOwnsSubmission(eventId, data) {
+      return isPartner(eventId)
+        && data.partnerId == memberData(eventId).partnerId;
+    }
+
+    function validPartnerSubmissionData(eventId, data) {
+      return data.partnerId is string
+        && data.partnerName is string
+        && data.partnerName.size() > 0
+        && data.partnerName.size() <= 120
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 200
+        && data.searchName is string
+        && data.category is string
+        && data.category in eventData(eventId).categories
+        && data.comment is string
+        && data.comment.size() <= 1000
+        && (data.status == 'pending' || data.status == 'approved' || data.status == 'rejected')
+        && (data.guestDocId == null || data.guestDocId is string)
+        && data.submittedByUid is string
+        && (data.reviewedAt == null || data.reviewedAt is timestamp)
+        && (data.reviewedByUid == null || data.reviewedByUid is string)
+        && (data.reviewedByName == null || data.reviewedByName is string)
+        && data.keys().hasOnly([
+          'partnerId', 'partnerName', 'name', 'searchName', 'category', 'comment',
+          'status', 'guestDocId', 'submittedByUid', 'createdAt', 'updatedAt',
+          'reviewedAt', 'reviewedByUid', 'reviewedByName'
+        ]);
+    }
+
+    function partnerCounterIncrementAllowed(eventId, partnerId) {
+      return isPartner(eventId)
+        && partnerId == memberData(eventId).partnerId
+        && request.resource.data.usedCount == resource.data.usedCount + 1
+        && resource.data.usedCount < resource.data.guestLimit
+        && request.resource.data.counterMutationKind == 'create'
+        && request.resource.data.counterMutationId is string
+        && !exists(/databases/$(database)/documents/events/$(eventId)/partnerSubmissions/$(request.resource.data.counterMutationId))
+        && existsAfter(/databases/$(database)/documents/events/$(eventId)/partnerSubmissions/$(request.resource.data.counterMutationId));
+    }
+
+    function partnerCounterDecrementAllowed(eventId, partnerId) {
+      return isPartner(eventId)
+        && partnerId == memberData(eventId).partnerId
+        && resource.data.usedCount > 0
+        && request.resource.data.usedCount == resource.data.usedCount - 1
+        && request.resource.data.counterMutationKind == 'delete'
+        && request.resource.data.counterMutationId is string
+        && exists(/databases/$(database)/documents/events/$(eventId)/partnerSubmissions/$(request.resource.data.counterMutationId))
+        && !existsAfter(/databases/$(database)/documents/events/$(eventId)/partnerSubmissions/$(request.resource.data.counterMutationId));
+    }
+
+    function partnerCounterUpdateAllowed(eventId, partnerId) {
+      return validPartnerLinkData(request.resource.data)
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'usedCount', 'counterMutationId', 'counterMutationKind', 'updatedAt'
+        ])
+        && (
+          partnerCounterIncrementAllowed(eventId, partnerId)
+          || partnerCounterDecrementAllowed(eventId, partnerId)
+        );
+    }
+
+    function partnerSubmissionCreateAllowed(eventId, submissionId) {
+      return partnerOwnsSubmission(eventId, request.resource.data)
+        && validPartnerSubmissionData(eventId, request.resource.data)
+        && request.resource.data.partnerName == partnerLinkData(eventId, request.resource.data.partnerId).partnerName
+        && request.resource.data.status == 'pending'
+        && request.resource.data.guestDocId == null
+        && request.resource.data.submittedByUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.reviewedByUid == null
+        && request.resource.data.reviewedByName == null
+        && getAfter(/databases/$(database)/documents/events/$(eventId)/partnerLinks/$(request.resource.data.partnerId)).data.usedCount
+          == partnerLinkData(eventId, request.resource.data.partnerId).usedCount + 1
+        && getAfter(/databases/$(database)/documents/events/$(eventId)/partnerLinks/$(request.resource.data.partnerId)).data.counterMutationId == submissionId
+        && getAfter(/databases/$(database)/documents/events/$(eventId)/partnerLinks/$(request.resource.data.partnerId)).data.counterMutationKind == 'create';
+    }
+
+    function partnerSubmissionUpdateAllowed(eventId) {
+      return partnerOwnsSubmission(eventId, resource.data)
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'pending'
+        && validPartnerSubmissionData(eventId, request.resource.data)
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'searchName', 'category', 'comment', 'updatedAt'
+        ]);
+    }
+
+    function partnerSubmissionDeleteAllowed(eventId, submissionId) {
+      return partnerOwnsSubmission(eventId, resource.data)
+        && (
+          resource.data.status == 'rejected'
+          || (
+            resource.data.status == 'pending'
+            && getAfter(/databases/$(database)/documents/events/$(eventId)/partnerLinks/$(resource.data.partnerId)).data.usedCount
+              == partnerLinkData(eventId, resource.data.partnerId).usedCount - 1
+            && getAfter(/databases/$(database)/documents/events/$(eventId)/partnerLinks/$(resource.data.partnerId)).data.counterMutationId == submissionId
+            && getAfter(/databases/$(database)/documents/events/$(eventId)/partnerLinks/$(resource.data.partnerId)).data.counterMutationKind == 'delete'
+          )
+        );
     }
 
     function validGuestAdminNoteData(data) {
@@ -533,6 +715,36 @@ service cloud.firestore {
         allow update: if validMemberSelfUpdate(eventId, uid);
         allow update: if adminMemberDeviceLabelUpdateAllowed(eventId);
         allow delete: if isAdmin(eventId) || (signedIn() && uid == request.auth.uid) || sameNamedOtherMember(eventId, uid);
+      }
+
+      match /partnerLinks/{partnerId} {
+        allow read: if isAdmin(eventId)
+          || (isPartner(eventId) && partnerId == memberData(eventId).partnerId);
+        allow create: if isAdmin(eventId)
+          && validPartnerLinkData(request.resource.data)
+          && request.resource.data.createdByUid == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if (
+            isAdmin(eventId)
+            && validPartnerLinkData(request.resource.data)
+            && request.resource.data.createdByUid == resource.data.createdByUid
+          )
+          || partnerCounterUpdateAllowed(eventId, partnerId);
+        allow delete: if isAdmin(eventId);
+      }
+
+      match /partnerSubmissions/{submissionId} {
+        allow read: if isAdmin(eventId)
+          || partnerOwnsSubmission(eventId, resource.data);
+        allow create: if partnerSubmissionCreateAllowed(eventId, submissionId);
+        allow update: if (
+            isAdmin(eventId)
+            && validPartnerSubmissionData(eventId, request.resource.data)
+          )
+          || partnerSubmissionUpdateAllowed(eventId);
+        allow delete: if isAdmin(eventId)
+          || partnerSubmissionDeleteAllowed(eventId, submissionId);
       }
 
       match /guests/{guestId} {
