@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Datenschutzerklärung – Gästeliste Check-in</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: #f4f6f8; color: #172033; line-height: 1.6; }
+    main { width: min(52rem, calc(100% - 2rem)); margin: 2rem auto; background: #fff; padding: clamp(1.25rem, 4vw, 3rem); border-radius: 1rem; box-shadow: 0 1rem 3rem rgba(15, 23, 42, .1); }
+    h1, h2 { line-height: 1.2; }
+    h2 { margin-top: 2rem; }
+    a { color: #155eef; }
+    .draft { border: 2px solid #b42318; background: #fff1f0; color: #7a271a; padding: 1rem; border-radius: .75rem; }
+    .summary { border-left: .3rem solid #155eef; padding: .25rem 0 .25rem 1rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #d0d5dd; padding: .65rem; text-align: left; vertical-align: top; }
+    code { overflow-wrap: anywhere; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #101828; color: #e4e7ec; }
+      main { background: #1d2939; box-shadow: none; }
+      .draft { background: #55160c; color: #fee4e2; border-color: #f97066; }
+      a { color: #84adff; }
+      th, td { border-color: #475467; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="./">← Zur Gästeliste</a></p>
+    <h1>Datenschutzerklärung</h1>
+
+    <div class="draft">
+      <strong>Entwurf für Review – noch nicht wirksam.</strong> Vor Freigabe und Inkraftsetzung müssen der Datenschutzkontakt, die Firestore-Region, die Aufbewahrungsfristen und die Google-Vertragsgrundlagen ergänzt und freigegeben werden. Die öffentliche Bereitstellung dieses Entwurfs zu Prüfzwecken macht ihn nicht wirksam. Stand: 17. September 2026, Entwurf 0.3. Keine Rechtsberatung oder Freigabe durch mandatierte Rechtsberatung.
+    </div>
+
+    <section class="summary">
+      <h2>Kurz erklärt</h2>
+      <p>Diese Web-App verwaltet Gästelisten, Partneranmeldungen und den Check-in für einzelne Veranstaltungen. Die statische App wird über GitHub Pages ausgeliefert; die Live-Daten liegen in Google Firebase Authentication und Cloud Firestore. Die App verwendet anonyme Firebase-Anmeldung, aber die Gästelisteneinträge selbst enthalten Namen und weitere veranstaltungsbezogene Personendaten.</p>
+      <p>Die aktuelle Anwendung initialisiert keine Werbung und kein Google Analytics. Eine in der Firebase-Konfiguration vorhandene Measurement-ID allein aktiviert noch keine Analytics-Verarbeitung.</p>
+    </section>
+
+    <h2>1. Verantwortliche Stelle</h2>
+    <p>Für die derzeit öffentlich erreichbare, konkret gebrandete Instanz ist Robert Schaub als privater Betreiber verantwortlich:</p>
+    <ul>
+      <li>Name: <strong>Robert Schaub</strong></li>
+      <li>Postanschrift: <strong>In Lederäcker 11, 8305 Dietlikon, Schweiz</strong></li>
+      <li>E-Mail für Datenschutzanfragen: <strong>[VOR INKRAFTSETZUNG ERGÄNZEN]</strong></li>
+      <li>Datenschutzvertretung oder -beratung, soweit erforderlich: <strong>[PRÜFEN]</strong></li>
+    </ul>
+    <p>Der Autor des öffentlichen Software-Repositories ist nicht allein deshalb Verantwortlicher für die Daten einer anderen Person oder Organisation, die die Software selbständig einsetzt. Entscheidet bei einer konkreten Veranstaltung ein weiterer Veranstalter über Zwecke und Mittel der Verarbeitung, müssen die Rollen und dieser Hinweis vor der Nutzung entsprechend aktualisiert werden. Robert Schaub steuert für die derzeit veröffentlichte Instanz die GitHub-/Firebase-Konfiguration, Zugriffe und Löschung.</p>
+
+    <h2>2. Welche Daten verarbeitet werden</h2>
+    <table>
+      <thead><tr><th>Bereich</th><th>Daten</th><th>Zweck</th></tr></thead>
+      <tbody>
+        <tr><td>Gästeliste</td><td>Guest-ID, Name, Suchname, Kategorie, Status, Support-Kommentar, nur für Admins bestimmte Notiz/Information</td><td>Einlass vorbereiten, Berechtigung prüfen, Gäste finden und unterstützen</td></tr>
+        <tr><td>Check-in</td><td>Zeitpunkt, ausführende anonyme Firebase-UID, Anzeigename/Position, Gerätebezeichnung, Rücknahme und letzter Bearbeitungsvorgang</td><td>Doppel-Check-ins vermeiden, Einlass koordinieren, Fehler nachvollziehen</td></tr>
+        <tr><td>Partneranmeldungen</td><td>Partnerkennung/-name, Name und Kategorie des Gasts, Kommentar, Status, Kontingent und Zeitstempel</td><td>Kontingente verwalten, Einträge freigeben und dem richtigen Partner zuordnen</td></tr>
+        <tr><td>Personal und Zugänge</td><td>Anzeigename oder Position, Rolle, Gerätebezeichnung, anonyme Firebase-UID, Zugriffs- und Sitzungsdaten, PIN-Hashes und Partner-Token</td><td>Rollenbasierter Zugriff, Sicherheit und Sitzungssteuerung</td></tr>
+        <tr><td>Audit-Protokoll</td><td>Aktion, betroffener Datensatz, Akteur/UID, Anzeigename, Gerät und Zeitpunkt</td><td>Sicherheits- und Fehlernachweis, Missbrauchsschutz, betriebliche Rechenschaft</td></tr>
+        <tr><td>Technische Nutzung</td><td>IP-Adresse und gewöhnliche HTTP-/Gerätemetadaten bei GitHub und Google; lokale Browser- und Sitzungswerte</td><td>Auslieferung, Firebase-Anmeldung, Sicherheit, Wiederaufnahme der gewählten Veranstaltung und Bedienkomfort</td></tr>
+      </tbody>
+    </table>
+
+    <h2>3. Browser-Speicher, Cookies und Tracking</h2>
+    <p>Die App speichert lokal unter anderem die zuletzt gewählte Veranstaltung, Anzeigename/Position, Gerätebezeichnung und bekannte Veranstaltungen. Eine Admin-Sitzung wird im <code>sessionStorage</code> als JSON mit Anzeigename, Speicherzeitpunkt und der eingegebenen <strong>Admin-PIN im Klartext</strong> gehalten. Dieser Speicher bleibt für die Dauer der Browser-Sitzung auf dem Gerät lesbar. Firebase kann für Anmeldung und Offline-/Sitzungsfunktionen weitere technische Browser-Speicher verwenden.</p>
+    <p>Die aktuelle Codebasis initialisiert keine Werbe- oder Publikumsanalyse. Wird später Analytics, Fehlertracking oder ein anderes nicht notwendiges Tracking ergänzt, muss diese Erklärung vorher aktualisiert und – soweit erforderlich – eine wirksame Einwilligung eingeholt werden.</p>
+
+    <h2>4. Zwecke und Rechtsgrundlagen</h2>
+    <p>Die Verarbeitung dient ausschließlich der Planung und Durchführung der Veranstaltung, der Zugangs- und Kontingentverwaltung, der Sicherheit, der Fehlerkorrektur und der Erfüllung gesetzlicher Pflichten.</p>
+    <p>Unter dem Schweizer Datenschutzgesetz gelten insbesondere Rechtmäßigkeit, Treu und Glauben, Transparenz, Zweckbindung, Verhältnismäßigkeit, Richtigkeit und Sicherheit. Soweit die DSGVO anwendbar ist, kommen je nach Rolle und Veranstaltung vor allem Vertrag bzw. vorvertragliche Maßnahmen (Art. 6 Abs. 1 lit. b), berechtigte Interessen an sicherer Veranstaltungsdurchführung und Missbrauchsschutz (lit. f) sowie gesetzliche Pflichten (lit. c) in Betracht. Beschäftigtendaten benötigen eine gesonderte arbeitsrechtliche Prüfung. Einwilligung wird nur dort eingesetzt, wo sie tatsächlich freiwillig und widerruflich ist; bloße App-Nutzung ist keine pauschale Einwilligung.</p>
+    <p><strong>[REVIEW ERFORDERLICH]</strong> Der Betreiber muss die Rechtsgrundlage je Betroffenengruppe (Gäste, Partner, Check-in-Personal, Admins) und Veranstaltung dokumentieren.</p>
+
+    <h2>5. Empfänger und Verarbeitung im Ausland</h2>
+    <ul>
+      <li><strong>GitHub Pages (GitHub/Microsoft):</strong> liefert die statischen Dateien aus. GitHub gibt an, IP-Adressen von Pages-Besuchern zu Sicherheitszwecken zu protokollieren. Es gilt die <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub-Datenschutzerklärung</a>.</li>
+      <li><strong>Google Firebase:</strong> Anonymous Authentication erzeugt eine technische UID; Cloud Firestore speichert die Veranstaltungsdaten. Firebase dokumentiert, dass Authentication nur in den USA verarbeitet wird, während für Firestore eine Datenbankregion gewählt wird. Es gilt die <a href="https://firebase.google.com/support/privacy">Firebase-Datenschutz- und Sicherheitsdokumentation</a>.</li>
+      <li><strong>Google Hosted Libraries:</strong> Die App lädt Firebase-JavaScriptmodule von <code>gstatic.com</code>; dabei erhält Google gewöhnliche Request-Metadaten.</li>
+    </ul>
+    <p>Die aktuell gewählte Firestore-Region konnte aus dem öffentlichen Repository nicht verlässlich festgestellt werden. <strong>[VOR INKRAFTSETZUNG: Region in der Firebase Console bestätigen, dokumentieren und nicht nachträglich unbemerkt ändern.]</strong></p>
+    <p>Der Betreiber muss Auftragsverarbeitungsbedingungen, Unterauftragsverarbeiter und die für Übermittlungen außerhalb der Schweiz bzw. des EWR nötigen Angemessenheits- oder Vertragsgarantien dokumentieren. Eine Firebase-Konfiguration im Browser ersetzt diese Prüfung nicht.</p>
+
+    <h2>6. Aufbewahrung und Löschung</h2>
+    <p>Die App bietet eine administrative Löschung einer Veranstaltung einschließlich zugehöriger Gäste, Partneranmeldungen, Links, Notizen, Sitzungen, Sicherheits- und Auditdaten. Der aktuelle Code erzwingt jedoch keine automatische Löschfrist.</p>
+    <ul>
+      <li>Gäste-, Partner- und Check-in-Daten: <strong>[VOR INKRAFTSETZUNG: feste Frist nach Veranstaltungsende bestimmen]</strong></li>
+      <li>Audit-/Sicherheitsdaten: <strong>[VOR INKRAFTSETZUNG: separate, verhältnismäßige Frist bestimmen]</strong></li>
+      <li>Backups/Exporte: <strong>[VOR INKRAFTSETZUNG: Speicherorte, Verantwortliche und Ablauf/Löschung festlegen]</strong></li>
+      <li>Browserdaten: bis sie durch Abmeldung, App-Logik, Browser oder Nutzer gelöscht werden</li>
+      <li>Provider-Logs: nach den anwendbaren GitHub-/Google-Regeln; der Veranstalter kann unabhängige Provider-Logs nicht direkt löschen</li>
+    </ul>
+    <p>CSV-Exporte sind zusätzliche Kopien. Der Standardexport „Alle Gäste“ enthält auch das nur für Admins bestimmte Feld „Admin-Notiz“ und transportiert es damit aus dem zugriffskontrollierten System in eine Datei. Wer exportiert, muss Erforderlichkeit, Zugriff, Weitergabe und Löschung dieser Dateien eigenständig absichern.</p>
+
+    <h2>7. Zugriff, Vertraulichkeit und Sicherheit</h2>
+    <p>Zugriff erfolgt über Event-Link, rollenbezogene PINs oder Partner-Links und anonyme Firebase-Sitzungen. Event- und Partner-Links sowie PINs sind wie Zugangsdaten zu behandeln. Auf gemeinsam genutzten Geräten müssen Admins die Sitzung beenden, das Browserfenster schließen und verbleibende Sitzungsdaten kontrollieren, weil die aktuelle Admin-Sitzung die eingegebene PIN im Klartext im <code>sessionStorage</code> hält. Rollen, Firestore Security Rules und Audit-Logs begrenzen und protokollieren Zugriffe, können aber absolute Sicherheit nicht garantieren.</p>
+    <p>Admins und Check-in-Personal dürfen Daten nur für die Veranstaltung nutzen. Partner sehen nur die ihnen zugeordneten Funktionen. Vertrauliche Admin-Notizen und Exporte müssen auf das notwendige Minimum beschränkt werden. Vermutete Vorfälle sind sofort an den oben eingetragenen Betreiberkontakt zu melden.</p>
+
+    <h2>8. Rechte betroffener Personen</h2>
+    <p>Je nach anwendbarem Recht bestehen Rechte auf Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch und Datenherausgabe/-übertragbarkeit. Anfragen gehen an den in Abschnitt 1 einzutragenden Betreiberkontakt. Zur Vermeidung unbefugter Offenlegung kann ein Identitäts- oder Berechtigungsnachweis verlangt werden.</p>
+    <p>Gäste können per CSV oder durch Partner/Veranstalter eingetragen werden, ohne die App selbst zu öffnen. Der Betreiber muss ihnen diese Datenschutzhinweise daher über einen tatsächlich erreichbaren Weg wie Einladung, Ticket oder Veranstaltungsseite bereitstellen; ein Link nur im Check-in-Footer erreicht diese Personen nicht zuverlässig. <strong>[VOR VERÖFFENTLICHUNG: Informationsweg und Zeitpunkt je Veranstaltung festlegen.]</strong></p>
+    <p>Beschwerden können an den <a href="https://www.edoeb.admin.ch/de">Eidgenössischen Datenschutz- und Öffentlichkeitsbeauftragten (EDÖB)</a> oder, soweit die DSGVO gilt, an die zuständige EU-/EWR-Aufsichtsbehörde gerichtet werden.</p>
+
+    <h2>9. Minderjährige und besondere Daten</h2>
+    <p>Der Veranstalter muss Altersgrenzen und Zutrittsregeln der konkreten Veranstaltung festlegen. Ohne besondere Notwendigkeit dürfen keine Gesundheitsdaten, Ausweiskopien, politischen/religiösen Angaben oder sonstigen besonders schützenswerten Daten in Freitextfelder aufgenommen werden. Sind solche Daten unvermeidbar, ist vorab eine gesonderte Rechts-, Sicherheits- und Informationsprüfung erforderlich.</p>
+
+    <h2>10. Offene Review-Gates vor Freigabe und Inkraftsetzung</h2>
+    <ol>
+      <li>Datenschutz-E-Mail einsetzen und klären, ob bei einer konkreten Veranstaltung ein weiterer Veranstalter Verantwortung übernimmt.</li>
+      <li>Firestore-Region, Firebase-Vertragsgrundlage, Unterauftragsverarbeiter und Auslandtransfer dokumentieren.</li>
+      <li>Verbindliche Löschfristen für Veranstaltung, Auditdaten, Backups und Exporte festlegen und technisch/organisatorisch umsetzen.</li>
+      <li>Rechtsgrundlagen je Gäste-, Partner- und Personalprozess bestätigen.</li>
+      <li>Verzeichnis der Verarbeitungstätigkeiten, Zugriffsberechtigung, Incident-Prozess und ggf. Datenschutz-Folgenabschätzung prüfen.</li>
+      <li>Festlegen, wie auch importierte Gäste die Hinweise über Einladung, Ticket oder Veranstaltungsseite erhalten.</li>
+      <li>Vor Wirksamkeit die öffentliche Indexierbarkeit der App begrenzen oder bewusst freigeben; nach Freigabe das <code>noindex</code> der Datenschutzerklärung überprüfen, Versions-/Wirksamkeitsdatum setzen und den Text gegen die Live-Konfiguration prüfen.</li>
+    </ol>
+  </main>
+</body>
+</html>

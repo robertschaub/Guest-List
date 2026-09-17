@@ -2,6 +2,8 @@
 
 Mobile-first web app for event guest-list management and live check-in.
 
+Privacy: [operator-specific privacy notice draft](privacy.html). Publishing the draft for review does not make it effective; the private operator is identified, while the privacy email, Firestore region, retention periods, and information route for imported guests must be confirmed before adoption.
+
 The MVP stack is fixed:
 
 ```text
@@ -59,4 +61,3 @@ Full German deployment steps: [docs/deployment/DEPLOYMENT_GITHUB_FIREBASE_DE.md]
 - Private backup exports.
 
 Use `data/samples/` for test data only.
-

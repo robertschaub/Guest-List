@@ -2,6 +2,8 @@
 
 Statische Web-App für Event-Gästeliste, Check-in auf mehreren Mobile-/Tablet-Geräten und zentrale Live-Daten in Firebase Firestore.
 
+Datenschutz: [Entwurf der betreiberspezifischen Datenschutzerklärung](privacy.html). Die Veröffentlichung zur Prüfung macht den Entwurf nicht wirksam; der private Betreiber ist benannt, vor Freigabe für den produktiven Betrieb müssen insbesondere die Datenschutz-E-Mail, die Firestore-Region und verbindliche Löschfristen ergänzt werden.
+
 ## Was ist drin?
 
 - GitHub-Pages-kompatible statische Dateien: `index.html`, `app.js`, `styles.css`, `app-config.js`
