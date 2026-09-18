@@ -2,7 +2,7 @@
 
 Mobile-first web app for event guest-list management and live check-in.
 
-Privacy: [operator-specific privacy notice draft](privacy.html). Publishing the draft for review does not make it effective; the private operator is identified, while the privacy email, Firestore region, retention periods, and information route for imported guests must be confirmed before adoption.
+Privacy: [effective operator-specific privacy notice](privacy.html), version 1.0 from 18 September 2026. It documents the postal privacy contact, Firestore region `eur3`, provider roles, retention periods, and requires each event to establish an information route before importing guests; the app does not send that notice automatically.
 
 The MVP stack is fixed:
 

@@ -3,7 +3,6 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="robots" content="noindex,nofollow" />
   <title>Datenschutzerklärung – Gästeliste Check-in</title>
   <style>
     :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -12,7 +11,7 @@
     h1, h2 { line-height: 1.2; }
     h2 { margin-top: 2rem; }
     a { color: #155eef; }
-    .draft { border: 2px solid #b42318; background: #fff1f0; color: #7a271a; padding: 1rem; border-radius: .75rem; }
+    .effective { border: 2px solid #175cd3; background: #eff8ff; color: #1849a9; padding: 1rem; border-radius: .75rem; }
     .summary { border-left: .3rem solid #155eef; padding: .25rem 0 .25rem 1rem; }
     table { border-collapse: collapse; width: 100%; }
     th, td { border: 1px solid #d0d5dd; padding: .65rem; text-align: left; vertical-align: top; }
@@ -20,7 +19,7 @@
     @media (prefers-color-scheme: dark) {
       body { background: #101828; color: #e4e7ec; }
       main { background: #1d2939; box-shadow: none; }
-      .draft { background: #55160c; color: #fee4e2; border-color: #f97066; }
+      .effective { background: #102a56; color: #d1e9ff; border-color: #53b1fd; }
       a { color: #84adff; }
       th, td { border-color: #475467; }
     }
@@ -31,8 +30,8 @@
     <p><a href="./">← Zur Gästeliste</a></p>
     <h1>Datenschutzerklärung</h1>
 
-    <div class="draft">
-      <strong>Entwurf für Review – noch nicht wirksam.</strong> Vor Freigabe und Inkraftsetzung müssen die Firestore-Region, die Aufbewahrungsfristen und die Google-Vertragsgrundlagen ergänzt und freigegeben werden. Die öffentliche Bereitstellung dieses Entwurfs zu Prüfzwecken macht ihn nicht wirksam. Stand: 18. September 2026, Entwurf 0.4. Keine Rechtsberatung oder Freigabe durch mandatierte Rechtsberatung.
+    <div class="effective">
+      <strong>Wirksam ab 18. September 2026, Version 1.0.</strong> Diese Datenschutzerklärung gilt für die derzeit veröffentlichte Instanz. Sie wurde mit Code, Firebase-Konfiguration und den aktuellen Providerangaben abgeglichen; sie ist keine Rechtsberatung oder Freigabe durch mandatierte Rechtsberatung.
     </div>
 
     <section class="summary">
@@ -47,9 +46,9 @@
       <li>Name: <strong>Robert Schaub</strong></li>
       <li>Postanschrift: <strong>In Lederäcker 11, 8305 Dietlikon, Schweiz</strong></li>
       <li>Datenschutzanfragen: <strong>schriftlich an die oben genannte Postanschrift</strong></li>
-      <li>Datenschutzvertretung oder -beratung, soweit erforderlich: <strong>[PRÜFEN]</strong></li>
+      <li>Datenschutzkontakt: <strong>Robert Schaub, schriftlich an die oben genannte Postanschrift</strong></li>
     </ul>
-    <p>Der Autor des öffentlichen Software-Repositories ist nicht allein deshalb Verantwortlicher für die Daten einer anderen Person oder Organisation, die die Software selbständig einsetzt. Entscheidet bei einer konkreten Veranstaltung ein weiterer Veranstalter über Zwecke und Mittel der Verarbeitung, müssen die Rollen und dieser Hinweis vor der Nutzung entsprechend aktualisiert werden. Robert Schaub steuert für die derzeit veröffentlichte Instanz die GitHub-/Firebase-Konfiguration, Zugriffe und Löschung.</p>
+    <p>Ein externer Datenschutzbeauftragter oder eine Datenschutzvertretung wurde für diese schweizerische private Instanz nicht bestellt. Der Autor des öffentlichen Software-Repositories ist nicht allein deshalb Verantwortlicher für die Daten einer anderen Person oder Organisation, die die Software selbständig einsetzt. Entscheidet bei einer konkreten Veranstaltung ein weiterer Veranstalter über Zwecke und Mittel der Verarbeitung, müssen Verantwortlichkeit, Informationsweg und dieser Hinweis vor der Nutzung entsprechend aktualisiert werden. Robert Schaub steuert für die derzeit veröffentlichte Instanz die GitHub-/Firebase-Konfiguration, Zugriffe und Löschung.</p>
 
     <h2>2. Welche Daten verarbeitet werden</h2>
     <table>
@@ -70,24 +69,26 @@
 
     <h2>4. Zwecke und Rechtsgrundlagen</h2>
     <p>Die Verarbeitung dient ausschließlich der Planung und Durchführung der Veranstaltung, der Zugangs- und Kontingentverwaltung, der Sicherheit, der Fehlerkorrektur und der Erfüllung gesetzlicher Pflichten.</p>
-    <p>Unter dem Schweizer Datenschutzgesetz gelten insbesondere Rechtmäßigkeit, Treu und Glauben, Transparenz, Zweckbindung, Verhältnismäßigkeit, Richtigkeit und Sicherheit. Soweit die DSGVO anwendbar ist, kommen je nach Rolle und Veranstaltung vor allem Vertrag bzw. vorvertragliche Maßnahmen (Art. 6 Abs. 1 lit. b), berechtigte Interessen an sicherer Veranstaltungsdurchführung und Missbrauchsschutz (lit. f) sowie gesetzliche Pflichten (lit. c) in Betracht. Beschäftigtendaten benötigen eine gesonderte arbeitsrechtliche Prüfung. Einwilligung wird nur dort eingesetzt, wo sie tatsächlich freiwillig und widerruflich ist; bloße App-Nutzung ist keine pauschale Einwilligung.</p>
-    <p><strong>[REVIEW ERFORDERLICH]</strong> Der Betreiber muss die Rechtsgrundlage je Betroffenengruppe (Gäste, Partner, Check-in-Personal, Admins) und Veranstaltung dokumentieren.</p>
+    <p>Unter dem Schweizer Datenschutzgesetz gelten insbesondere Rechtmäßigkeit, Treu und Glauben, Transparenz, Zweckbindung, Verhältnismäßigkeit, Richtigkeit und Sicherheit. Soweit die DSGVO anwendbar ist, gelten für Gäste und Partner je nach Veranstaltung Vertrag bzw. vorvertragliche Maßnahmen (Art. 6 Abs. 1 lit. b) sowie das berechtigte Interesse an Einlass, Kontingentverwaltung, Sicherheit und Missbrauchsschutz (lit. f). Für Check-in-Personal und Admins gelten die Durchführung ihrer vereinbarten Aufgabe bzw. ihres Vertrags und die berechtigten Sicherheits- und Rechenschaftsinteressen; Beschäftigtendaten werden zusätzlich auf das für das Arbeitsverhältnis Erforderliche beschränkt. Gesetzliche Pflichten stützen sich auf lit. c.</p>
+    <p>Einwilligung wird nur dort eingesetzt, wo sie für einen konkreten zusätzlichen Zweck erforderlich, freiwillig und widerruflich ist; bloße App-Nutzung ist keine pauschale Einwilligung. Der Betreiber dokumentiert je Veranstaltung, wer Veranstalter ist, welche Betroffenengruppen verarbeitet werden und ob eine abweichende Rechtsgrundlage oder Information erforderlich ist.</p>
 
     <h2>5. Empfänger und Verarbeitung im Ausland</h2>
     <ul>
       <li><strong>GitHub Pages (GitHub/Microsoft):</strong> liefert die statischen Dateien aus. GitHub gibt an, IP-Adressen von Pages-Besuchern zu Sicherheitszwecken zu protokollieren. Es gilt die <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub-Datenschutzerklärung</a>.</li>
-      <li><strong>Google Firebase:</strong> Anonymous Authentication erzeugt eine technische UID; Cloud Firestore speichert die Veranstaltungsdaten. Firebase dokumentiert, dass Authentication nur in den USA verarbeitet wird, während für Firestore eine Datenbankregion gewählt wird. Es gilt die <a href="https://firebase.google.com/support/privacy">Firebase-Datenschutz- und Sicherheitsdokumentation</a>.</li>
+      <li><strong>Google Firebase:</strong> Anonymous Authentication erzeugt eine technische UID und wird nach der Firebase-Dokumentation ausschließlich in den USA verarbeitet. Cloud Firestore speichert die Veranstaltungsdaten in der bestätigten Multi-Region <code>eur3</code>: Schreib-/Lesereplikate in Belgien (<code>europe-west1</code>) und den Niederlanden (<code>europe-west4</code>), Witness in Finnland (<code>europe-north1</code>). Google verarbeitet Kundendaten als Auftragsverarbeiter unter den <a href="https://firebase.google.com/terms/data-processing-terms">Firebase Data Processing and Security Terms</a>; für erforderliche Drittlandübermittlungen gelten die dort einbezogenen <a href="https://firebase.google.com/terms/firebase-sccs">Standardvertragsklauseln</a>. Google verarbeitet eigene Dienst-, Abrechnungs- und Sicherheitsdaten nach seinen anwendbaren Bedingungen. Siehe auch die <a href="https://firebase.google.com/support/privacy">Firebase-Datenschutz- und Sicherheitsdokumentation</a> und die <a href="https://firebase.google.com/docs/firestore/locations">Firestore-Standorte</a>.</li>
       <li><strong>Google Hosted Libraries:</strong> Die App lädt Firebase-JavaScriptmodule von <code>gstatic.com</code>; dabei erhält Google gewöhnliche Request-Metadaten.</li>
     </ul>
-    <p>Die aktuell gewählte Firestore-Region konnte aus dem öffentlichen Repository nicht verlässlich festgestellt werden. <strong>[VOR INKRAFTSETZUNG: Region in der Firebase Console bestätigen, dokumentieren und nicht nachträglich unbemerkt ändern.]</strong></p>
-    <p>Der Betreiber muss Auftragsverarbeitungsbedingungen, Unterauftragsverarbeiter und die für Übermittlungen außerhalb der Schweiz bzw. des EWR nötigen Angemessenheits- oder Vertragsgarantien dokumentieren. Eine Firebase-Konfiguration im Browser ersetzt diese Prüfung nicht.</p>
+    <p>Die Firestore-Region <code>eur3</code> wurde am 18. September 2026 in der Firebase Console bestätigt und kann für die bestehende Datenbank nicht nachträglich geändert werden. Google veröffentlicht die aktuellen <a href="https://firebase.google.com/terms/subprocessors">Firebase-Unterauftragsverarbeiter</a>. Übermittlungen in die USA werden auf die anwendbaren Google-Vertragsbedingungen, Standardvertragsklauseln und – soweit für die konkrete Empfängereinheit und Dienstleistung verfügbar – anerkannte Angemessenheitsmechanismen gestützt.</p>
 
     <h2>6. Aufbewahrung und Löschung</h2>
-    <p>Die App bietet eine administrative Löschung einer Veranstaltung einschließlich zugehöriger Gäste, Partneranmeldungen, Links, Notizen, Sitzungen, Sicherheits- und Auditdaten. Der aktuelle Code erzwingt jedoch keine automatische Löschfrist.</p>
+    <p>Die App bietet eine administrative Löschung einer Veranstaltung einschließlich zugehöriger Gäste, Partneranmeldungen, Links, Notizen, Sitzungen, Sicherheits- und Auditdaten. Der aktuelle Code erzwingt keine automatische Löschfrist; der Betreiber prüft fällige Löschungen deshalb mindestens monatlich und führt sie administrativ aus.</p>
     <ul>
-      <li>Gäste-, Partner- und Check-in-Daten: <strong>[VOR INKRAFTSETZUNG: feste Frist nach Veranstaltungsende bestimmen]</strong></li>
-      <li>Audit-/Sicherheitsdaten: <strong>[VOR INKRAFTSETZUNG: separate, verhältnismäßige Frist bestimmen]</strong></li>
-      <li>Backups/Exporte: <strong>[VOR INKRAFTSETZUNG: Speicherorte, Verantwortliche und Ablauf/Löschung festlegen]</strong></li>
+      <li>Gäste-, Partner-, Sitzungs- und Check-in-Daten: bis sechs Monate nach Veranstaltungsende; danach administrative Löschung, sofern keine gesetzliche Pflicht oder ein aktiver Rechtsfall eine längere Aufbewahrung verlangt</li>
+      <li>Audit-/Sicherheitsdaten: bis zwölf Monate nach Veranstaltungsende; danach Löschung, sofern sie nicht für einen dokumentierten Sicherheitsvorfall oder Rechtsfall benötigt werden</li>
+      <li>Anonyme Firebase-Authentication-Konten und technische UIDs: bis sechs Monate nach dem Ende der zugehörigen Veranstaltung; die App löscht Auth-Konten nicht automatisch, daher erfolgt die Prüfung und Löschung in Firebase mindestens monatlich</li>
+      <li>Globale Zugriffs- und Sicherheitskonfiguration, PIN-Hashes und Anleitungen: bis sie ersetzt oder nicht mehr benötigt werden; entfallene Berechtigungen werden unverzüglich entfernt</li>
+      <li>Vom Betreiber verwahrte Backups und CSV-Exporte: höchstens sechs Monate nach Veranstaltungsende, zugriffsbeschränkt; danach Löschung. Andere Veranstalter sind für ihre selbständig erzeugten Kopien verantwortlich.</li>
+      <li>Direkte Datenschutz-/Supportkorrespondenz: bis zwei Jahre nach Abschluss, länger nur bei gesetzlicher Pflicht oder aktivem Rechtsfall</li>
       <li>Browserdaten: bis sie durch Abmeldung, App-Logik, Browser oder Nutzer gelöscht werden</li>
       <li>Provider-Logs: nach den anwendbaren GitHub-/Google-Regeln; der Veranstalter kann unabhängige Provider-Logs nicht direkt löschen</li>
     </ul>
@@ -99,21 +100,20 @@
 
     <h2>8. Rechte betroffener Personen</h2>
     <p>Je nach anwendbarem Recht bestehen Rechte auf Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch und Datenherausgabe/-übertragbarkeit. Anfragen gehen an den in Abschnitt 1 genannten Betreiberkontakt. Zur Vermeidung unbefugter Offenlegung kann ein Identitäts- oder Berechtigungsnachweis verlangt werden.</p>
-    <p>Gäste können per CSV oder durch Partner/Veranstalter eingetragen werden, ohne die App selbst zu öffnen. Der Betreiber muss ihnen diese Datenschutzhinweise daher über einen tatsächlich erreichbaren Weg wie Einladung, Ticket oder Veranstaltungsseite bereitstellen; ein Link nur im Check-in-Footer erreicht diese Personen nicht zuverlässig. <strong>[VOR VERÖFFENTLICHUNG: Informationsweg und Zeitpunkt je Veranstaltung festlegen.]</strong></p>
+    <p>Gäste können per CSV oder durch Partner/Veranstalter eingetragen werden, ohne die App selbst zu öffnen. Ein solcher Import darf für eine Veranstaltung nur freigegeben werden, wenn der Betreiber oder verantwortliche Veranstalter einen tatsächlich erreichbaren Informationsweg über Einladung, Ticket oder Veranstaltungsseite festgelegt hat. Die App versendet diesen Hinweis nicht automatisch; die konkrete Durchführung ist eine organisatorische Pflicht der jeweiligen Veranstaltung. Werden Daten nicht direkt bei der Person erhoben, muss die Information spätestens innerhalb eines Monats, bei der ersten Kontaktaufnahme oder vor der ersten Weitergabe erfolgen – je nachdem, was zuerst eintritt. Der Footer-Link ist nur eine zusätzliche Zugriffsmöglichkeit.</p>
     <p>Beschwerden können an den <a href="https://www.edoeb.admin.ch/de">Eidgenössischen Datenschutz- und Öffentlichkeitsbeauftragten (EDÖB)</a> oder, soweit die DSGVO gilt, an die zuständige EU-/EWR-Aufsichtsbehörde gerichtet werden.</p>
 
     <h2>9. Minderjährige und besondere Daten</h2>
     <p>Der Veranstalter muss Altersgrenzen und Zutrittsregeln der konkreten Veranstaltung festlegen. Ohne besondere Notwendigkeit dürfen keine Gesundheitsdaten, Ausweiskopien, politischen/religiösen Angaben oder sonstigen besonders schützenswerten Daten in Freitextfelder aufgenommen werden. Sind solche Daten unvermeidbar, ist vorab eine gesonderte Rechts-, Sicherheits- und Informationsprüfung erforderlich.</p>
 
-    <h2>10. Offene Review-Gates vor Freigabe und Inkraftsetzung</h2>
+    <h2>10. Betriebsentscheidungen und Prüfauslöser</h2>
     <ol>
-      <li>Klären, ob bei einer konkreten Veranstaltung ein weiterer Veranstalter Verantwortung übernimmt.</li>
-      <li>Firestore-Region, Firebase-Vertragsgrundlage, Unterauftragsverarbeiter und Auslandtransfer dokumentieren.</li>
-      <li>Verbindliche Löschfristen für Veranstaltung, Auditdaten, Backups und Exporte festlegen und technisch/organisatorisch umsetzen.</li>
-      <li>Rechtsgrundlagen je Gäste-, Partner- und Personalprozess bestätigen.</li>
-      <li>Verzeichnis der Verarbeitungstätigkeiten, Zugriffsberechtigung, Incident-Prozess und ggf. Datenschutz-Folgenabschätzung prüfen.</li>
-      <li>Festlegen, wie auch importierte Gäste die Hinweise über Einladung, Ticket oder Veranstaltungsseite erhalten.</li>
-      <li>Vor Wirksamkeit die öffentliche Indexierbarkeit der App begrenzen oder bewusst freigeben; nach Freigabe das <code>noindex</code> der Datenschutzerklärung überprüfen, Versions-/Wirksamkeitsdatum setzen und den Text gegen die Live-Konfiguration prüfen.</li>
+      <li>Vor jeder Veranstaltung wird festgehalten, wer über Zwecke und Mittel entscheidet und ob ein weiterer Veranstalter verantwortlich oder gemeinsam verantwortlich ist.</li>
+      <li>Die Firestore-Region <code>eur3</code>, Firebase-Vertragsgrundlage, Unterauftragsverarbeiter und Übermittlungsgrundlagen werden bei einer materiellen Provideränderung erneut geprüft.</li>
+      <li>Fällige Firestore-Daten, anonyme Firebase-Authentication-Konten, lokale Exporte und Berechtigungen werden mindestens monatlich kontrolliert. Der erste Review bereits vorhandener Daten erfolgt bis 31. Oktober 2026.</li>
+      <li>Vor besonders schützenswerten Daten, umfangreicher Überwachung, neuen Empfängern oder einer wesentlich grösseren Veranstaltung werden Verzeichnis, Zugriffsrollen, Incident-Prozess und Bedarf einer Datenschutz-Folgenabschätzung neu geprüft.</li>
+      <li>Der konkrete Informationsweg für importierte Gäste wird vor dem Import festgelegt.</li>
+      <li>Diese Erklärung wird vor Analytics, Werbung, neuen Tracking-IDs, neuen Authentifizierungsarten oder einer materiellen Änderung von Datenfeldern und Zugriffen aktualisiert.</li>
     </ol>
   </main>
 </body>

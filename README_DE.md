@@ -2,7 +2,7 @@
 
 Statische Web-App für Event-Gästeliste, Check-in auf mehreren Mobile-/Tablet-Geräten und zentrale Live-Daten in Firebase Firestore.
 
-Datenschutz: [Entwurf der betreiberspezifischen Datenschutzerklärung](privacy.html). Die Veröffentlichung zur Prüfung macht den Entwurf nicht wirksam; der private Betreiber ist benannt, vor Freigabe für den produktiven Betrieb müssen insbesondere die Datenschutz-E-Mail, die Firestore-Region und verbindliche Löschfristen ergänzt werden.
+Datenschutz: [Wirksame betreiberspezifische Datenschutzerklärung](privacy.html), Version 1.0 ab 18. September 2026. Sie dokumentiert den postalischen Datenschutzkontakt, die Firestore-Region `eur3`, Providerrollen und Aufbewahrungsfristen; vor einem Gästeimport muss die jeweilige Veranstaltung einen Informationsweg festlegen, da die App den Hinweis nicht automatisch versendet.
 
 ## Was ist drin?
 
