@@ -155,6 +155,7 @@ Do not push or maintain a `gh-pages` branch for this repository. Do not reintrod
 - If the user assigns a role, read `docs/agents/multi-agent-collaboration.md`.
 - If work is incomplete, leave a compact handoff using `.claude/skills/handoff/SKILL.md`.
 - Use `docs/agents/role-learnings.md` for durable notes that are likely to help future agents.
+- When asked to call Gemini, use the local Antigravity CLI (`~/.gemini/bin/agy.exe` or `%LOCALAPPDATA%\agy\bin\agy.exe`) under Google subscription OAuth with `--input-format stream-json --output-format stream-json --mode plan --model <slug> [--effort low|medium|high] --print-timeout 15m` (e.g. `gemini-4-argon-high` or `gemini-4-argon-low`), stripping `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS` and `GOOGLE_GENAI_USE_*` from the child environment and sending `{"event":"user","message":{"content":"<prompt>"}}\n` on stdin; never fall back to paid API keys.
 - Do not add broad process rules unless they apply to this repository.
 
 ## Local Skills
